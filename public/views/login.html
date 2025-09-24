@@ -1,0 +1,43 @@
+{{template "header.html" .}}
+<div class="flex-1 p-8 ">
+    {{template "_flash" .}}
+    <div class="bg-surface border border-border rounded-card shadow-md p-8 mb-8">
+        <div class="mb-8">
+            <div class="mb-8">
+                <h2 class="text-2xl font-bold mb-6">Login</h2>
+                <form class="space-y-4" method="POST" action="/login">
+                    <input type="hidden" name="csrf" value="{{.CSRFToken}}">
+                    <div class="mb-5">
+                        <div>
+                            <label for="email" class="block text-sm font-medium mb-1">E-Mail</label>
+                            <input type="email" id="email" name="email"
+                                class="bg-white rounded-lg w-full px-4 py-2 border border-border rounded-button focus:ring-2 focus:ring-primary focus:border-transparent"
+                                required />
+                        </div>
+                        <div>
+                            <label for="password">Passwort</label>
+                            <input type="password"
+                                class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+                                id="password" name="password" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group form-check mb-3">
+                        <input type="checkbox" class="form-check-input" id="rememberMe" name="rememberMe">
+                        <label class="" for="rememberMe">Remember Me</label>
+                    </div>
+                    <button
+                        class="bg-primary text-text px-6 py-3 rounded-button font-bold hover:bg-hover hover:text-white transition-colors">
+                        Login
+                    </button>
+                    <!-- forgot password link -->
+                    <div class="text-sm">
+                        <a href="/passwordreset" class="text-primary hover:underline">Passwort vergessen?</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{template "footer.html" .}}

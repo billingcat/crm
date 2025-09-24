@@ -1,0 +1,168 @@
+{{template "header.html" .}}
+{{ $invoice := index . "invoice"}}
+{{ $company := index . "company"}}
+
+<div class="grid gap-4 sm:grid-cols-2">
+
+    <div class="bg-white shadow rounded-xl p-4">
+        <p class="text-sm text-gray-500">Rechnungsnummer</p>
+        <p class="text-lg">{{$invoice.Number}}</p>
+
+        <p class="text-sm text-gray-500">Empfänger</p>
+        <p><a href="/company/{{$company.ID}}" class="text-blue-600 hover:underline">{{$company.Name}}</a></p>
+        {{ with $invoice.ContactInvoice }}
+        <p class="text-sm text-gray-500">Ansprechpartner</p>
+        <p>{{.}}</p>
+        {{end}}
+        {{ with $invoice.OrderNumber }}
+        <p class="text-sm text-gray-500">Bestellnummer</p>
+        <p>{{.}}</p>
+        {{ end }}
+        {{ with $invoice.SupplierNumber }}
+        <p class="text-sm text-gray-500">Lieferantennummer</p>
+        <p>{{.}}</p>
+        {{ end }}
+    </div>
+
+    <div class="bg-white shadow rounded-xl p-4">
+        <p class="text-sm text-gray-500">Datum</p>
+        <p>{{$invoice.Date | userdate }}</p>
+        <p class="text-sm text-gray-500">Leistungsdatum</p>
+        <p>{{$invoice.OccurrenceDate | userdate }}</p>
+        <p class="text-sm text-gray-500">Fälligkeitsdatum</p>
+        <p>{{$invoice.DueDate | userdate}}</p>
+    </div>
+
+    <div class="bg-white shadow rounded-xl p-4">
+        <p class="text-sm text-gray-500">Netto</p>
+        <p class="">{{$invoice.NetTotal | rounddecimal}} EUR</p>
+        {{ range $invoice.TaxAmounts}}
+        <p class="text-sm text-gray-500">Umsatzsteuer {{.Rate}}%</p>
+        <p>{{.Amount | rounddecimal }}</p>
+        {{end}}
+        <p class="text-sm text-gray-500">Gesamtbetrag</p>
+        <p class="">{{$invoice.GrossTotal | rounddecimal}} EUR</p>
+    </div>
+
+    <div class="bg-white shadow rounded-xl p-4">
+        <p class="text-sm text-gray-500">Steuerart</p>
+        <p>{{$invoice.TaxType | taxtype}}</p>
+        <p class="text-sm text-gray-500">Währung</p>
+        <p>{{$invoice.Currency}}</p>
+        <p class="text-sm text-gray-500">Steuernummer</p>
+        <p>{{$invoice.TaxNumber}}</p>
+    </div>
+
+    <div class="bg-white shadow rounded-xl p-4  sm:col-span-2">
+        <p class="text-sm text-gray-500">Anrede</p>
+        <p class="whitespace-pre-wrap">{{$invoice.Opening}}</p>
+    </div>
+    <div class="bg-white shadow rounded-xl p-4  sm:col-span-2">
+        <p class="text-sm text-gray-500">Fußzeile</p>
+        <p class="whitespace-pre-wrap">{{$invoice.Footer}}</p>
+    </div>
+</div>
+
+{{ range $invoice.InvoicePositions }}
+<div class="space-y-4 mt-4">
+    <div class="bg-white shadow rounded-xl p-4">
+        <div class="flex items-center justify-between mb-2">
+            <span class="text-gray-500 text-sm">Position {{.Position }} </span>
+        </div>
+        <div class="text-gray-800 mb-2">
+            <p class="font-medium">{{.Text}}</p>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm text-gray-700">
+            <div><span class="text-gray-500">Menge:</span> {{.Quantity | rounddecimal}} {{.UnitCode | unittype }}</div>
+            <div><span class="text-gray-500">Einzelpreis:</span> {{.NetPrice | rounddecimal }} EUR</div>
+            <div><span class="text-gray-500">Gesamtpreis:</span> {{.LineTotal | rounddecimal }} EUR</div>
+            <div><span class="text-gray-500">Steuersatz:</span> {{.TaxRate | rounddecimal }}%</div>
+        </div>
+    </div>
+</div>
+{{ end }}
+
+<div class="mt-4" x-data="{ confirmOpen:false }">
+  <a href="/invoice/edit/{{$invoice.ID}}">
+    <button type="button"
+      class="bg-accent-green text-text px-6 py-3 rounded-button font-bold hover:bg-hover hover:text-white transition-colors">
+      Bearbeiten
+    </button>
+  </a>
+
+  <!-- Öffnet die Sicherheitsabfrage -->
+  <button type="button"
+    class="bg-hover text-text px-6 py-3 rounded-button font-bold hover:bg-hover hover:text-white transition-colors"
+    @click="confirmOpen = true">
+    Löschen
+  </button>
+
+  <a href="/invoice/zugferdxml/{{$invoice.ID}}">
+    <button type="button" class="bg-accent-green text-text px-6 py-3 rounded-button font-bold hover:bg-hover hover:text-white transition-colors">
+      ZUGFeRD XML
+    </button>
+  </a>
+  <a href="/invoice/zugferdpdf/{{$invoice.ID}}">
+    <button type="button" class="bg-accent-green text-text px-6 py-3 rounded-button font-bold hover:bg-hover hover:text-white transition-colors">
+      ZUGFeRD PDF
+    </button>
+  </a>
+  <a href="/invoice/duplicate/{{$invoice.ID}}">
+    <button type="button" class="bg-accent-green text-text px-6 py-3 rounded-button font-bold hover:bg-hover hover:text-white transition-colors">
+      Duplizieren
+    </button>
+  </a>
+
+  <!-- Modal -->
+  <div x-show="confirmOpen" x-cloak
+       class="fixed inset-0 z-50" @keydown.escape.window="confirmOpen=false">
+    <div class="absolute inset-0 bg-black/50" @click="confirmOpen=false"></div>
+    <div class="relative mx-auto mt-24 w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+      <h2 class="text-lg font-semibold">Rechnung wirklich löschen?</h2>
+      <p class="mt-2 text-sm text-slate-600">Diese Aktion kann nicht rückgängig gemacht werden.</p>
+
+      <div class="mt-6 flex justify-end gap-3">
+        <button type="button"
+                class="px-4 py-2 rounded-md border border-slate-300 hover:bg-slate-50"
+                @click="confirmOpen=false">
+          Abbrechen
+        </button>
+
+        <!-- POST-Löschformular -->
+        <form method="post" action="/invoice/delete/{{$invoice.ID}}">
+          <input type="hidden" name="_method" value="DELETE">
+          <input type="hidden" name="csrf" value="{{.CSRFToken}}">
+          <button type="submit"
+                  class="px-4 py-2 rounded-md bg-red-600 text-white font-semibold hover:bg-red-700">
+            Ja, löschen
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+async function duplicateInvoice(id) {
+    const response = await fetch(`/invoice/duplicate/${id}`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-Requested-With": "fetch",
+            "X-CSRF-Token": "{{ .CSRFToken }}"
+        }
+    });
+
+    if (response.redirected) {
+        // wenn dein Go-Handler ein Redirect macht
+        window.location.href = response.url;
+    } else {
+        const data = await response.text();
+        alert("Antwort vom Server: " + data);
+    }
+}
+</script>
+
+
+
+{{template "footer.html" .}}

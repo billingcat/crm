@@ -1,0 +1,33 @@
+{{template "header.html" . }}
+<div class="mb-8" id="main-content">
+    {{template "_flash" .}}
+<div>
+    <h2 class="text-xl font-semibold text-gray-800 mb-4">Aktionen</h2>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4" x-data="">
+        <button  @click="window.location.href='/person/new'" class="bg-white border border-gray-200 rounded-lg p-4 flex flex-col items-center justify-center hover:bg-gray-50">
+            <i class="fas fa-plus-circle text-primary text-2xl mb-2"></i>
+            <span class="text-sm font-medium">Neuer Kontakt</span>
+        </button>
+        <button  @click="window.location.href='/company/new'" class="bg-white border border-gray-200 rounded-lg p-4 flex flex-col items-center justify-center hover:bg-gray-50">
+            <i class="fas fa-plus-circle text-primary text-2xl mb-2"></i>
+            <span class="text-sm font-medium">Neue Firma</span>
+        </button>
+    </div>
+</div>
+
+    <h2 class="text-xl font-semibold text-gray-800 mb-4 mt-4">Letzte Aktivität</h2>
+    <div class="bg-gray-50 rounded-lg p-4">
+        <div class="space-y-4">
+                {{range $.lastchanges}}
+                <div class="flex items-start">
+                    <div class="ml-3">
+                        <p class="text-sm font-medium text-gray-900">{{.Who}}</p>
+                        <p class="text-sm text-gray-500">{{.What }}</p>
+                        <p class="text-xs text-gray-400 mt-1">{{.When | timeago}}</p>
+                    </div>
+                </div>
+                {{end}}
+        </div>
+    </div>
+</div>
+{{template "footer.html" .}}

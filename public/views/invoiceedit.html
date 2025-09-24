@@ -1,0 +1,496 @@
+{{template "header.html" .}}
+{{$company := (index . "company") }}
+{{$invoice := (index . "invoice") }}
+
+<form class="needs-validation" action='{{index . "action"}}' method="post">
+  <input type="hidden" name="companyid" value="{{$company.ID}}">
+  <input type="hidden" name="invoiceid" value="{{$invoice.ID}}">
+  <input type="hidden" id="defaultTaxRate" name="defaultTaxRate" value="{{$company.DefaultTaxRate}}">
+  <input type="hidden" name="csrf" value="{{.CSRFToken}}">
+
+  <div class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+    <div>
+      <label for="date">Datum</label>
+      <input type="date" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+        id="date" name="date" value="{{$invoice.Date | htmldate}}">
+    </div>
+    <div>
+      <label for="leistungsdatum">Leistungsdatum</label>
+      <input type="date" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+        id="leistungsdatum" name="occurrencedate" value="{{$invoice.OccurrenceDate | htmldate}}">
+    </div>
+    <div>
+      <label for="duedate">Fälligkeitsdatum</label>
+      <input type="date" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+        id="duedate" name="duedate" value="{{$invoice.DueDate | htmldate}}">
+    </div>
+    <div>
+      <label for="invoicenumber">Rechnungsnummer</label>
+      <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+        id="invoicenumber" name="invoicenumber" value="{{$invoice.Number}}">
+    </div>
+    <div>
+      <label for="ordernumber">Bestellnummer</label>
+      <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+        id="ordernumber" name="ordernumber" value="{{$invoice.OrderNumber}}">
+    </div>
+    <div>
+      <label for="suppliernumber">Lieferantennummer</label>
+      <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+        id="suppliernumber" name="suppliernumber" value="{{$invoice.SupplierNumber}}">
+    </div>
+    <div>
+      <label for="counter">Int. Zähler</label>
+      <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+        id="counter" name="counter" value="{{$invoice.Counter}}">
+    </div>
+    <div class="lg:col-span-6">
+      <label for="contactinvoice">Rechnung Ansprechpartner</label>
+      <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+        id="contactinvoice" name="contactinvoice" placeholder="Max Mustermann" value="{{$invoice.ContactInvoice}}">
+    </div>
+    <div class="lg:col-span-6">
+      <label for="anrede">Anrede</label>
+      <textarea id="anrede" name="anrede"
+        class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+        placeholder="Sehr geehrter Herr Meyer,&#x0a;&#x0a;wir bedanken uns ..."
+        style="height: 100px;">{{ $invoice.Opening}}</textarea>
+    </div>
+    <div class="lg:col-span-6">
+      <label for="fusszeile">Fußzeile</label>
+      <textarea class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+        id="fusszeile" name="fusszeile" placeholder="Bitte zahlen Sie den Gesamtbetrag auf unten stehendes Konto."
+        style="height: 80px;">{{$invoice.Footer}}</textarea>
+    </div>
+    <div class="lg:col-span-2">
+      <label for="taxtype">Steuer</label>
+      <div class="relative">
+        <select id="taxtype" name="taxtype" class="selectbox">
+          <option value="S" {{if eq $company.InvoiceTaxType "S" }}selected{{end}}>Umsatzsteuerpflichtige Umsätze</option>
+          <option value="G" {{if eq $company.InvoiceTaxType "G" }}selected{{end}}>Ausfuhrlieferung (Außerhalb EU)</option>
+          <option value="K" {{if eq $company.InvoiceTaxType "K" }}selected{{end}}>Innergemeinschaftliche Lieferungen (Innerhalb EU)</option>
+          <option value="E" {{if eq $company.InvoiceTaxType "E" }}selected{{end}}>Steuerfreie Umsätze §4 UStG</option>
+          <option value="AE" {{if eq $company.InvoiceTaxType "AE" }}selected{{end}}>Reverse Charge</option>
+        </select>
+        <svg class="h-5 w-5 ml-1 absolute top-2.5 right-2.5 text-slate-700"><use href="#updownsvg" /></svg>
+      </div>
+    </div>
+    <div>
+      <label for="ustid">USt-ID</label>
+      <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+        name="ustid" id="ustid" value="{{$company.VATID}}">
+    </div>
+    <div>
+      <label for="currency">Währung</label>
+      <div class="relative">
+        <select name="currency" id="currency" class="selectbox">
+          <option value="EUR" {{if eq $company.InvoiceCurrency "EUR" }}selected{{end}}>EUR</option>
+          <option value="CHF" {{if eq $company.InvoiceCurrency "CHF" }}selected{{end}}>CHF</option>
+        </select>
+        <svg class="h-5 w-5 ml-1 absolute top-2.5 right-2.5 text-slate-700"><use href="#updownsvg" /></svg>
+      </div>
+    </div>
+    <div class="lg:col-span-6">
+      <label for="exemptionreason">Grund bei Steuerbefreiung</label>
+      <input type="text" name="invoiceexemptionreason" id="exemptionreason"
+        class="bg-white border border-gray-300 text-sm rounded-lg  w-full focus:ring-primary p-2.5"
+        value="{{$company.InvoiceExemptionReason}}">
+    </div>
+  </div>
+
+  <!-- Positionen: Alpine State + Sortable Container -->
+  <div x-data="{ counter: 1, showDivs: [], defaultTax: Number(document.getElementById('defaultTaxRate')?.value || 0) }">
+    <div id="positions">
+      {{range $pos, $ignore := $invoice.InvoicePositions}}
+      <fieldset id="fieldset{{$pos}}" data-pos="{{$pos}}" class="mt-3 p-3 border rounded invoicepos">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-2">
+          <div>
+            <label for="id{{$pos}}">Pos.</label>
+            <input id="id{{$pos}}" type="text" class="bg-white border border-gray-300 text-sm rounded focus:ring-primary w-full p-1"
+              name="is{{$pos}}" value="{{.Position}}" readonly>
+          </div>
+          <div class="lg:col-span-2">
+            <label for="einheit{{$pos}}">Einheit</label>
+            <div class="relative">
+              <select class="selectbox-sm" id="einheit{{$pos}}" name="invoicepos[{{$pos}}].einheit">
+                <option value="C62" {{if eq .UnitCode "C62" }}selected{{end}}>Stück</option>
+                <option value="LS" {{if eq .UnitCode "LS" }}selected{{end}}>pauschal</option>
+                <option value="HUR" {{if eq .UnitCode "HUR" }}selected{{end}}>Stunden</option>
+                <option value="DAY" {{if eq .UnitCode "DAY" }}selected{{end}}>Tage</option>
+                <option value="WEE" {{if eq .UnitCode "WEE" }}selected{{end}}>Wochen</option>
+                <option value="MON" {{if eq .UnitCode "MON" }}selected{{end}}>Monate</option>
+              </select>
+              <svg class="h-5 w-5 ml-1 absolute top-1.5 right-2.5 text-slate-700"><use href="#updownsvg" /></svg>
+            </div>
+          </div>
+          <div>
+            <label for="menge{{$pos}}">Menge</label>
+            <input id="menge{{$pos}}" class="bg-white border border-gray-300 text-sm rounded focus:ring-primary w-full p-1" type="text"
+              name="invoicepos[{{$pos}}].menge" onchange="updatefields('{{$pos}}')" value="{{.Quantity}}">
+          </div>
+          <div class="lg:col-span-3">
+            <label for="einzelpreis{{$pos}}">Einzelpreis (netto)</label>
+            <input id="einzelpreis{{$pos}}" class="bg-white border border-gray-300 text-sm rounded focus:ring-primary w-full p-1" type="text"
+              name="invoicepos[{{$pos}}].einzelpreis" onchange="updatefields('{{$pos}}')" value="{{.NetPrice}}">
+          </div>
+          <div>
+            <label for="steuersatz{{$pos}}">Steuer</label>
+            <input id="steuersatz{{$pos}}" class="bg-white border border-gray-300 text-sm rounded focus:ring-primary w-full p-1" list="steuersätze"
+              name="invoicepos[{{$pos}}].steuersatz" onchange="updatefields('{{$pos}}')" value="{{.TaxRate}}">
+          </div>
+          <div class="lg:col-span-3">
+            <label for="total{{$pos}}">Gesamt (netto)</label>
+            <input id="total{{$pos}}" class="bg-white border border-gray-300 text-sm rounded focus:ring-primary w-full p-1" type="text"
+              name="invoicepos[{{$pos}}].gesamtpreis" value="{{.LineTotal}}" readonly>
+          </div>
+          <div class="lg:col-span-12 grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-2 items-start">
+            <div>
+              <label for="text{{$pos}}">Beschreibung</label>
+              <input id="text{{$pos}}" class="bg-white border border-gray-300 text-sm rounded focus:ring-primary w-full p-1"
+                   type="text" name="invoicepos[{{$pos}}].leistungstext" value="{{.Text}}">
+            </div>
+            <div class="flex items-center justify-end gap-2 flex-nowrap lg:translate-y-[30px]">
+              <button type="button" class="drag-handle btn w-5 h-5 p-0" aria-label="Ziehen zum Verschieben">↕</button>
+              <button type="button" class="btn inline-flex items-center justify-center w-5 h-5 p-0 shrink-0 rounded hover:bg-slate-100" onclick="removePosition(this)">
+                <img src="/static/images/trash.svg" alt="Löschen" class="w-5 h-5 shrink-0" />
+              </button>
+              <button type="button" class="btn inline-flex items-center justify-center w-5 h-5 shrink-0 rounded hover:bg-slate-100"
+                      @click="duplicatePosition(Number($el.closest('fieldset').dataset.pos))">
+                <img src="/static/images/duplicate.svg" alt="Duplizieren" class="w-5 h-5 shrink-0" />
+              </button>
+              <button type="button" class="btn w-5 h-5 p-0" onclick="moveUp(this)">▲</button>
+              <button type="button" class="btn w-5 h-5 p-0" onclick="moveDown(this)">▼</button>
+            </div>
+          </div>
+        </div>
+      </fieldset>
+      {{end}}
+
+      {{ $l := len $invoice.InvoicePositions }}
+      <template x-for="(div, index) in showDivs" :key="div.id">
+        <fieldset :id="'fieldset' + (index + {{ $l}})" :data-pos="index + {{ $l}}" class="mt-3 p-3 border rounded invoicepos">
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-2">
+            <div>
+              <label :for="'id' + (index + {{ $l}})">Pos.</label>
+              <input :id="'id' + (index + {{ $l}})" type="text" class="bg-white border border-gray-300 text-sm rounded focus:ring-primary w-full p-1"
+                :name="'is' + (index + {{ $l}})" :value="( index + 1 +  {{ $l }} )" readonly>
+            </div>
+            <div class="lg:col-span-2">
+              <label :for="'einheit' + (index + {{ $l}})">Einheit</label>
+              <div class="relative">
+                <select class="selectbox-sm" :id="'einheit' + (index + {{ $l }})" :name="'invoicepos[' + ( index + {{ $l }} ) + '].einheit'">
+                  <option value="C62" selected>Stück</option>
+                  <option value="LS">pauschal</option>
+                  <option value="HUR">Stunden</option>
+                  <option value="DAY">Tage</option>
+                  <option value="WEE">Wochen</option>
+                  <option value="MON">Monate</option>
+                </select>
+                <svg class="h-5 w-5 ml-1 absolute top-1.5 right-2.5 text-slate-700"><use href="#updownsvg" /></svg>
+              </div>
+            </div>
+            <div>
+              <label :for="'menge' + (index + {{ $l }})">Menge</label>
+              <input :id="'menge' + (index + {{ $l }})" class="bg-white border border-gray-300 text-sm rounded focus:ring-primary w-full p-1" type="text"
+                :name="'invoicepos[' + ( index + {{$l}} ) + '].menge'"
+                :onchange="'updatefields(' +  ( {{ $l }} + index) + ')'" value="">
+            </div>
+            <div class="lg:col-span-3">
+              <label :for="'einzelpreis' + (index + {{ $l }})">Einzelpreis (netto)</label>
+              <input :id="'einzelpreis' + (index + {{ $l }})" class="bg-white border border-gray-300 text-sm rounded focus:ring-primary w-full p-1" type="text"
+                :name="'invoicepos[' + ( index + {{ $l }} ) + '].einzelpreis'"
+                :onchange="'updatefields(' +  ( {{ $l }} + index) + ')'" value="">
+            </div>
+            <div>
+              <label :for="'steuersatz' + (index + {{ $l }})">Steuer</label>
+              <input :id="'steuersatz' + (index + {{ $l }})" class="bg-white border border-gray-300 text-sm rounded focus:ring-primary w-full p-1" list="steuersätze"
+                :name="'invoicepos[' + ( index + {{$l}} ) + '].steuersatz'"
+                :onchange="'updatefields(' +  ( {{ $l }} + index) + ')'"
+                :value="defaultTax">
+            </div>
+            <div class="lg:col-span-3">
+              <label :for="'total' + (index + {{ $l }})">Gesamt (netto)</label>
+              <input :id="'total' + (index + {{ $l }})" class="bg-white border border-gray-300 text-sm rounded focus:ring-primary w-full p-1" type="text"
+                :name="'invoicepos[' + ( index + {{ $l }} ) + '].gesamtpreis'"
+                value="0" readonly>
+            </div>
+            <div class="lg:col-span-11">
+              <label :for="'text' + (index + {{ $l }})">Beschreibung</label>
+              <input :id="'text' + (index + {{ $l }})" class="bg-white border border-gray-300 text-sm rounded focus:ring-primary w-full p-1" type="text"
+                 :name="'invoicepos[' + ( index + {{ $l }} ) + '].leistungstext'"
+                 value="">
+            </div>
+
+            <div class="flex items-center space-x-2 lg:relative lg:top-3">
+              <button type="button" class="drag-handle btn" aria-label="Ziehen zum Verschieben">↕</button>
+
+              <button type="button" class="btn" @click="$el.closest('fieldset').remove(); renumberPositions(); updatetotals();">
+                <img src="/static/images/trash.svg" width="20" alt="Löschen">
+              </button>
+
+              <button type="button" class="btn" @click="duplicatePosition(Number($el.closest('fieldset').dataset.pos))">
+                <img src="/static/images/duplicate.svg" width="20" alt="Duplizieren">
+              </button>
+
+              <button type="button" class="btn" onclick="moveUp(this)">▲</button>
+              <button type="button" class="btn" onclick="moveDown(this)">▼</button>
+            </div>
+          </div>
+        </fieldset>
+      </template>
+    </div>
+
+    <div id="addposition" class="mt-3">
+      <button @click="showDivs.push({ id: counter }); counter++"
+        class="bg-primary-light text-text  rounded-button font-bold hover:bg-hover hover:text-white transition-colors"
+        type="button">Zeile hinzufügen</button>
+    </div>
+  </div>
+
+  <div class="bg-white shadow rounded-xl p-4 mt-4 mb-4">
+    <p class="text-sm text-gray-500">Zusammenfassung</p>
+    <table>
+      <tr id="netsumrow">
+        <td>Summe (netto)</td>
+        <td class="text-end" id="netsum"></td>
+      </tr>
+      <tr>
+        <td>Gesamtbetrag</td>
+        <td class="text-end" id="gross"></td>
+      </tr>
+    </table>
+  </div>
+
+  <button class="bg-primary text-text rounded-button font-bold hover:bg-hover hover:text-white transition-colors"
+    type="submit" onclick="updateAllFields()">{{ index . "submit" }}</button>
+  <a class="btn btn-danger" href='{{ index . "cancel" }}'>
+    <button type="button"
+      class="bg-primary-light text-text px-6 py-3 rounded-button font-bold hover:bg-hover hover:text-white transition-colors">
+      Abbruch
+    </button>
+  </a>
+</form>
+
+<!-- SortableJS (Drag&Drop) -->
+<script src="/static/js/Sortable.min.js"></script>
+
+<script>
+  // Nächsten freien Index (für Duplizieren)
+  function getNextPos() {
+    let max = -1;
+    document.querySelectorAll('fieldset.invoicepos').forEach(fs => {
+      const n = Number(fs.dataset.pos);
+      if (Number.isFinite(n) && n > max) max = n;
+    });
+    return max + 1;
+  }
+
+  // Entfernen via Button
+  function removePosition(btn) {
+    const fs = btn.closest('fieldset.invoicepos');
+    if (fs) {
+      fs.remove();
+      renumberPositions();
+      updatetotals();
+    }
+  }
+
+  // Nach strukturellen Änderungen: alle Indizes konsistent umschreiben
+  function renumberPositions() {
+    const fieldsets = Array.from(document.querySelectorAll('#positions fieldset.invoicepos'));
+    fieldsets.forEach((fs, newPos) => {
+      const oldPos = Number(fs.dataset.pos);
+      if (oldPos === newPos) {
+        // Sichtbare Positionsanzeige trotzdem aktualisieren
+        const posInputSame = fs.querySelector(`input[name="is${newPos}"]`);
+        if (posInputSame) posInputSame.value = String(newPos + 1);
+        return;
+      }
+
+      const rewrite = s => {
+        if (!s) return s;
+        return s
+          .replaceAll(`[${oldPos}]`, `[${newPos}]`)
+          .replaceAll(`(${oldPos})`, `(${newPos})`)
+          .replaceAll(`fieldset${oldPos}`, `fieldset${newPos}`)
+          .replace(new RegExp(`\\b(einheit|menge|einzelpreis|steuersatz|total|text|is|id)${oldPos}\\b`, 'g'),
+                   (_, pref) => `${pref}${newPos}`);
+      };
+
+      fs.id = `fieldset${newPos}`;
+      fs.dataset.pos = String(newPos);
+
+      fs.querySelectorAll('[id],[for],[name],[list],[onclick],[onchange]').forEach(el => {
+        for (const attr of ['id','for','name','list','onclick','onchange']) {
+          if (el.hasAttribute(attr)) {
+            const v = el.getAttribute(attr);
+            const r = rewrite(v);
+            if (r !== v) el.setAttribute(attr, r);
+          }
+        }
+      });
+
+      const posInput = fs.querySelector(`input[name="is${newPos}"]`);
+      if (posInput) posInput.value = String(newPos + 1);
+    });
+
+    updatetotals();
+  }
+
+  // Pfeil-Fallback
+  function moveUp(btn) {
+    const fs = btn.closest('fieldset.invoicepos');
+    const prev = fs?.previousElementSibling;
+    if (fs && prev && prev.matches('fieldset.invoicepos')) {
+      prev.insertAdjacentElement('beforebegin', fs);
+      renumberPositions();
+    }
+  }
+  function moveDown(btn) {
+    const fs = btn.closest('fieldset.invoicepos');
+    const next = fs?.nextElementSibling;
+    if (fs && next && next.matches('fieldset.invoicepos')) {
+      next.insertAdjacentElement('afterend', fs);
+      renumberPositions();
+    }
+  }
+
+  // Duplizieren
+  function duplicatePosition(pos) {
+    pos = Number(pos);
+    const original = document.getElementById('fieldset' + pos);
+    if (!original) return;
+
+    const newPos = getNextPos();
+    const clone = original.cloneNode(true);
+
+    // Umschreiben auf neue Positionsnummer
+    const rewrite = (s) => {
+      if (!s) return s;
+      return s
+        .replaceAll(`[${pos}]`, `[${newPos}]`)
+        .replaceAll(`(${pos})`, `(${newPos})`)
+        .replaceAll(`fieldset${pos}`, `fieldset${newPos}`)
+        .replace(new RegExp(`\\b(einheit|menge|einzelpreis|steuersatz|total|text|is|id)${pos}\\b`, 'g'),
+                 (_, pref) => `${pref}${newPos}`);
+    };
+    clone.id = 'fieldset' + newPos;
+    clone.dataset.pos = String(newPos);
+
+    clone.querySelectorAll('[id],[for],[name],[list],[onclick],[onchange]').forEach(el => {
+      for (const attr of ['id','for','name','list','onclick','onchange']) {
+        if (el.hasAttribute(attr)) {
+          const v = el.getAttribute(attr);
+          const r = rewrite(v);
+          if (r !== v) el.setAttribute(attr, r);
+        }
+      }
+    });
+
+    // Sichtbare Positionsnummer fortlaufend (wird nach renumber nochmal konsolidiert)
+    const posInput = clone.querySelector(`input[name="is${newPos}"]`);
+    if (posInput) posInput.value = String(document.querySelectorAll('fieldset.invoicepos').length + 1);
+
+    original.insertAdjacentElement('afterend', clone);
+
+    // Konsolidieren + Summen neu
+    renumberPositions();
+    calculatesum(newPos);
+  }
+
+  // update all fields
+  function updateAllFields() {
+    document.querySelectorAll('fieldset.invoicepos').forEach(fs => {
+      const pos = fs.dataset.pos;
+      calculatesum(pos);
+    });
+    updatetotals();
+  }
+
+  // Summen
+  function updatefields(position) {
+    calculatesum(position);
+    updatetotals();
+  }
+
+  function updatetotals() {
+    let netsum = 0;
+    let totalsum = 0;
+    const taxsums = {};
+    const fieldsets = document.querySelectorAll('fieldset.invoicepos');
+
+    for (const fieldset of fieldsets) {
+      const pos = fieldset.dataset.pos;
+      const taxInput = document.getElementById('steuersatz' + pos);
+      const totalInput = document.getElementById('total' + pos);
+      if (!taxInput || !totalInput) continue;
+      const taxamount = Number((taxInput.value || '0').toString().replace(',', '.'));
+      const linetotal = Number((totalInput.value || '0').toString().replace(',', '.'));
+      const tax = linetotal * taxamount / 100;
+      const gross = tax + linetotal;
+      taxsums[taxamount] = (taxsums[taxamount] || 0) + tax;
+      netsum += linetotal;
+      totalsum += gross;
+    }
+
+    const netsumElement = document.getElementById("netsum");
+    const totalsumElement = document.getElementById("gross");
+    netsumElement.innerText = (Math.round(netsum * 100) / 100).toFixed(2);
+    totalsumElement.innerText = (Math.round(totalsum * 100) / 100).toFixed(2);
+
+    // Steuerzeilen erzeugen
+    const keys = Object.keys(taxsums).sort((a, b) => b - a);
+    document.querySelectorAll('.taxrow').forEach(e => e.remove());
+    for (let i = 0; i < keys.length; i++) {
+      const k = keys[i];
+      const value = taxsums[k];
+      if (value > 0) {
+        const td1 = document.createElement("td");
+        const td2 = document.createElement("td");
+        td1.innerText = "Umsatzsteuer " + k + "%";
+        td2.innerText = (Math.round(value * 100) / 100).toFixed(2);
+        td2.setAttribute("class", "text-end");
+        const tr = document.createElement("tr");
+        tr.setAttribute("class", "taxrow");
+        tr.appendChild(td1);
+        tr.appendChild(td2);
+        const netsumrow = document.getElementById("netsumrow");
+        netsumrow.insertAdjacentElement("afterend", tr);
+      }
+    }
+  }
+
+  function calculatesum(position) {
+    const epElt = document.getElementById("einzelpreis" + position);
+    const qtyElt = document.getElementById("menge" + position);
+    const totalElt = document.getElementById("total" + position);
+    if (!epElt || !qtyElt || !totalElt) return;
+
+    let ep = epElt.value;
+    let qty = qtyElt.value;
+
+    if (ep !== '' && qty !== '') {
+      ep = ep.replace(',', '.');
+      qty = qty.replace(',', '.');
+      const total = Number(ep) * Number(qty);
+      totalElt.value = isNaN(total) ? '' : (Math.round(total * 100) / 100).toFixed(2);
+    } else {
+      totalElt.value = '';
+    }
+  }
+
+  // Init: Summen + Sortable
+  document.addEventListener("DOMContentLoaded", function () {
+    updatetotals();
+    if (window.Sortable) {
+      Sortable.create(document.getElementById('positions'), {
+        animation: 150,
+        draggable: 'fieldset.invoicepos',
+        handle: '.drag-handle',
+        onEnd: renumberPositions
+      });
+    }
+  });
+</script>
+
+{{ template "footer.html" . }}

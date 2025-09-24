@@ -1,0 +1,40 @@
+{{define "_flash"}}
+<script>window.__flashes__ = {{ if .flashes }}{{ toJSON .flashes }}{{ else }}[]{{ end }};</script>
+
+<div x-data="{
+        msgs: window.__flashes__ || [],
+        remove(i){ this.msgs.splice(i,1) },
+        bg(k){
+          switch(k){
+            case 'success': return 'bg-[var(--color-accent-green)]/20';
+            case 'error':   return 'bg-[var(--color-error)]/10';
+            case 'warning': return 'bg-[var(--color-primary-light)]';
+            default:        return 'bg-white';
+          }
+        }
+     }"
+     class="space-y-0">
+
+  <template x-for="(f,i) in msgs" :key="i">
+    <div
+        x-init="setTimeout(()=>remove(i), 8000)"
+         role="alert"
+         class="relative flex rounded-card shadow-md mb-8 border border-border "
+         :class="bg(f.Kind)">
+
+      <!-- Inhalt -->
+      <div class="flex-1  ">
+        <div class="flex items-start justify-between gap-4">
+          <div class="text-[var(--color-text)]">
+            <span x-text="f.Message"></span>
+          </div>
+          <button type="button"
+                  @click="remove(i)"
+                  class="shrink-0 inline-flex items-center justify-center rounded-lg px-2  hover:bg-[var(--color-hover)]/10"
+                  aria-label="Schließen" title="Schließen">✕</button>
+        </div>
+      </div>
+    </div>
+  </template>
+</div>
+{{end}}

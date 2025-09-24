@@ -1,0 +1,165 @@
+{{template "header.html" .}}
+{{with index . "persondetail"}}
+{{ $person := . }}
+
+<form class="grid grid-cols-1 gap-4" action='{{index $ "action"}}' method="post" x-data="{ showDivs: [], counter: 0 }">
+    <input type="hidden" name="csrf" value="{{$.CSRFToken}}">
+    <div class="col-sm-6">
+        <label for="personname">Name</label>
+        <input type="text" class="editfield" name="name" id="personname" placeholder="Dirk Müller" value="{{.Name}}">
+    </div>
+    <div class="col-sm-6">
+        <label for="firma">Firma</label>
+        <div class="relative">
+            <select name="firma" id="firma" class="selectbox">
+                {{ range ( index $ "companies" ) }}
+                <option value="{{.ID}}">{{.Name}}</option>
+                {{ end}}
+            </select>
+            <svg class="h-5 w-5 ml-1 absolute top-2.5 right-2.5 text-slate-700">
+                <use href="#updownsvg" />
+            </svg>
+        </div>
+    </div>
+    <div>
+        <label for="funktion">Funktion</label>
+        <input class="editfield" type="text" id="funktion" name="funktion" value="{{.Position}}"
+            placeholder="Marketing">
+    </div>
+    <div>
+        <label for="email">E-Mail</label>
+        <input class="editfield" type="email" id="email" name="email" value="{{ .EMail}}"
+            placeholder="person@company.de">
+    </div>
+    <div>
+        <h2>Telefonnummern</h2>
+    </div>
+    {{ range $i, $p := .Phones }}
+    <div id="phoneedit{{$i}}" class="grid grid-cols-5 gap-2" data-pos="{{$i}}">
+        <div class="col-span-2">
+            <label for="phone{{$i}}location"></label>
+            <input id="phone{{$i}}location" list="locationlist" name="phone[{{$i}}].location"
+                class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+                value="{{$p.Location}}">
+        </div>
+        <div class="col-span-2">
+            <label for="phone{{$i}}number"></label>
+            <input id="phone{{$i}}number" type="text" name="phone[{{$i}}].number"
+                class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+                value="{{$p.Number}}">
+        </div>
+        <div class="ps-4">
+            <a class="btn" style="position: relative; bottom: -16px; left: -7px"
+                onclick="document.getElementById('phoneedit{{$i}}').remove();">
+                <img src="/static/images/trash.svg">
+            </a>
+        </div>
+    </div>
+    {{ end }}
+    {{ $l := len .Phones }}
+    <template x-for="(div, index) in showDivs" :key="div.id">
+        <div class="grid grid-cols-5 gap-2 mt-2">
+            <div class="col-span-2">
+                <label :for="'phone' + (index +  {{ $l }} ) + 'location'"></label>
+                <input :id="'phone' + (index +  {{ $l }} ) + 'location'" list="locationlist"
+                    :name="'phone[' + (index +  {{ $l }}) + '].location'"
+                    class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5">
+            </div>
+            <div class="col-span-2">
+                <label :for="'phone' + (index + {{ $l }} ) + 'number'"></label>
+                <input :id="'phone' + (index + {{ $l }} ) + 'number'" type="text"
+                    :name="'phone[' + (index + {{ $l }}) + '].number'"
+                    class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5">
+            </div>
+            <div class="ps-4">
+                <a class="btn" style="position: relative; bottom: -16px; left: -7px" @click="showDivs.splice(index, 1)">
+                    <img src="/static/images/trash.svg">
+                </a>
+            </div>
+        </div>
+    </template>
+    <datalist id="locationlist">
+        <option value="Arbeit">
+        <option value="Durchwahl">
+        <option value="Fax">
+        <option value="Mobil">
+        <option value="Privat">
+        <option value="Zentrale">
+    </datalist>
+
+    <div class="mt-2">
+        <button @click="showDivs.push({ id: counter, location: '', number: '' }); counter++"
+            class="bg-primary-light text-text  rounded-button font-bold hover:bg-hover hover:text-white transition-colors"
+            type="button">
+            Telefonnummer hinzufügen
+        </button>
+    </div>
+    <div class="mt-3 grid sm:grid-cols-3 md:grid-cols-6 gap-4" x-data="{ confirmDelete: false }">
+        <button
+            class="bg-accent-green text-text  rounded-button font-bold hover:bg-hover hover:text-white transition-colors"
+            type="submit">
+            Speichern
+        </button>
+        <button type="button" @click='window.location.href=`{{index $ "cancel"}}`'
+            class=" col-span-1 bg-primary-light text-text px-6 py-3 rounded-button font-bold hover:bg-hover hover:text-white transition-colors">
+            Abbruch
+        </button>
+        <!-- Löschbutton -->
+        {{ if index $ "showremove" }}
+        <button @click="confirmDelete = true"
+            class="col-span-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700" type="button">
+            Löschen
+        </button>
+<div x-show="confirmDelete" x-cloak
+     class="col-span-1 fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+
+  <div class="bg-white p-6 rounded shadow-lg w-full max-w-md text-center"
+       x-data="{
+         csrf: '{{ $.CSRFToken }}',
+         deleting: false,
+         async doDelete() {
+           try {
+             this.deleting = true
+             const res = await fetch('/person/delete/{{ .ID }}', {
+               method: 'DELETE',
+               headers: { 'X-CSRF-Token': this.csrf },
+               credentials: 'same-origin'
+             })
+             if (!res.ok) throw new Error('HTTP ' + res.status)
+             window.location.href = '/company/{{ .CompanyID }}'
+           } catch (e) {
+             this.deleting = false
+             alert('Löschen fehlgeschlagen: ' + e.message)
+           }
+         }
+       }">
+
+    <h2 class="text-lg font-semibold mb-4">Bist du sicher?</h2>
+    <p class="mb-6">Diese Aktion kann nicht rückgängig gemacht werden.</p>
+
+    <div class="flex justify-center gap-4">
+      <button type="button"
+              @click="confirmDelete = false"
+              class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">
+        Abbrechen
+      </button>
+
+      <button type="button"
+              @click="confirmDelete = false; doDelete()"
+              :disabled="deleting"
+              class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50">
+        <span x-text="deleting ? 'Lösche…' : 'Ja, löschen'"></span>
+      </button>
+    </div>
+
+  </div>
+</div>
+
+        {{ end }}
+    </div>
+</form>
+
+{{end}}
+
+
+{{ template "footer.html" . }}

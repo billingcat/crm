@@ -1,0 +1,104 @@
+{{template "header.html" .}}
+    {{template "_flash" .}}
+<form action='{{index . "action"}}' method="post">
+    <input type="hidden" name="csrf" value="{{.CSRFToken}}">
+
+    {{with index . "settings"}}
+    <div class="grid sm:grid-cols-6 gap-4">
+        <div class="sm:col-span-6">
+            <label class="form-label" for="companyname">Eigener Firmenname</label>
+            <input class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+                type="text" name="companyname" id="companyname" value="{{.CompanyName}}">
+        </div>
+        <div class="sm:col-span-6">
+            <label class="form-label" for="contactperson">Ansprechpartner</label>
+            <input class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+                type="text" name="contactperson" id="contactperson" value="{{.InvoiceContact}}">
+        </div>
+        <div class="sm:col-span-6">
+            <label class="form-label" for="ownemail">E-Mail</label>
+            <input class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+                type="email" name="ownemail" id="ownemail" value="{{.InvoiceEMail}}">
+        </div>
+
+        <div class="sm:col-span-6">
+            <label class="form-label" for="address1">Adresse 1</label>
+            <input class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+                type="text" name="address1" id="address1" value="{{.Address1}}">
+        </div>
+
+        <div class="sm:col-span-6">
+            <label class="form-label" for="address2">Adresse 2</label>
+            <input class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+                type="text" name="address2" id="address2" value="{{.Address2}}">
+        </div>
+
+        <div class="sm:col-span-1">
+            <label class="form-label" for="zip">PLZ</label>
+            <input class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+                type="text" name="zip" id="zip" value="{{.ZIP}}">
+        </div>
+
+        <div class="sm:col-span-2">
+            <label class="form-label" for="city">Ort</label>
+            <input class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+                type="text" name="city" id="city" value="{{.City}}">
+        </div>
+
+        <div class="sm:col-span-3">
+            <label class="form-label" for="countrycode">Land</label>
+            <input class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+                type="text" name="countrycode" id="countrycode" placeholder="DE" value="{{.CountryCode}}">
+        </div>
+
+        <div class="sm:col-span-3">
+            <label class="form-label" for="vat">USt.-ID</label>
+            <input class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+                type="text" name="vat" id="vat" value="{{.VATID}}">
+        </div>
+        <div class="sm:col-span-3">
+            <label class="form-label" for="taxno">Steuernummer</label>
+            <input class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+                type="text" name="taxno" id="taxno" value="{{.TAXNumber}}">
+        </div>
+        <div class="sm:col-span-2">
+            <label class="form-label" for="invoicetemplate">Rechnungsnr.-Vorlage</label>
+            <input class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+                type="text" name="invoicetemplate" id="invoicetemplate" value="{{.InvoiceNumberTemplate}}">
+        </div>
+
+        <div class="flex flex-col items-start space-y-1 sm:col-span-2">
+            <label class="" for="uselocalcounter">Eigener Zähler je Kunde?</label>
+            <input class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" type="checkbox"
+                name="uselocalcounter" id="uselocalcounter" value="{{.UseLocalCounter}}" checked>
+        </div>
+        <div class="sm:col-span-2"></div>
+        <div class="sm:col-span-2">
+            <label class="form-label" for="bankname">Konto Inhaber</label>
+            <input class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+                type="text" name="bankname" id="bankname" value="{{.BankName}}">
+        </div>
+        <div class="sm:col-span-2">
+            <label class="form-label" for="bankiban">IBAN</label>
+            <input class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+                type="text" name="bankiban" id="bankiban" value="{{.BankIBAN}}">
+        </div>
+        <div class="sm:col-span-2">
+            <label class="form-label" for="bankbic">BIC</label>
+            <input class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+                type="text" name="bankbic" id="bankbic" value="{{.BankBIC}}">
+        </div>
+    </div>
+
+    {{end}}
+    <button
+        class="bg-primary text-text mt-4 px-6 py-3 rounded-button font-bold hover:bg-hover hover:text-white transition-colors"
+        type="submit">{{index . "submit"}}</button>
+    <a href='{{index . "cancel"}}'>
+        <button type="button"
+            class="bg-accent-green text-text px-6 py-3 rounded-button font-bold hover:bg-hover hover:text-white transition-colors">
+            Abbruch
+        </button></a>
+</form>
+
+{{template "footer.html" .}}

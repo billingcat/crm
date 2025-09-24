@@ -1,0 +1,65 @@
+{{template "header.html" . }}
+{{template "_flash" .}}
+
+<!-- Upload -->
+<form class="bg-white border border-gray-200 p-4 rounded-lg shadow-sm space-y-3 mb-3"
+      action="/filemanager/upload" method="post" enctype="multipart/form-data">
+  <input type="hidden" name="csrf" value="{{ .CSRFToken }}">
+  <input type="hidden" name="dir" value="{{ .CurrDir }}">
+
+  <div class="flex items-center gap-3">
+    <input
+      class="file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-primary file:text-white file:hover:bg-primary/90 file:cursor-pointer
+             px-3 py-2 rounded-md border border-gray-200 w-full bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+      type="file" name="files" multiple required>
+    <button
+      class="px-4 py-2 rounded-md bg-primary text-white hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary">
+      Hochladen
+    </button>
+  </div>
+
+  <p class="text-xs text-gray-500">Limit: 5MB Speicherplatz.</p>
+</form>
+
+<!-- Tabelle -->
+<div class="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+  <table class="min-w-full text-sm">
+    <thead class="bg-gray-50">
+      <tr class="text-left text-gray-600">
+        <th class="px-4 py-2 font-semibold">Name</th>
+        <th class="px-4 py-2 font-semibold">Größe</th>
+        <th class="px-4 py-2 font-semibold">Geändert</th>
+        <th class="px-4 py-2"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {{ range .Files }}
+      <tr class="border-t border-gray-100 hover:bg-gray-50">
+        <td class="px-4 py-2">
+          <a class="text-gray-800 hover:underline font-medium"
+             href="/filemanager/download/{{ .Name }}">{{ .Name }}</a>
+        </td>
+        <td class="px-4 py-2 text-gray-600">{{ if .IsDir }}–{{ else }}{{ .SizeHuman }}{{ end }}</td>
+        <td class="px-4 py-2 text-gray-600">{{ .ModTime.Format "2006-01-02 15:04:05" }}</td>
+        <td class="px-4 py-2 text-right">
+          {{ if not .IsDir }}
+          <form action="/filemanager/delete" method="post" onsubmit="return confirm('Wirklich löschen?')">
+            <input type="hidden" name="csrf" value="{{ $.CSRFToken }}">
+            <input type="hidden" name="path" value="{{ .Name }}">
+            <button
+              class="px-3 py-1.5 rounded-md bg-rose-600 text-white hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500">
+              Löschen
+            </button>
+          </form>
+          {{ end }}
+        </td>
+      </tr>
+      {{ else }}
+      <tr>
+        <td class="px-4 py-3 text-gray-500" colspan="4">Leer.</td>
+      </tr>
+      {{ end }}
+    </tbody>
+  </table>
+</div>
+{{template "footer.html" .}}

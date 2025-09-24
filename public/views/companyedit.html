@@ -1,0 +1,217 @@
+{{template "header.html" .}}
+{{$company := (index . "company") }}
+<form action='{{index . "action"}}' method="post">
+  <input type="hidden" name="csrf" value="{{ .CSRFToken }}">
+
+  <fieldset class="mt-3 p-3 border rounded grid grid-cols-4 gap-2">
+    <legend>Stammdaten</legend>
+    <div class="w-full col-span-4       ">
+      <label for="companyname">Firmenname</label>
+      <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+        name="name" id="companyname" placeholder="Muster GmbH" value="{{$company.Name}}">
+    </div>
+    <div class="col-span-4      ">
+      <label for="background">Hintergrund</label>
+      <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+        id="background" name="background" placeholder="Kontakt über Musterfirma" value="{{$company.Background}}">
+    </div>
+    <div class="col-span-4">
+      <label for="address">Adresse</label>
+      <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+        name="adresse1" id="address" placeholder="Hauptstraße 12" value="{{$company.Adresse1}}">
+    </div>
+    <div class="col-span-4">
+      <label for="address2">Zusatz <span class="text-muted">(Optional)</span></label>
+      <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+        name="adresse2" id="address2" placeholder="3. Hinterhof" value="{{$company.Adresse2}}">
+    </div>
+    <div class="mb-2">
+      <label for="plz">PLZ</label>
+      <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+        id="plz" name="plz" placeholder="12345" value="{{$company.PLZ}}">
+    </div>
+    <div class="mb-2 col-span-2">
+      <label for="ort">Ort</label>
+      <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+        id="ort" name="ort" placeholder="Berlin" value="{{$company.Ort}}">
+    </div>
+    <div class="col-span-1">
+      <label for="country">Land</label>
+      <input class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+        list="countryOptions" id="country" name="land" placeholder="Tippen für Suche..." value="{{$company.Land}}"
+        autocomplete="off">
+      <datalist id="countryOptions">
+        <option value="Deutschland">
+        <option value="Schweiz">
+        <option value="Niederlande">
+        <option value="Frankreich">
+        <option value="Österreich">
+        <option value="Polen">
+      </datalist>
+    </div>
+  </fieldset>
+
+  <fieldset class="mt-3 p-3 border rounded grid sm:grid-cols-4 gap-2">
+    <legend>Rechnungsdaten</legend>
+    <div class="sm:col-span-4">
+      <label for="emailinvoice">Email für Rechnungen</label>
+      <input type="email" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+        name="rechnungemail" id="emailinvoice" placeholder="info@example.com" value="{{$company.RechnungEmail}}">
+    </div>
+    <div class="sm:col-span-4">
+      <label for="contactinvoice">Ansprechpartner für Rechnungen</label>
+      <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+        name="contactinvoice" id="contactinvoice" placeholder="Max Mustermann" value="{{$company.ContactInvoice}}">
+    </div>
+
+    <div>
+      <label for="kundennummer">Kundennummer</label>
+      <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+        id="kundennummer" name="kundennummer" placeholder="12345" value="{{$company.Kundennummer}}">
+    </div>
+    <div>
+      <label for="lieferantennummer">Lieferantennummer</label>
+      <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+        id="lieferantennummer" name="suppliernumber" placeholder="12345" value="{{$company.SupplierNumber}}">
+    </div>
+    <div class="col-md-3">
+      <label for="invoicecurrency">Währung</label>
+      <input list="currency" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+        id="invoicecurrency" name="invoicecurrency" value="{{$company.InvoiceCurrency}}">
+    </div>
+
+    <div>
+      <label for="umsatzsteuerid">USt. ID</label>
+      <input type="text" name="vatid"
+        class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5" id="umsatzsteuerid"
+        placeholder="DE12345678" value="{{$company.VATID}}">
+    </div>
+    <div>
+      <label for="taxtype">Steuerart</label>
+      <div class="relative">
+        <select name="invoicetaxtype" id="taxtype"
+          class="w-full bg-white placeholder:text-slate-400 text-slate-700 text-sm border border-slate-200 rounded-lg pl-3 pr-8 py-2 transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-400 shadow-sm focus:shadow-md appearance-none cursor-pointer">
+          <option value="S" {{if eq $company.InvoiceTaxType "S" }}selected{{end}}>Umsatzsteuerpflichtige Umsätze
+          </option>
+          <option value="G" {{if eq $company.InvoiceTaxType "G" }}selected{{end}}>Ausfuhrlieferung (Außerhalb EU)
+          </option>
+          <option value="K" {{if eq $company.InvoiceTaxType "K" }}selected{{end}}>Innergemeinschaftliche Lieferungen
+            (Innerhalb EU)</option>
+          <option value="E" {{if eq $company.InvoiceTaxType "E" }}selected{{end}}>Steuerfreie Umsätze §4 UStG
+          </option>
+          <option value="AE" {{if eq $company.InvoiceTaxType "AE" }}selected{{end}}>Reverse Charge</option>
+        </select>
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.2" stroke="currentColor"
+          class="h-5 w-5 ml-1 absolute top-2.5 right-2.5 text-slate-700">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 15 12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9" />
+        </svg>
+      </div>
+
+    </div>
+    <div class="sm:col-span-1">
+      <label for="defaulttaxrate">Standardsteuersatz</label>
+      <input type="text" name="defaulttaxrate" id="defaulttaxrate"
+        class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+        value="{{$company.DefaultTaxRate}}">
+    </div>
+    <div class="sm:col-span-2">
+      <label for="exemptionreason">Grund bei Steuerbefreiung</label>
+      <input type="text" name="invoiceexemptionreason" id="exemptionreason"
+        class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+        value="{{$company.InvoiceExemptionReason}}">
+    </div>
+    <div class="sm:col-span-4">
+      <label for="invoiceopening">Anrede</label>
+      <textarea name="invoiceopening" id="invoiceopening"
+        class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+        style="height: 80px;">{{$company.InvoiceOpening}}</textarea>
+    </div>
+    <div class="sm:col-span-4">
+      <label for="invoicefooter">Fußzeile</label>
+      <textarea name="invoicefooter" id="invoicefooter"
+        class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+        style="height: 80px;">{{$company.InvoiceFooter}}</textarea>
+    </div>
+  </fieldset>
+
+  <fieldset class="border rounded p-3 mt-3" x-data="{ counter: 1, showDivs: [] }">
+    <legend>Rufnummern</legend>
+    {{ range $i, $p := $company.Phones }}
+    <div id="phoneedit{{$i}}" class="grid grid-cols-5 gap-2" data-pos="{{$i}}">
+      <div class="col-span-2">
+        <label for="phone{{$i}}location"></label>
+        <input id="phone{{$i}}location" list="locationlist" name="phone[{{$i}}].location"
+          class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5" value="{{$p.Location}}">
+      </div>
+      <div class="col-span-2">
+        <label for="phone{{$i}}number"></label>
+        <input id="phone{{$i}}number" type="text" name="phone[{{$i}}].number"
+          class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+          value="{{$p.Number}}">
+      </div>
+      <div class="ps-4">
+        <a class="btn" style="position: relative; bottom: -16px; left: -7px"
+          onclick="document.getElementById('phoneedit{{$i}}').remove();">
+          <img src="/static/images/trash.svg">
+        </a>
+      </div>
+    </div>
+    {{ end }}
+    {{ $l := len $company.Phones }}
+    <template x-for="(div, index) in showDivs" :key="div.id">
+      <div class="grid grid-cols-5 gap-2 mt-2">
+        <div class="col-span-2">
+          <label :for="'phone' + (index +  {{ $l }} ) + 'location'"></label>
+          <input :id="'phone' + (index +  {{ $l }} ) + 'location'" list="locationlist"
+            :name="'phone[' + (index +  {{ $l }}) + '].location'"
+            class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5">
+        </div>
+        <div class="col-span-2">
+          <label :for="'phone' + (index + {{ $l }} ) + 'number'"></label>
+          <input :id="'phone' + (index + {{ $l }} ) + 'number'" type="text" :name="'phone[' + (index + {{ $l }}) + '].number'"
+            class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5">
+        </div>
+        <div class="ps-4">
+          <a class="btn" style="position: relative; bottom: -16px; left: -7px" @click="showDivs.splice(index, 1)">
+            <img src="/static/images/trash.svg">
+          </a>
+        </div>
+      </div>
+    </template>
+
+    <div id="telefonnummern" class="mt-3">
+      <button @click="showDivs.push({ id: counter, location: '', number: '' }); counter++"
+        class="bg-primary-light text-text  rounded-button font-bold hover:bg-hover hover:text-white transition-colors"
+        type="button">
+        Zeile hinzufügen
+      </button>
+    </div>
+  </fieldset>
+
+
+  <button
+    class="bg-primary text-text mt-4 px-6 py-3 rounded-button font-bold hover:bg-hover hover:text-white transition-colors"
+    type="submit">{{index . "submit"}}</button>
+  <a href='{{index . "cancel"}}'>
+    <button type="button"
+      class="bg-accent-green text-text px-6 py-3 rounded-button font-bold hover:bg-hover hover:text-white transition-colors">
+      Abbruch
+    </button></a>
+
+  <datalist id="currency">
+    <option>EUR</option>
+    <option>CHF</option>
+  </datalist>
+  <datalist id="locationlist">
+    <option value="Mobil">
+    <option value="Arbeit">
+    <option value="Fax">
+    <option value="Privat">
+    <option value="Zentrale">
+    <option value="Durchwahl">
+  </datalist>
+</form>
+
+
+
+{{template "footer.html" .}}

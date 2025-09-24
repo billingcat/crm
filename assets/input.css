@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+@theme {
+    --color-primary: #F4A623;
+    --color-primary-light: #FCE8B2;
+    --color-accent-green: #5DBB63;
+    --color-background: #FFF9F0;
+    --color-surface: #F7EBD2;
+    --color-text: #2A2A2A;
+    --color-border: #444444;
+    --color-hover: #F76C3C;
+    --color-error: #E63946;
+    --color-success: #3CB371;
+
+}
+
+.rounded-card {
+    @apply rounded-lg  p-4;
+}
+
+.rounded-button {
+    @apply rounded-lg px-4 py-2;
+}
+
+
+.selectbox {
+    @apply w-full bg-white placeholder:text-slate-400 text-slate-700 text-sm border border-slate-200 rounded-lg pl-3 pr-8 py-2 transition duration-300 focus:outline-none focus:border-slate-400 hover:border-slate-400 shadow-sm focus:shadow-md appearance-none cursor-pointer;
+}
+
+.selectbox-sm {
+    @apply w-full bg-white placeholder:text-slate-400 text-slate-700 text-sm border border-slate-200 rounded-lg pl-3 pr-8 py-1 transition duration-300 focus:outline-none focus:border-slate-400 hover:border-slate-400 shadow-sm focus:shadow-md appearance-none cursor-pointer;
+}
+
+.editfield {
+    @apply bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5
+}
