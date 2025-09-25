@@ -20,7 +20,7 @@ Check out [billingcat.de](https://billingcat.de) – you can sign up for the new
 - Open Source and SaaS
 
 >  Note: billingcat is currently available **only in German** (source code and user interface).
-> "billingcat" is a registered trademark of [Your Company / Name].
+> "billingcat" is a registered trademark of Patrick Gundlach.
 
 ---
 
@@ -29,7 +29,8 @@ Check out [billingcat.de](https://billingcat.de) – you can sign up for the new
 - [Go](https://go.dev/) + [Echo](https://echo.labstack.com/) for the backend
 - [GORM](https://gorm.io/) as ORM
 - [Tailwind CSS](https://tailwindcss.com/) + [Alpine.js](https://alpinejs.dev/) for the frontend
-- [SQLite](https://www.sqlite.org/) as the default database
+- [SQLite](https://www.sqlite.org/) as the default database (built-in, file-based, zero-config)
+- [PostgreSQL](https://www.postgresql.org/) as an alternative database
 - [speedata Publisher](https://github.com/speedata/publisher) for PDF generation
 
 ---
