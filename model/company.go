@@ -77,9 +77,13 @@ func (crmdb *CRMDatenbank) LoadAllCompanies(ownerid any) ([]*Company, error) {
 	return companies, result.Error
 }
 
-// FindAllCompaniesWithText sucht über alle Firmendaten.
-func (crmdb *CRMDatenbank) FindAllCompaniesWithText(search string) ([]*Company, error) {
-	var companies = make([]*Company, 0)
-	result := crmdb.db.Preload("Phones").Where("name LIKE ?", "%"+search+"%").Find(&companies)
+// FindAllCompaniesWithText sucht über alle Firmendaten eines Owners.
+func (crmdb *CRMDatenbank) FindAllCompaniesWithText(search string, ownerid uint) ([]*Company, error) {
+	var companies []*Company
+	result := crmdb.db.
+		Preload("Phones").
+		Where("owner_id = ? AND name LIKE ?", ownerid, "%"+search+"%").
+		Find(&companies)
+
 	return companies, result.Error
 }

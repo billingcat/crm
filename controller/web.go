@@ -291,7 +291,7 @@ func (ctrl *controller) root(c echo.Context) error {
 
 func (ctrl *controller) search(c echo.Context) error {
 	var err error
-
+	ownerID := c.Get("ownerid").(uint)
 	str := strings.TrimSpace(c.QueryParam("query"))
 	if str == "" {
 		return c.JSON(http.StatusOK, []any{})
@@ -314,11 +314,11 @@ func (ctrl *controller) search(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Search query cannot be empty")
 	}
 
-	companies, err := ctrl.model.FindAllCompaniesWithText(str)
+	companies, err := ctrl.model.FindAllCompaniesWithText(str, ownerID)
 	if err != nil {
 		return ErrInvalid(err, "Fehler beim Suchen der Firmen")
 	}
-	people, err := ctrl.model.FindAllPeopleWithText(str)
+	people, err := ctrl.model.FindAllPeopleWithText(str, ownerID)
 	if err != nil {
 		return ErrInvalid(err, "Fehler beim Suchen der Kontakte")
 	}

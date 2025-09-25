@@ -75,9 +75,13 @@ func (crmdb *CRMDatenbank) LoadPerson(id any, ownerID any) (*Person, error) {
 	return c, result.Error
 }
 
-// FindAllPeopleWithText sucht über alle Firmendaten
-func (crmdb *CRMDatenbank) FindAllPeopleWithText(search string) ([]*Person, error) {
-	var people = make([]*Person, 0)
-	result := crmdb.db.Preload("Phones").Where("name LIKE ?", "%"+search+"%").Find(&people)
+// FindAllPeopleWithText sucht über alle Personendaten eines Owners.
+func (crmdb *CRMDatenbank) FindAllPeopleWithText(search string, ownerid uint) ([]*Person, error) {
+	var people []*Person
+	result := crmdb.db.
+		Preload("Phones").
+		Where("owner_id = ? AND name LIKE ?", ownerid, "%"+search+"%").
+		Find(&people)
+
 	return people, result.Error
 }
