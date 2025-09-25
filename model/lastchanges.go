@@ -23,20 +23,39 @@ func (crmdb *CRMDatenbank) GetActivityHeads(ownerID any, limit int) ([]ActivityH
 	var rows []ActivityHead
 
 	raw := `
-		SELECT 'company' AS item_type, id AS item_id, created_at, NULL AS company_id, NULL AS parent_type, NULL AS parent_id
-		  FROM companies
-		 WHERE owner_id = ?
-		UNION ALL
-		SELECT 'invoice' AS item_type, id AS item_id, created_at, company_id, NULL AS parent_type, NULL AS parent_id
-		  FROM invoices
-		 WHERE owner_id = ?
-		UNION ALL
-		SELECT 'note' AS item_type, id AS item_id, created_at, NULL AS company_id, parent_type, parent_id
-		  FROM notes
-		 WHERE owner_id = ?
-		ORDER BY created_at DESC
-		LIMIT ?
-	`
+SELECT CAST('company' AS text) AS item_type,
+       CAST(id AS bigint)      AS item_id,
+       created_at,
+       CAST(NULL AS bigint)    AS company_id,
+       CAST(NULL AS text)      AS parent_type,
+       CAST(NULL AS bigint)    AS parent_id
+FROM companies
+WHERE owner_id = ?
+
+UNION ALL
+
+SELECT CAST('invoice' AS text) AS item_type,
+       CAST(id AS bigint)      AS item_id,
+       created_at,
+       CAST(company_id AS bigint),
+       CAST(NULL AS text)      AS parent_type,
+       CAST(NULL AS bigint)    AS parent_id
+FROM invoices
+WHERE owner_id = ?
+
+UNION ALL
+
+SELECT CAST('note' AS text)    AS item_type,
+       CAST(id AS bigint)      AS item_id,
+       created_at,
+       CAST(NULL AS bigint)    AS company_id,
+       CAST(parent_type AS text),
+       CAST(parent_id AS bigint)
+FROM notes
+WHERE owner_id = ?
+
+ORDER BY created_at DESC
+LIMIT ?;	`
 	if err := crmdb.db.Raw(raw, ownerID, ownerID, ownerID, limit).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
