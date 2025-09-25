@@ -1,26 +1,51 @@
 {{template "header.html" .}}
-<div id="realcontent" class="realcontent">
-  <div class="container mt-5">
-    <div class="row justify-content-center">
-      <div class="col-md-6">
-        <h2 class="text-center mb-4">Register</h2>
-        <form method="POST" action="/register">
-          <input type="hidden" name="csrf" value="{{.CSRFToken}}">
-          <div class="form-group mb-3">
-            <label for="email">Email</label>
-            <input type="email" class="form-control" id="email" name="email" placeholder="Enter email" required>
-          </div>
-          <div class="form-group mb-3">
-            <label for="password">Password</label>
-            <input type="password" class="form-control" id="password" name="password" placeholder="Enter password" required>
-          </div>
-          <div class="d-flex justify-content-between">
-            <button type="submit" class="btn btn-primary">Register</button>
-            <a href="/" class="btn btn-secondary">Cancel</a>
-          </div>
-        </form>
-      </div>
+<div class="flex-1 p-8">
+  {{template "_flash" .}}
+
+  <div class="bg-surface border border-border rounded-card shadow-md p-8 mb-8">
+    <div class="mb-8">
+      <h2 class="text-2xl font-bold mb-6">Registrieren</h2>
+
+      <!-- Info text -->
+      <p class="text-sm text-gray-600 mb-6">
+        Gib deine E-Mail-Adresse ein. Wir schicken dir eine Nachricht mit den nächsten Schritten.
+      </p>
+
+      <form class="space-y-4" method="POST" action="/register" novalidate>
+        <input type="hidden" name="csrf" value="{{ .CSRFToken }}">
+        <!-- Email -->
+        <div class="mb-5">
+          <label for="email" class="block text-sm font-medium mb-1">E-Mail</label>
+          <input
+            type="email"
+            id="email"
+            name="email"
+            autocomplete="email"
+            required
+            class="bg-white rounded-lg w-full px-4 py-2 border border-border rounded-button focus:ring-2 focus:ring-primary focus:border-transparent" />
+          <p class="text-xs text-gray-500 mt-1">
+            Wir senden dir einen Bestätigungslink. Erst danach geht’s weiter.
+          </p>
+        </div>
+
+
+        <div class="hidden" aria-hidden="true">
+          <label for="company">Company</label>
+          <input id="company" name="company" type="text" tabindex="-1" autocomplete="off">
+        </div>
+
+        <button
+          class="bg-primary text-text px-6 py-3 rounded-button font-bold hover:bg-hover hover:text-white transition-colors">
+          Registrieren
+        </button>
+
+        <div class="text-sm mt-3">
+          Schon ein Konto?
+          <a href="/login" class="text-primary hover:underline">Zum Login</a>
+        </div>
+      </form>
     </div>
   </div>
 </div>
 {{template "footer.html" .}}
+

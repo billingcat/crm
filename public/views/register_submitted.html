@@ -1,0 +1,17 @@
+{{template "header.html" .}}
+<div class="flex-1 p-8">
+  {{template "_flash" .}}
+
+  <div class="bg-surface border border-border rounded-card shadow-md p-8 mb-8 text-center">
+    <h2 class="text-2xl font-bold mb-4">Fast geschafft!</h2>
+    <p class="text-gray-700 mb-6">
+      Wenn für diese E-Mail ein Konto existiert oder erstellt werden kann, haben wir dir eine Nachricht mit den nächsten Schritten geschickt.
+    </p>
+
+    <a href="/login"
+       class="inline-block bg-primary text-text px-6 py-3 rounded-button font-bold hover:bg-hover hover:text-white transition-colors">
+      Zum Login
+    </a>
+  </div>
+</div>
+{{template "footer.html" .}}

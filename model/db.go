@@ -64,6 +64,9 @@ func (crmdb *CRMDatenbank) autoMigrate() error {
 	if err = crmdb.db.AutoMigrate(&User{}); err != nil {
 		return err
 	}
+	if err = crmdb.db.AutoMigrate(&SignupToken{}); err != nil {
+		return err
+	}
 	if err = crmdb.db.AutoMigrate(&RecentView{}); err != nil {
 		return err
 	}

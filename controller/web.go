@@ -112,6 +112,10 @@ func (ctrl *controller) defaultResponseMap(c echo.Context, title string) map[str
 		responseMap["flashes"] = []Flash{}
 	}
 
+	if t := c.Get(middleware.DefaultCSRFConfig.ContextKey); t != nil {
+		responseMap["CSRFToken"] = t.(string)
+	}
+
 	ownerID := c.Get("ownerid")
 	userID := c.Get("uid")
 	if ownerID == nil || userID == nil {
@@ -131,9 +135,6 @@ func (ctrl *controller) defaultResponseMap(c echo.Context, title string) map[str
 		c.Get("logger").(*slog.Logger).Warn("cannot get recent items", "error", err)
 	} else {
 		responseMap["recentitems"] = items
-	}
-	if t := c.Get(middleware.DefaultCSRFConfig.ContextKey); t != nil {
-		responseMap["CSRFToken"] = t.(string) // ContextKey ist standardmäßig "csrf"
 	}
 	return responseMap
 }
@@ -634,6 +635,9 @@ func NewController(crmdb *model.CRMDatenbank) error {
 	e.GET("/logout", ctrl.logout)
 	e.GET("/register", ctrl.register)
 	e.POST("/register", ctrl.register)
+	e.GET("/verify", ctrl.verifyEmail)
+	e.GET("/set-password", ctrl.showSetPasswordForm)
+	e.POST("/set-password", ctrl.handleSetPasswordSubmit)
 	e.GET("/passwordreset/:token", ctrl.showPasswordResetForm)
 	e.POST("/passwordreset/:token", ctrl.handlePasswordResetSubmit)
 	e.GET("/passwordreset", ctrl.showPasswordResetRequest)
