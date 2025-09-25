@@ -77,11 +77,20 @@ func (crmdb *CRMDatenbank) LoadPerson(id any, ownerID any) (*Person, error) {
 
 // FindAllPeopleWithText sucht über alle Personendaten eines Owners.
 func (crmdb *CRMDatenbank) FindAllPeopleWithText(search string, ownerid uint) ([]*Person, error) {
-	var people []*Person
-	result := crmdb.db.
-		Preload("Phones").
-		Where("owner_id = ? AND name LIKE ?", ownerid, "%"+search+"%").
-		Find(&people)
+	search = likeEscape(search)
+	like := "%" + search + "%"
 
-	return people, result.Error
+	var people []*Person
+	q := crmdb.db.Preload("Phones")
+
+	switch crmdb.db.Dialector.Name() {
+	case "postgres":
+		// Postgres: ILIKE für case-insensitive Suche
+		q = q.Where("owner_id = ? AND name ILIKE ? ESCAPE '\\'", ownerid, like)
+	default: // sqlite, mysql/mariadb
+		q = q.Where("owner_id = ? AND LOWER(name) LIKE LOWER(?) ESCAPE '\\'", ownerid, like)
+	}
+
+	err := q.Find(&people).Error
+	return people, err
 }

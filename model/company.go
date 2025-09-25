@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
@@ -78,12 +79,26 @@ func (crmdb *CRMDatenbank) LoadAllCompanies(ownerid any) ([]*Company, error) {
 }
 
 // FindAllCompaniesWithText sucht über alle Firmendaten eines Owners.
-func (crmdb *CRMDatenbank) FindAllCompaniesWithText(search string, ownerid uint) ([]*Company, error) {
-	var companies []*Company
-	result := crmdb.db.
-		Preload("Phones").
-		Where("owner_id = ? AND name LIKE ?", ownerid, "%"+search+"%").
-		Find(&companies)
+func likeEscape(s string) string {
+	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return r.Replace(s)
+}
 
-	return companies, result.Error
+func (crmdb *CRMDatenbank) FindAllCompaniesWithText(search string, ownerid uint) ([]*Company, error) {
+	search = likeEscape(search)
+	like := "%" + search + "%"
+	var companies []*Company
+
+	q := crmdb.db.Preload("Phones")
+
+	switch crmdb.db.Dialector.Name() {
+	case "postgres":
+		// Schnell + trgm-freundlich
+		q = q.Where("owner_id = ? AND name ILIKE ? ESCAPE '\\'", ownerid, like)
+	default: // sqlite, mysql/mariadb
+		q = q.Where("owner_id = ? AND LOWER(name) LIKE LOWER(?) ESCAPE '\\'", ownerid, like)
+	}
+
+	err := q.Find(&companies).Error
+	return companies, err
 }
