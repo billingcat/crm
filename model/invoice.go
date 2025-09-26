@@ -12,7 +12,21 @@ import (
 	"github.com/shopspring/decimal"
 	"github.com/speedata/einvoice"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
+
+type InvoiceStatus string
+
+const (
+	InvoiceStatusDraft  InvoiceStatus = "draft"  // Entwurf
+	InvoiceStatusIssued InvoiceStatus = "issued" // Gestellt/versendet
+	InvoiceStatusPaid   InvoiceStatus = "paid"   // Bezahlt
+	InvoiceStatusVoided InvoiceStatus = "voided" // Storniert
+)
+
+func (s InvoiceStatus) IsFinal() bool {
+	return s == InvoiceStatusPaid || s == InvoiceStatusVoided
+}
 
 type Invoice struct {
 	gorm.Model
@@ -36,6 +50,10 @@ type Invoice struct {
 	TaxAmounts       []TaxAmount `gorm:"-"`
 	TaxNumber        string
 	TaxType          string
+	Status           InvoiceStatus `gorm:"type:text;not null;default:draft;check:status IN ('draft','issued','paid','voided');index;index:idx_owner_status"`
+	IssuedAt         *time.Time    // gesetzt bei Status -> issued
+	PaidAt           *time.Time    // gesetzt bei Status -> paid
+	VoidedAt         *time.Time    // gesetzt bei Status -> voided
 }
 
 // TaxAmount collects the amount for each rate
@@ -332,4 +350,126 @@ func (crmdb *CRMDatenbank) CreateZUGFeRDXML(inv *Invoice, ownerID any, path stri
 
 	return os.WriteFile(path, []byte(sb.String()), 0644)
 
+}
+
+// --- Status Transitions ------------------------------------------------------
+//
+// Allowed transitions:
+//   draft  -> issued | voided
+//   issued -> paid   | voided
+//   paid   -> (final, no further changes)
+//   voided -> (final, no further changes)
+
+func (crmdb *CRMDatenbank) changeInvoiceStatus(
+	id uint, ownerID uint,
+	to InvoiceStatus, t time.Time,
+) error {
+	return crmdb.db.Transaction(func(tx *gorm.DB) error {
+		var inv Invoice
+
+		// Lock the row (Postgres: FOR UPDATE; SQLite: no-op)
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ? AND owner_id = ?", id, ownerID).
+			First(&inv).Error; err != nil {
+			return err
+		}
+
+		from := inv.Status
+
+		// Guard: do not change final states
+		if from.IsFinal() {
+			return nil
+		}
+
+		// Allowed transitions map
+		allowed := map[InvoiceStatus]map[InvoiceStatus]bool{
+			InvoiceStatusDraft:  {InvoiceStatusIssued: true, InvoiceStatusVoided: true},
+			InvoiceStatusIssued: {InvoiceStatusPaid: true, InvoiceStatusVoided: true},
+		}
+		if _, ok := allowed[from][to]; !ok {
+			return fmt.Errorf("invalid status transition %q -> %q", from, to)
+		}
+
+		// Prepare fields to update
+		updates := map[string]any{
+			"status": to,
+		}
+		switch to {
+		case InvoiceStatusIssued:
+			updates["issued_at"] = t
+			// Optional: assign invoice number here if needed
+		case InvoiceStatusPaid:
+			updates["paid_at"] = t
+		case InvoiceStatusVoided:
+			// Prevent voiding already paid invoices
+			if from == InvoiceStatusPaid {
+				return fmt.Errorf("paid invoices cannot be voided")
+			}
+			updates["voided_at"] = t
+		}
+
+		// Perform the update
+		if err := tx.Model(&Invoice{}).
+			Where("id = ? AND owner_id = ?", id, ownerID).
+			Updates(updates).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+}
+
+// In deinem model (z. B. in invoice.go):
+
+// MarkInvoiceDraft rolls back an issued invoice to draft.
+// Business rules: clears IssuedAt (and optionally Number/Counter).
+func (crmdb *CRMDatenbank) MarkInvoiceDraft(id uint, ownerID uint, t time.Time) error {
+	return crmdb.db.Transaction(func(tx *gorm.DB) error {
+		var inv Invoice
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ? AND owner_id = ?", id, ownerID).
+			First(&inv).Error; err != nil {
+			return err
+		}
+
+		// Only allow issued -> draft (paid/voided remain final)
+		if inv.Status == InvoiceStatusPaid || inv.Status == InvoiceStatusVoided {
+			return fmt.Errorf("cannot revert from %s to draft", inv.Status)
+		}
+		if inv.Status != InvoiceStatusIssued && inv.Status != InvoiceStatusDraft {
+			// From draft to draft is a no-op
+			if inv.Status == InvoiceStatusDraft {
+				return nil
+			}
+			return fmt.Errorf("invalid transition %q -> draft", inv.Status)
+		}
+
+		updates := map[string]any{
+			"status":    InvoiceStatusDraft,
+			"issued_at": nil,
+		}
+
+		// Optional (falls du Nummern erst bei 'issued' vergibst und beim Rückgang löschen willst):
+		// updates["number"]  = ""   // vorsichtig: nur wenn Nummer noch nicht an Kunden ging
+		// updates["counter"] = 0    // dito
+
+		return tx.Model(&Invoice{}).
+			Where("id = ? AND owner_id = ?", id, ownerID).
+			Updates(updates).Error
+	})
+}
+
+// Convenience: draft -> issued
+func (crmdb *CRMDatenbank) MarkInvoiceIssued(id uint, ownerID uint, t time.Time) error {
+	return crmdb.changeInvoiceStatus(id, ownerID, InvoiceStatusIssued, t)
+}
+
+// Convenience: (draft|issued) -> paid
+func (crmdb *CRMDatenbank) MarkInvoicePaid(id uint, ownerID uint, t time.Time) error {
+	return crmdb.changeInvoiceStatus(id, ownerID, InvoiceStatusPaid, t)
+}
+
+// Convenience: (draft|issued) -> voided
+func (crmdb *CRMDatenbank) VoidInvoice(id uint, ownerID uint, t time.Time) error {
+	return crmdb.changeInvoiceStatus(id, ownerID, InvoiceStatusVoided, t)
 }

@@ -4,127 +4,172 @@
 
 <div class="grid gap-4 sm:grid-cols-2">
 
-    <div class="bg-white shadow rounded-xl p-4">
+  <div class="bg-white shadow rounded-xl p-4">
+    <div class="flex items-start justify-between gap-3">
+      <div>
         <p class="text-sm text-gray-500">Rechnungsnummer</p>
         <p class="text-lg">{{$invoice.Number}}</p>
-
-        <p class="text-sm text-gray-500">Empfänger</p>
-        <p><a href="/company/{{$company.ID}}" class="text-blue-600 hover:underline">{{$company.Name}}</a></p>
-        {{ with $invoice.ContactInvoice }}
-        <p class="text-sm text-gray-500">Ansprechpartner</p>
-        <p>{{.}}</p>
-        {{end}}
-        {{ with $invoice.OrderNumber }}
-        <p class="text-sm text-gray-500">Bestellnummer</p>
-        <p>{{.}}</p>
-        {{ end }}
-        {{ with $invoice.SupplierNumber }}
-        <p class="text-sm text-gray-500">Lieferantennummer</p>
-        <p>{{.}}</p>
-        {{ end }}
+      </div>
+      <span x-data x-bind:class="$store.invoice.badgeClass"
+        class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold">
+        <span x-text="$store.invoice.statusLabel"></span>
+      </span>
     </div>
 
-    <div class="bg-white shadow rounded-xl p-4">
-        <p class="text-sm text-gray-500">Datum</p>
-        <p>{{$invoice.Date | userdate }}</p>
-        <p class="text-sm text-gray-500">Leistungsdatum</p>
-        <p>{{$invoice.OccurrenceDate | userdate }}</p>
-        <p class="text-sm text-gray-500">Fälligkeitsdatum</p>
-        <p>{{$invoice.DueDate | userdate}}</p>
-    </div>
+    <p class="text-sm text-gray-500 mt-4">Empfänger</p>
+    <p><a href="/company/{{$company.ID}}" class="text-blue-600 hover:underline">{{$company.Name}}</a></p>
+    {{ with $invoice.ContactInvoice }}
+    <p class="text-sm text-gray-500">Ansprechpartner</p>
+    <p>{{.}}</p>
+    {{end}}
+    {{ with $invoice.OrderNumber }}
+    <p class="text-sm text-gray-500">Bestellnummer</p>
+    <p>{{.}}</p>
+    {{ end }}
+    {{ with $invoice.SupplierNumber }}
+    <p class="text-sm text-gray-500">Lieferantennummer</p>
+    <p>{{.}}</p>
+    {{ end }}
+  </div>
 
-    <div class="bg-white shadow rounded-xl p-4">
-        <p class="text-sm text-gray-500">Netto</p>
-        <p class="">{{$invoice.NetTotal | rounddecimal}} EUR</p>
-        {{ range $invoice.TaxAmounts}}
-        <p class="text-sm text-gray-500">Umsatzsteuer {{.Rate}}%</p>
-        <p>{{.Amount | rounddecimal }}</p>
-        {{end}}
-        <p class="text-sm text-gray-500">Gesamtbetrag</p>
-        <p class="">{{$invoice.GrossTotal | rounddecimal}} EUR</p>
+  <div class="bg-white shadow rounded-xl p-4">
+    <p class="text-sm text-gray-500">Datum</p>
+    <p>{{$invoice.Date | userdate }}</p>
+    <p class="text-sm text-gray-500">Leistungsdatum</p>
+    <p>{{$invoice.OccurrenceDate | userdate }}</p>
+    <p class="text-sm text-gray-500">Fälligkeitsdatum</p>
+    <p>{{$invoice.DueDate | userdate}}</p>
+    <hr class="my-3">
+    <p class="text-sm text-gray-500">Status-Zeitstempel</p>
+    <div class="text-sm text-gray-700" x-data>
+      <div x-show="$store.invoice.issuedAt">Gestellt: <span x-text="$store.invoice.issuedAt"></span></div>
+      <div x-show="$store.invoice.paidAt">Bezahlt: <span x-text="$store.invoice.paidAt"></span></div>
+      <div x-show="$store.invoice.voidedAt">Storniert: <span x-text="$store.invoice.voidedAt"></span></div>
     </div>
+  </div>
 
-    <div class="bg-white shadow rounded-xl p-4">
-        <p class="text-sm text-gray-500">Steuerart</p>
-        <p>{{$invoice.TaxType | taxtype}}</p>
-        <p class="text-sm text-gray-500">Währung</p>
-        <p>{{$invoice.Currency}}</p>
-        <p class="text-sm text-gray-500">Steuernummer</p>
-        <p>{{$invoice.TaxNumber}}</p>
-    </div>
+  <div class="bg-white shadow rounded-xl p-4">
+    <p class="text-sm text-gray-500">Netto</p>
+    <p class="">{{$invoice.NetTotal | rounddecimal}} EUR</p>
+    {{ range $invoice.TaxAmounts}}
+    <p class="text-sm text-gray-500">Umsatzsteuer {{.Rate}}%</p>
+    <p>{{.Amount | rounddecimal }}</p>
+    {{end}}
+    <p class="text-sm text-gray-500">Gesamtbetrag</p>
+    <p class="">{{$invoice.GrossTotal | rounddecimal}} EUR</p>
+  </div>
 
-    <div class="bg-white shadow rounded-xl p-4  sm:col-span-2">
-        <p class="text-sm text-gray-500">Anrede</p>
-        <p class="whitespace-pre-wrap">{{$invoice.Opening}}</p>
-    </div>
-    <div class="bg-white shadow rounded-xl p-4  sm:col-span-2">
-        <p class="text-sm text-gray-500">Fußzeile</p>
-        <p class="whitespace-pre-wrap">{{$invoice.Footer}}</p>
-    </div>
+  <div class="bg-white shadow rounded-xl p-4">
+    <p class="text-sm text-gray-500">Steuerart</p>
+    <p>{{$invoice.TaxType | taxtype}}</p>
+    <p class="text-sm text-gray-500">Währung</p>
+    <p>{{$invoice.Currency}}</p>
+    <p class="text-sm text-gray-500">Steuernummer</p>
+    <p>{{$invoice.TaxNumber}}</p>
+  </div>
+
+  <div class="bg-white shadow rounded-xl p-4  sm:col-span-2">
+    <p class="text-sm text-gray-500">Anrede</p>
+    <p class="whitespace-pre-wrap">{{$invoice.Opening}}</p>
+  </div>
+  <div class="bg-white shadow rounded-xl p-4  sm:col-span-2">
+    <p class="text-sm text-gray-500">Fußzeile</p>
+    <p class="whitespace-pre-wrap">{{$invoice.Footer}}</p>
+  </div>
 </div>
 
 {{ range $invoice.InvoicePositions }}
 <div class="space-y-4 mt-4">
-    <div class="bg-white shadow rounded-xl p-4">
-        <div class="flex items-center justify-between mb-2">
-            <span class="text-gray-500 text-sm">Position {{.Position }} </span>
-        </div>
-        <div class="text-gray-800 mb-2">
-            <p class="font-medium">{{.Text}}</p>
-        </div>
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm text-gray-700">
-            <div><span class="text-gray-500">Menge:</span> {{.Quantity | rounddecimal}} {{.UnitCode | unittype }}</div>
-            <div><span class="text-gray-500">Einzelpreis:</span> {{.NetPrice | rounddecimal }} EUR</div>
-            <div><span class="text-gray-500">Gesamtpreis:</span> {{.LineTotal | rounddecimal }} EUR</div>
-            <div><span class="text-gray-500">Steuersatz:</span> {{.TaxRate | rounddecimal }}%</div>
-        </div>
+  <div class="bg-white shadow rounded-xl p-4">
+    <div class="flex items-center justify-between mb-2">
+      <span class="text-gray-500 text-sm">Position {{.Position }} </span>
     </div>
+    <div class="text-gray-800 mb-2">
+      <p class="font-medium">{{.Text}}</p>
+    </div>
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm text-gray-700">
+      <div><span class="text-gray-500">Menge:</span> {{.Quantity | rounddecimal}} {{.UnitCode | unittype }}</div>
+      <div><span class="text-gray-500">Einzelpreis:</span> {{.NetPrice | rounddecimal }} EUR</div>
+      <div><span class="text-gray-500">Gesamtpreis:</span> {{.LineTotal | rounddecimal }} EUR</div>
+      <div><span class="text-gray-500">Steuersatz:</span> {{.TaxRate | rounddecimal }}%</div>
+    </div>
+  </div>
 </div>
 {{ end }}
 
-<div class="mt-4" x-data="{ confirmOpen:false }">
+
+<div class="mt-4" x-data="{ confirmDelete:false, confirmStatus:false }">
   <a href="/invoice/edit/{{$invoice.ID}}">
-    <button type="button"
-      class="bg-accent-green text-text px-6 py-3 rounded-button font-bold hover:bg-hover hover:text-white transition-colors">
+    <!-- Bearbeiten -->
+    <button type="button" :disabled="$store.invoice.status !== 'draft'" class="bg-accent-green text-text px-6 py-3 rounded-button font-bold transition-colors
+         hover:bg-hover hover:text-white disabled:opacity-50 disabled:cursor-not-allowed">
       Bearbeiten
     </button>
   </a>
 
-  <!-- Öffnet die Sicherheitsabfrage -->
-  <button type="button"
-    class="bg-hover text-text px-6 py-3 rounded-button font-bold hover:bg-hover hover:text-white transition-colors"
-    @click="confirmOpen = true">
+  <!-- Dropdown: zeigt ALLE Status -->
+  <div class="relative inline-block" x-data="{ open:false }">
+    <button type="button"
+      class="bg-accent-green text-text px-6 py-3 rounded-button font-bold hover:bg-hover hover:text-white transition-colors"
+      @click="open = !open">
+      Status ändern
+    </button>
+
+    <div x-show="open" x-cloak @click.outside="open=false"
+      class="absolute z-10 mt-2 w-64 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5">
+      <div class="py-1">
+        <template x-for="opt in ['draft','issued','paid','voided']" :key="opt">
+          <button type="button" @click.prevent="$store.invoice.pending = opt; open=false; confirmStatus=true"
+            class="flex w-full items-center justify-between px-4 py-2 text-sm hover:bg-gray-100" :class="{
+                    'text-gray-500 cursor-not-allowed': opt === $store.invoice.status
+                  }" :disabled="opt === $store.invoice.status">
+            <span x-text="$store.invoice.label(opt)"></span>
+            <span class="ml-2 text-xs rounded px-2 py-0.5" :class="{
+                    'bg-gray-100 text-gray-600': opt === 'draft',
+                    'bg-blue-100 text-blue-800': opt === 'issued',
+                    'bg-green-100 text-green-800': opt === 'paid',
+                    'bg-red-100 text-red-800': opt === 'voided'
+                  }" x-text="opt === $store.invoice.status ? 'aktuell' : ''"></span>
+          </button>
+        </template>
+      </div>
+    </div>
+  </div>
+
+  <button type="button" :disabled="$store.invoice.status !== 'draft'" @click="confirmDelete = true" class="bg-hover text-text px-6 py-3 rounded-button font-bold transition-colors
+         hover:bg-hover hover:text-white disabled:opacity-50 disabled:cursor-not-allowed">
     Löschen
   </button>
 
   <a href="/invoice/zugferdxml/{{$invoice.ID}}">
-    <button type="button" class="bg-accent-green text-text px-6 py-3 rounded-button font-bold hover:bg-hover hover:text-white transition-colors">
+    <button type="button"
+      class="bg-accent-green text-text px-6 py-3 rounded-button font-bold hover:bg-hover hover:text-white transition-colors">
       ZUGFeRD XML
     </button>
   </a>
   <a href="/invoice/zugferdpdf/{{$invoice.ID}}">
-    <button type="button" class="bg-accent-green text-text px-6 py-3 rounded-button font-bold hover:bg-hover hover:text-white transition-colors">
+    <button type="button"
+      class="bg-accent-green text-text px-6 py-3 rounded-button font-bold hover:bg-hover hover:text-white transition-colors">
       ZUGFeRD PDF
     </button>
   </a>
   <a href="/invoice/duplicate/{{$invoice.ID}}">
-    <button type="button" class="bg-accent-green text-text px-6 py-3 rounded-button font-bold hover:bg-hover hover:text-white transition-colors">
+    <button type="button"
+      class="bg-accent-green text-text px-6 py-3 rounded-button font-bold hover:bg-hover hover:text-white transition-colors">
       Duplizieren
     </button>
   </a>
 
-  <!-- Modal -->
-  <div x-show="confirmOpen" x-cloak
-       class="fixed inset-0 z-50" @keydown.escape.window="confirmOpen=false">
-    <div class="absolute inset-0 bg-black/50" @click="confirmOpen=false"></div>
+  <!-- Modal: Rechnung löschen -->
+  <div x-show="confirmDelete" x-cloak class="fixed inset-0 z-50" @keydown.escape.window="confirmDelete=false">
+    <div class="absolute inset-0 bg-black/50" @click="confirmDelete=false"></div>
     <div class="relative mx-auto mt-24 w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
       <h2 class="text-lg font-semibold">Rechnung wirklich löschen?</h2>
       <p class="mt-2 text-sm text-slate-600">Diese Aktion kann nicht rückgängig gemacht werden.</p>
 
       <div class="mt-6 flex justify-end gap-3">
-        <button type="button"
-                class="px-4 py-2 rounded-md border border-slate-300 hover:bg-slate-50"
-                @click="confirmOpen=false">
+        <button type="button" class="px-4 py-2 rounded-md border border-slate-300 hover:bg-slate-50"
+          @click="confirmDelete=false">
           Abbrechen
         </button>
 
@@ -132,37 +177,184 @@
         <form method="post" action="/invoice/delete/{{$invoice.ID}}">
           <input type="hidden" name="_method" value="DELETE">
           <input type="hidden" name="csrf" value="{{.CSRFToken}}">
-          <button type="submit"
-                  class="px-4 py-2 rounded-md bg-red-600 text-white font-semibold hover:bg-red-700">
+          <button type="submit" class="px-4 py-2 rounded-md bg-red-600 text-white font-semibold hover:bg-red-700">
             Ja, löschen
           </button>
         </form>
       </div>
     </div>
   </div>
+
+  <!-- Modal: Status ändern -->
+  <div x-show="confirmStatus" x-cloak class="fixed inset-0 z-50" @keydown.escape.window="confirmStatus=false">
+    <div class="absolute inset-0 bg-black/50" @click="confirmStatus=false"></div>
+
+    <div class="relative mx-auto mt-24 w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+      x-data="{ meta: $store.invoice.transitionMeta($store.invoice.pending) }"
+      x-init="$watch('$store.invoice.pending', v => meta = $store.invoice.transitionMeta(v))">
+      <h2 class="text-lg font-semibold" x-text="meta.title"></h2>
+      <p class="mt-2 text-sm text-slate-600" x-text="meta.message"></p>
+
+      <div class="mt-4 text-xs text-slate-500">
+        <template x-if="!meta.allowed">
+          <p>Hinweis: Vom aktuellen Status ist dieser Wechsel nicht möglich.</p>
+        </template>
+        <template x-if="meta.allowed && ($store.invoice.isIrreversible($store.invoice.pending))">
+          <p>Folgeaktionen z. B. über Gutschrift/Korrekturrechnung.</p>
+        </template>
+      </div>
+
+      <div class="mt-6 flex justify-end gap-3">
+        <button type="button" class="px-4 py-2 rounded-md border border-slate-300 hover:bg-slate-50"
+          @click="confirmStatus=false">
+          Abbrechen
+        </button>
+
+        <button type="button" :class="'px-4 py-2 rounded-md font-semibold ' + meta.confirmStyle"
+          :disabled="!meta.allowed" @click="
+                  if (meta.allowed) {
+                    $store.invoice.setStatus($store.invoice.pending);
+                    confirmStatus=false;
+                  }
+                ">
+          <span x-text="meta.confirmText"></span>
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
 
+
 <script>
-async function duplicateInvoice(id) {
+  async function duplicateInvoice(id) {
     const response = await fetch(`/invoice/duplicate/${id}`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "X-Requested-With": "fetch",
-            "X-CSRF-Token": "{{ .CSRFToken }}"
-        }
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Requested-With": "fetch",
+        "X-CSRF-Token": "{{ .CSRFToken }}"
+      }
     });
 
     if (response.redirected) {
-        // wenn dein Go-Handler ein Redirect macht
-        window.location.href = response.url;
+      window.location.href = response.url;
     } else {
-        const data = await response.text();
-        alert("Antwort vom Server: " + data);
+      const data = await response.text();
     }
-}
+  }
 </script>
 
+<script>
+  document.addEventListener('alpine:init', () => {
+    Alpine.store('invoice', {
+      // --- Initial data from template ---
+      id: {{ $invoice.ID }},
+    csrf: '{{.CSRFToken}}',
+    status: '{{$invoice.Status}}',
+    dueIso: '{{$invoice.DueDate.Format `2006-01-02T15:04:05Z07:00`}}',
+    issuedAt: '{{with $invoice.IssuedAt}}{{. | userdate}}{{end}}' || '',
+    paidAt: '{{with $invoice.PaidAt}}{{. | userdate}}{{end}}' || '',
+    voidedAt: '{{with $invoice.VoidedAt}}{{. | userdate}}{{end}}' || '',
+
+    // --- Labels / helpers ---
+    label(s){
+    return s === 'draft' ? 'Entwurf'
+      : s === 'issued' ? 'Gestellt'
+        : s === 'paid' ? 'Bezahlt'
+          : s === 'voided' ? 'Storniert'
+            : s;
+  },
+    isIrreversible(next){ return next === 'paid' || next === 'voided'; },
+
+    allowedMap: {
+    draft: { issued: true, voided: true },
+    issued: { paid: true, voided: true, draft: true },
+    paid: {},
+    voided: {}
+  },
+
+    get isOverdue() {
+    if(this.status !== 'issued') return false;
+  const d = new Date(this.dueIso), t = new Date();
+  if (isNaN(d)) return false;
+  d.setHours(0, 0, 0, 0); t.setHours(0, 0, 0, 0);
+  return d < t;
+    },
+    get badgeClass() {
+    if (this.isOverdue) return 'bg-red-100 text-red-800 ring-1 ring-red-200';
+    return this.status === 'draft' ? 'bg-yellow-100 text-yellow-800 ring-1 ring-yellow-200'
+      : this.status === 'issued' ? 'bg-blue-100 text-blue-800 ring-1 ring-blue-200'
+        : this.status === 'paid' ? 'bg-green-100 text-green-800 ring-1 ring-green-200'
+          : 'bg-gray-200 text-gray-700 ring-1 ring-gray-300';
+  },
+    get statusLabel(){ return this.isOverdue ? 'Überfällig' : this.label(this.status); },
+
+  // UI state for confirmation modal
+  pending: null,
+    transitionMeta(next){
+    const allowed = !!this.allowedMap[this.status]?.[next];
+    let title = `Status ändern: ${this.label(this.status)} → ${this.label(next)}`;
+    let message = '', confirmText = 'Bestätigen';
+    let confirmStyle = 'bg-accent-green text-text hover:bg-hover hover:text-white';
+    if (!allowed) {
+      message = 'Dieser Übergang ist aus dem aktuellen Status nicht erlaubt.';
+    } else if (this.isIrreversible(next)) {
+      message = 'Achtung: Diese Änderung ist nicht rückgängig zu machen.';
+      confirmText = 'Ja, endgültig ändern';
+      confirmStyle = 'bg-red-600 text-white hover:bg-red-700';
+    } else {
+      message = 'Möchten Sie diesen Status wirklich setzen?';
+    }
+    return { allowed, title, message, confirmText, confirmStyle };
+  },
+
+    // --- AJAX status change with JSON handling ---
+    async setStatus(next){
+    // guard
+    if (!this.allowedMap[this.status]?.[next]) return;
+
+    const body = new URLSearchParams({ status: next, csrf: this.csrf });
+    try {
+      const res = await fetch(`/invoice/status/${this.id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-Requested-With': 'fetch'
+        },
+        body
+      });
+      if (!res.ok) throw new Error('status update failed');
+
+      // Try JSON response first
+      let data = null;
+      const ct = res.headers.get('content-type') || '';
+      if (ct.includes('application/json')) {
+        data = await res.json();
+      }
+
+      if (data) {
+        // Use server truth
+        this.status = data.status || this.status;
+        this.issuedAt = data.issued_at || '';
+        this.paidAt = data.paid_at || '';
+        this.voidedAt = data.voided_at || '';
+      } else {
+        // Fallback for 204/empty body: optimistic local update
+        const now = new Date().toLocaleDateString();
+        if (next === 'issued') this.issuedAt = now;
+        if (next === 'paid') this.paidAt = now;
+        if (next === 'voided') this.voidedAt = now;
+        if (next === 'draft') this.Bearbeiten = '';
+        this.status = next;
+      }
+    } catch (e) {
+      console.error(e);
+      // optional: show toast / flash here
+    }
+  }
+  });
+});
+</script>
 
 
 {{template "footer.html" .}}

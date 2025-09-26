@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -35,6 +36,7 @@ func (ctrl *controller) invoiceInit(e *echo.Echo) {
 	g.POST("/edit/:id", ctrl.invoiceEdit)
 	g.GET("/zugferdxml/:id", ctrl.invoiceZUGFeRDXML)
 	g.GET("/zugferdpdf/:id", ctrl.invoiceZUGFeRDPDF)
+	g.POST("/status/:id", ctrl.invoiceStatusChange)
 }
 
 // invoicepos has one invoice line
@@ -213,6 +215,9 @@ func (ctrl *controller) invoiceDelete(c echo.Context) error {
 	if err != nil {
 		return ErrInvalid(err, "Kann Rechnung nicht laden")
 	}
+	if inv.Status != model.InvoiceStatusDraft {
+		return echo.NewHTTPError(http.StatusForbidden, "invoice cannot be deleted after issuing")
+	}
 	if inv.OwnerID != ownerID {
 		return echo.NewHTTPError(http.StatusForbidden, "You do not have permission to delete this invoice")
 	}
@@ -292,12 +297,15 @@ func (ctrl *controller) invoiceDuplicate(c echo.Context) error {
 func (ctrl *controller) invoiceEdit(c echo.Context) error {
 	m := ctrl.defaultResponseMap(c, "Rechnung bearbeiten")
 	ownerID := c.Get("ownerid").(uint)
+	i, err := ctrl.model.LoadInvoice(c.Param("id"), ownerID)
+	if err != nil {
+		return ErrInvalid(err, "Kann Rechnung nicht laden")
+	}
+	if i.Status != model.InvoiceStatusDraft {
+		return echo.NewHTTPError(http.StatusForbidden, "invoice is not editable after issuing")
+	}
 	switch c.Request().Method {
 	case http.MethodGet:
-		i, err := ctrl.model.LoadInvoice(c.Param("id"), ownerID)
-		if err != nil {
-			return ErrInvalid(err, "Kann Rechnung nicht laden")
-		}
 		var cpy *model.Company
 		if cpy, err = ctrl.model.LoadCompany(i.CompanyID, ownerID); err != nil {
 			return ErrInvalid(err, "Kann Firma nicht laden")
@@ -322,21 +330,34 @@ func (ctrl *controller) invoiceEdit(c echo.Context) error {
 	return nil
 }
 
+// getXMLPathForInvoice returns the full path where the XML for the invoice is stored
 func (ctrl *controller) getXMLPathForInvoice(inv *model.Invoice) string {
 	return filepath.Join(ctrl.model.Config.XMLDir, fmt.Sprintf("user%d", inv.OwnerID), fmt.Sprintf("%d.xml", inv.ID))
 }
 
+// getPDFPathForInvoice returns the full path where the PDF for the invoice is stored
 func (ctrl *controller) getPDFPathForInvoice(inv *model.Invoice) string {
 	return filepath.Join(ctrl.model.Config.XMLDir, fmt.Sprintf("user%d", inv.OwnerID), fmt.Sprintf("%d.pdf", inv.ID))
 }
 
 func (ctrl *controller) invoiceZUGFeRDXML(c echo.Context) error {
 	ownerID := c.Get("ownerid").(uint)
+	logger := c.Get("logger").(*slog.Logger)
+
 	i, err := ctrl.model.LoadInvoice(c.Param("id"), ownerID)
 	if err != nil {
 		return ErrInvalid(err, "Kann Rechnung nicht laden")
 	}
 	outPath := ctrl.getXMLPathForInvoice(i)
+	userFilename := fmt.Sprintf("%s.xml", i.Number)
+	// when not draft, just send existing file if exists
+	if i.Status != model.InvoiceStatusDraft {
+		if _, err = os.Stat(outPath); err == nil {
+			logger.Info("re-using existing zugferd xml", "invoice_id", i.ID, "path", outPath)
+			return c.Attachment(outPath, userFilename)
+		}
+		logger.Info("zugferd xml not found, re-creating", "invoice_id", i.ID, "path", outPath)
+	}
 	if err = ensureDir(filepath.Dir(outPath)); err != nil {
 		return ErrInvalid(err, "Fehler beim Erstellen des Verzeichnisses für die XML-Datei")
 	}
@@ -345,7 +366,7 @@ func (ctrl *controller) invoiceZUGFeRDXML(c echo.Context) error {
 		return ErrInvalid(err, "Fehler beim Erstellen der ZUGFeRD XML")
 	}
 
-	return c.Attachment(outPath, fmt.Sprintf("%s.xml", i.Number))
+	return c.Attachment(outPath, userFilename)
 }
 
 func ensureDir(dirName string) error {
@@ -363,6 +384,19 @@ func (ctrl *controller) invoiceZUGFeRDPDF(c echo.Context) error {
 	if err != nil {
 		return ErrInvalid(err, "Kann Rechnung nicht laden")
 	}
+
+	pdfname := fmt.Sprintf("%s.pdf", i.Number)
+
+	// when not draft, just send existing file if exists
+	if i.Status != model.InvoiceStatusDraft {
+		pdfPath := ctrl.getPDFPathForInvoice(i)
+		if _, err = os.Stat(pdfPath); err == nil {
+			logger.Info("re-using existing zugferd pdf", "invoice_id", i.ID, "path", pdfPath)
+			return c.Attachment(pdfPath, pdfname)
+		}
+		logger.Info("zugferd pdf not found, re-creating", "invoice_id", i.ID, "path", pdfPath)
+	}
+
 	xmlPath := ctrl.getXMLPathForInvoice(i)
 
 	err = ctrl.model.CreateZUGFeRDXML(i, ownerid, xmlPath)
@@ -370,7 +404,6 @@ func (ctrl *controller) invoiceZUGFeRDPDF(c echo.Context) error {
 		return ErrInvalid(err, "Fehler beim Erstellen der ZUGFeRD XML")
 	}
 	pdfPath := ctrl.getPDFPathForInvoice(i)
-	pdfname := fmt.Sprintf("%s.pdf", i.Number)
 
 	// make directory user if not exists
 	userdir := filepath.Join(ctrl.model.Config.XMLDir, fmt.Sprintf("user%d", ownerid))
@@ -385,4 +418,112 @@ func (ctrl *controller) invoiceZUGFeRDPDF(c echo.Context) error {
 	}
 
 	return c.Attachment(pdfPath, pdfname)
+}
+
+func (ctrl *controller) invoiceStatusChange(c echo.Context) error {
+	ownerID := c.Get("ownerid").(uint)
+
+	// parse invoice id
+	idStr := c.Param("id")
+	id64, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil || id64 == 0 {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid invoice id")
+	}
+	invoiceID := uint(id64)
+
+	// read desired status
+	desired := strings.TrimSpace(c.FormValue("status"))
+	if desired == "" {
+		// fallback: allow JSON too, though dein Frontend sendet x-www-form-urlencoded
+		var payload struct {
+			Status string `json:"status"`
+		}
+		if bindErr := c.Bind(&payload); bindErr == nil && payload.Status != "" {
+			desired = payload.Status
+		}
+	}
+	dest, ok := toInvoiceStatus(desired)
+	if !ok {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid status value")
+	}
+
+	now := time.Now()
+
+	// execute transition
+	switch dest {
+	case model.InvoiceStatusIssued:
+		err = ctrl.model.MarkInvoiceIssued(invoiceID, ownerID, now)
+	case model.InvoiceStatusPaid:
+		err = ctrl.model.MarkInvoicePaid(invoiceID, ownerID, now)
+	case model.InvoiceStatusVoided:
+		err = ctrl.model.VoidInvoice(invoiceID, ownerID, now)
+	case model.InvoiceStatusDraft:
+		err = ctrl.model.MarkInvoiceDraft(invoiceID, ownerID, now)
+	default:
+		return echo.NewHTTPError(http.StatusBadRequest, "unsupported transition")
+	}
+	if err != nil {
+		// Gib dem Nutzer eine klare Meldung (z.B. „paid invoices cannot be voided“)
+		slog.Error("invoice status change failed", "invoice_id", invoiceID, "err", err)
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	// AJAX: kein Reload nötig – 204 reicht (Frontend checkt nur res.ok)
+	// Wenn du später Zeiten zurückgeben willst, könntest du 200 + JSON senden.
+	// reload auslassen, aber Daten mitschicken
+	inv, loadErr := ctrl.model.LoadInvoice(invoiceID, ownerID)
+	if loadErr != nil {
+		return c.NoContent(http.StatusNoContent) // still ok – UI bleibt konsistent
+	}
+
+	// render PDF and XML in background, ignore errors
+	go func() {
+		logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+		xmlPath := ctrl.getXMLPathForInvoice(inv)
+		if err = ctrl.model.CreateZUGFeRDXML(inv, ownerID, xmlPath); err != nil {
+			logger.Error("creating zugferd xml failed", "invoice_id", invoiceID, "err", err)
+			return
+		}
+		pdfPath := ctrl.getPDFPathForInvoice(inv)
+		if err = ctrl.model.CreateZUGFeRDPDF(inv, 1, xmlPath, pdfPath, logger); err != nil {
+			logger.Error("creating zugferd pdf failed", "invoice_id", invoiceID, "err", err)
+			return
+		}
+	}()
+
+	type resp struct {
+		Status   string  `json:"status"`
+		IssuedAt *string `json:"issued_at"`
+		PaidAt   *string `json:"paid_at"`
+		VoidedAt *string `json:"voided_at"`
+	}
+	fmtTS := func(t *time.Time) *string {
+		if t == nil {
+			return nil
+		}
+		s := t.Format("02.01.2006")
+		return &s
+	}
+	return c.JSON(http.StatusOK, resp{
+		Status:   string(inv.Status),
+		IssuedAt: fmtTS(inv.IssuedAt),
+		PaidAt:   fmtTS(inv.PaidAt),
+		VoidedAt: fmtTS(inv.VoidedAt),
+	})
+}
+
+// helper: sanitize / map string -> model.InvoiceStatus
+func toInvoiceStatus(s string) (model.InvoiceStatus, bool) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "draft":
+		return model.InvoiceStatusDraft, true
+	case "issued":
+		return model.InvoiceStatusIssued, true
+	case "paid":
+		return model.InvoiceStatusPaid, true
+	case "voided":
+		return model.InvoiceStatusVoided, true
+	default:
+		return "", false
+	}
 }

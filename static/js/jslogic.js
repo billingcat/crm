@@ -115,3 +115,71 @@ function searchhandler(e) {
     }
     updateSearchResults(jsonActiveItem);
 }
+
+function invoiceStatusPanel({ id, status, csrf }) {
+  return {
+    id,
+    status,
+    csrf,
+    loading: false,
+    confirmVoid: false,
+    issuedAt: '',
+    paidAt: '',
+    voidedAt: '',
+
+    get statusLabel() {
+      switch (this.status) {
+        case 'draft':  return 'Entwurf';
+        case 'issued': return 'Gestellt';
+        case 'paid':   return 'Bezahlt';
+        case 'voided': return 'Storniert';
+        default:       return this.status;
+      }
+    },
+    get badgeClass() {
+      return {
+        'bg-yellow-100 text-yellow-800': this.status === 'draft',
+        'bg-blue-100 text-blue-800':     this.status === 'issued',
+        'bg-green-100 text-green-800':   this.status === 'paid',
+        'bg-red-100 text-red-800':       this.status === 'voided',
+      };
+    },
+
+    async setStatus(next) {
+      if (this.loading) return;
+      this.loading = true;
+
+      try {
+        const body = new URLSearchParams({ status: next, csrf: this.csrf });
+        const res = await fetch(`/invoice/status/${this.id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'fetch' },
+          body
+        });
+
+        // Bei Redirect einfach folgen (Server kann nach PRG-Pattern umleiten)
+        if (res.redirected) {
+          window.location.href = res.url;
+          return;
+        }
+
+        // Erwartet 200/204 – dann UI aktualisieren (optimistisch) oder Seite neu laden
+        if (res.ok) {
+          this.status = next;
+          const now = new Date().toLocaleDateString(); // einfache Anzeige; Server rendert beim Reload korrekt
+          if (next === 'issued') this.issuedAt = now;
+          if (next === 'paid')   this.paidAt = now;
+          if (next === 'voided') this.voidedAt = now;
+          this.confirmVoid = false;
+        } else {
+          // Fallback: Seite neu laden, damit Fehlermeldung/Flash sichtbar wird
+          window.location.reload();
+        }
+      } catch (e) {
+        window.location.reload();
+      } finally {
+        this.loading = false;
+      }
+    }
+  };
+}
