@@ -37,6 +37,9 @@ func (ctrl *controller) invoiceInit(e *echo.Echo) {
 	g.GET("/zugferdxml/:id", ctrl.invoiceZUGFeRDXML)
 	g.GET("/zugferdpdf/:id", ctrl.invoiceZUGFeRDPDF)
 	g.POST("/status/:id", ctrl.invoiceStatusChange)
+
+	lg := e.Group("/invoices", ctrl.authMiddleware)
+	lg.GET("", ctrl.invoiceList)
 }
 
 // invoicepos has one invoice line
@@ -526,4 +529,141 @@ func toInvoiceStatus(s string) (model.InvoiceStatus, bool) {
 	default:
 		return "", false
 	}
+}
+
+func (ctrl *controller) invoiceList(c echo.Context) error {
+	ownerID := c.Get("ownerid").(uint)
+	title := "Rechnungen"
+	status := strings.ToLower(c.QueryParam("status"))
+	format := strings.ToLower(c.QueryParam("format"))
+
+	// --- Status-Mapping ---
+	var statuses []model.InvoiceStatus
+	switch status {
+	case "open":
+		title = "Offene Rechnungen"
+		statuses = []model.InvoiceStatus{model.InvoiceStatusIssued}
+	case "draft":
+		title = "Entwürfe"
+		statuses = []model.InvoiceStatus{model.InvoiceStatusDraft}
+	case "issued":
+		title = "Ausgestellte Rechnungen"
+		statuses = []model.InvoiceStatus{model.InvoiceStatusIssued}
+	case "paid":
+		title = "Bezahlte Rechnungen"
+		statuses = []model.InvoiceStatus{model.InvoiceStatusPaid}
+	case "voided":
+		title = "Stornierte Rechnungen"
+		statuses = []model.InvoiceStatus{model.InvoiceStatusVoided}
+	default:
+		// any → kein Status-Filter
+	}
+
+	// --- CompanyID optional ---
+	var companyID *uint
+	if cid := c.QueryParam("company_id"); cid != "" {
+		if v, err := strconv.ParseUint(cid, 10, 64); err == nil {
+			tmp := uint(v)
+			companyID = &tmp
+		}
+	}
+
+	// --- Zeitraum ---
+	periodField := strings.ToLower(c.QueryParam("period_field"))
+	if periodField != "due" {
+		periodField = "date"
+	}
+	parseDate := func(s string) *time.Time {
+		if s == "" {
+			return nil
+		}
+		if t, err := time.Parse("2006-01-02", s); err == nil {
+			return &t
+		}
+		if t, err := time.Parse("02.01.2006", s); err == nil {
+			return &t
+		}
+		return nil
+	}
+	dateFrom := parseDate(c.QueryParam("date_from"))
+	dateTo := parseDate(c.QueryParam("date_to"))
+
+	// --- Sortierung ---
+	order := "date desc, id desc"
+	switch strings.ToLower(c.QueryParam("sort")) {
+	case "date_asc":
+		order = "date asc, id asc"
+	case "due_asc":
+		order = "due_date asc, id asc"
+	case "due_desc":
+		order = "due_date desc, id desc"
+	case "total_asc":
+		order = "gross_total asc, id asc"
+	case "total_desc":
+		order = "gross_total desc, id desc"
+	}
+
+	// --- Pagination ---
+	page, _ := strconv.Atoi(c.QueryParam("page"))
+	if page < 1 {
+		page = 1
+	}
+	pageSize, _ := strconv.Atoi(c.QueryParam("page_size"))
+	if pageSize < 1 || pageSize > 200 {
+		pageSize = 50
+	}
+	offset := (page - 1) * pageSize
+
+	// --- Daten via Repo laden ---
+	rows, total, err := ctrl.model.FindInvoices(
+		ownerID,
+		statuses,
+		companyID,
+		periodField,
+		dateFrom,
+		dateTo,
+		pageSize,
+		offset,
+		order,
+	)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "query_failed"})
+	}
+
+	// --- JSON-Ausgabe ---
+	if format == "json" || strings.Contains(c.Request().Header.Get("Accept"), "application/json") {
+		type item struct {
+			ID         uint                `json:"id"`
+			CompanyID  uint                `json:"company_id"`
+			Number     string              `json:"number"`
+			Date       string              `json:"date"`
+			DueDate    string              `json:"due_date"`
+			Status     model.InvoiceStatus `json:"status"`
+			GrossTotal int64               `json:"gross_total"`
+		}
+		out := make([]item, 0, len(rows))
+		for _, r := range rows {
+			out = append(out, item{
+				ID:         r.ID,
+				CompanyID:  r.CompanyID,
+				Number:     r.Number,
+				Date:       r.Date.Format("02.01.2006"),
+				DueDate:    r.DueDate.Format("02.01.2006"),
+				Status:     r.Status,
+				GrossTotal: r.GrossTotal.IntPart(),
+			})
+		}
+		return c.JSON(http.StatusOK, map[string]any{
+			"total": total, "page": page, "page_size": pageSize, "items": out,
+		})
+	}
+
+	// --- HTML-Render ---
+	m := ctrl.defaultResponseMap(c, title)
+	m["invoices"] = rows
+	m["total"] = total
+	m["page"] = page
+	m["page_size"] = pageSize
+	m["isViewActive"] = (status == "open") // für aktiven Menüpunkt
+	return c.Render(http.StatusOK, "invoicelist.html", m)
 }

@@ -386,6 +386,18 @@ func NewController(crmdb *model.CRMDatenbank) error {
 		"rounddecimal": func(in decimal.Decimal) string {
 			return in.Round(2).StringFixed(2)
 		},
+		"invoiceStatus": func(in model.InvoiceStatus) string {
+			status := map[model.InvoiceStatus]string{
+				model.InvoiceStatusDraft:  "Entwurf",
+				model.InvoiceStatusIssued: "Offen",
+				model.InvoiceStatusPaid:   "Bezahlt",
+				model.InvoiceStatusVoided: "Storniert",
+			}
+			if desc, ok := status[in]; ok {
+				return desc
+			}
+			return "unbekannt"
+		},
 		"unittype": func(in string) string {
 			unittype := map[string]string{
 				"C62": "Stück",

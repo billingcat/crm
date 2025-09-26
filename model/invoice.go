@@ -31,6 +31,7 @@ func (s InvoiceStatus) IsFinal() bool {
 type Invoice struct {
 	gorm.Model
 	CompanyID        uint
+	Company          Company `gorm:"foreignKey:CompanyID"`
 	ContactInvoice   string
 	Counter          uint
 	Currency         string
@@ -134,10 +135,17 @@ func (crmdb *CRMDatenbank) GetMaxCounter(companyID uint, useLocalCounter bool, o
 }
 
 // UpdateInvoice updates an invoice and fully replaces its positions (hard delete + recreate).
-func (db *CRMDatenbank) UpdateInvoice(inv *Invoice, ownerid any) error {
-	return db.db.Transaction(func(tx *gorm.DB) error {
+func (crmdb *CRMDatenbank) UpdateInvoice(inv *Invoice, ownerid any) error {
+	return crmdb.db.Transaction(func(tx *gorm.DB) error {
 		if inv.ID == 0 {
 			return fmt.Errorf("update invoice: inv.ID is zero")
+		}
+
+		// In draft Totale nur transient
+		vals := *inv
+		if inv.Status == InvoiceStatusDraft {
+			vals.NetTotal = decimal.Zero
+			vals.GrossTotal = decimal.Zero
 		}
 
 		// 1) Invoice-Felder updaten (nur wenn OwnerID passt)
@@ -179,21 +187,23 @@ func (crmdb *CRMDatenbank) DeleteInvoice(inv *Invoice, ownerid any) error {
 
 // LoadInvoice loads an invoice
 func (crmdb *CRMDatenbank) LoadInvoice(id any, ownerid uint) (*Invoice, error) {
-	var i Invoice
-	// ensure invoice and its positions belong to the given owner
-	result := crmdb.db.Where("owner_id = ?", ownerid).
+	var inv Invoice
+	err := crmdb.db.Where("owner_id = ?", ownerid).
 		Preload("InvoicePositions", "owner_id = ?", ownerid).
-		First(&i, id)
-	if err := result.Error; err != nil {
-		return nil, fmt.Errorf("load invoice %v: %w", id, result.Error)
+		First(&inv, id).Error
+	if err != nil {
+		return nil, fmt.Errorf("load invoice %v: %w", id, err)
 	}
-	calculateTaxAmounts(&i)
 
-	return &i, result.Error
+	// In Entwürfen immer frisch rechnen
+	if inv.Status == InvoiceStatusDraft {
+		inv.RecomputeTotals()
+	}
+	return &inv, nil
 }
 
-func calculateTaxAmounts(i *Invoice) {
-	// reset previous amounts to avoid duplicates on repeated calls
+// RecomputeTotals setzt NetTotal, GrossTotal und TaxAmounts anhand der Positionen.
+func (i *Invoice) RecomputeTotals() {
 	i.TaxAmounts = i.TaxAmounts[:0]
 	totals := map[string]decimal.Decimal{}
 	netTotal := decimal.Zero
@@ -215,22 +225,19 @@ func calculateTaxAmounts(i *Invoice) {
 	for k := range totals {
 		keys = append(keys, k)
 	}
-	// sort strings as decimal
-	sort.Slice(keys, func(i, j int) bool {
-		di, _ := decimal.NewFromString(keys[i])
-		dj, _ := decimal.NewFromString(keys[j])
+	sort.Slice(keys, func(i1, j1 int) bool {
+		di, _ := decimal.NewFromString(keys[i1])
+		dj, _ := decimal.NewFromString(keys[j1])
 		return di.LessThan(dj)
 	})
-
 	for _, key := range keys {
-		ta := TaxAmount{
+		i.TaxAmounts = append(i.TaxAmounts, TaxAmount{
 			Rate:   decimal.RequireFromString(key),
 			Amount: totals[key],
-		}
-		i.TaxAmounts = append(i.TaxAmounts, ta)
+		})
 	}
-	i.GrossTotal = grossTotal
 	i.NetTotal = netTotal
+	i.GrossTotal = grossTotal
 }
 
 // countryID returns a to letter alpha code for the given country
@@ -397,7 +404,16 @@ func (crmdb *CRMDatenbank) changeInvoiceStatus(
 		switch to {
 		case InvoiceStatusIssued:
 			updates["issued_at"] = t
-			// Optional: assign invoice number here if needed
+			// Positionen holen, Totale berechnen, festschreiben
+			var full Invoice
+			if err := tx.Where("id = ? AND owner_id = ?", id, ownerID).
+				Preload("InvoicePositions", "owner_id = ?", ownerID).
+				First(&full).Error; err != nil {
+				return err
+			}
+			full.RecomputeTotals()
+			updates["net_total"] = full.NetTotal
+			updates["gross_total"] = full.GrossTotal
 		case InvoiceStatusPaid:
 			updates["paid_at"] = t
 		case InvoiceStatusVoided:
@@ -472,4 +488,34 @@ func (crmdb *CRMDatenbank) MarkInvoicePaid(id uint, ownerID uint, t time.Time) e
 // Convenience: (draft|issued) -> voided
 func (crmdb *CRMDatenbank) VoidInvoice(id uint, ownerID uint, t time.Time) error {
 	return crmdb.changeInvoiceStatus(id, ownerID, InvoiceStatusVoided, t)
+}
+
+func (crmdb *CRMDatenbank) FindInvoices(ownerID uint, statuses []InvoiceStatus, companyID *uint, field string, from, to *time.Time, limit, offset int, order string) (rows []Invoice, total int64, err error) {
+	q := crmdb.db.Model(&Invoice{}).Preload("Company").Where("owner_id = ?", ownerID)
+	if companyID != nil {
+		q = q.Where("company_id = ?", *companyID)
+	}
+	if len(statuses) > 0 {
+		q = q.Where("status IN ?", statuses)
+	}
+	if from != nil {
+		if field == "due" {
+			q = q.Where("due_date >= ?", from)
+		} else {
+			q = q.Where("date >= ?", from)
+		}
+	}
+	if to != nil {
+		next := to.Add(24 * time.Hour)
+		if field == "due" {
+			q = q.Where("due_date < ?", next)
+		} else {
+			q = q.Where("date < ?", next)
+		}
+	}
+	if err = q.Count(&total).Error; err != nil {
+		return
+	}
+	err = q.Order(order).Limit(limit).Offset(offset).Find(&rows).Error
+	return
 }

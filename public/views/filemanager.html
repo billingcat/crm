@@ -1,6 +1,11 @@
 {{template "header.html" . }}
 {{template "_flash" .}}
 
+<h1 class="text-3xl font-bold text-gray-900 tracking-tight mb-6">
+  Dateien für die PDF-Rechnung
+</h1>
+
+
 <!-- Upload -->
 <form class="bg-white border border-gray-200 p-4 rounded-lg shadow-sm space-y-3 mb-3"
       action="/filemanager/upload" method="post" enctype="multipart/form-data">

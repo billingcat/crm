@@ -88,33 +88,25 @@ func InitDatabase(cfg *Config) (*CRMDatenbank, error) {
 
 	crmdb := &CRMDatenbank{Config: cfg}
 	svr := cfg.Servers[cfg.Mode]
+	gormConfig := &gorm.Config{}
+	if cfg.Mode == "development" {
+		gormConfig.Logger = logger.Default.LogMode(logger.Info)
+	} else {
+		gormConfig.Logger = logger.Default.LogMode(logger.Silent)
+	}
+
 	switch svr.Database {
 	case "sqlite3":
 		filename := filepath.Join("db", svr.DBName)
 		fmt.Println("Use server sqlite3 and database", filename)
-		gormConfig := &gorm.Config{}
-		if cfg.Mode == "development" {
-			gormConfig.Logger = logger.Default.LogMode(logger.Info)
-		} else {
-			gormConfig.Logger = logger.Default.LogMode(logger.Silent)
-		}
-
 		crmdb.db, err = gorm.Open(sqlite.Open(filename), gormConfig)
-
 		if err != nil {
 			return nil, err
 		}
 	case "postgresql":
 		fmt.Println("Use server postgresql and database", svr.DBName)
-
 		dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=5432 sslmode=disable TimeZone=UTC",
 			svr.DBHost, svr.DBUser, svr.DBPassword, svr.DBName)
-		gormConfig := &gorm.Config{}
-		if cfg.Mode == "development" {
-			gormConfig.Logger = logger.Default.LogMode(logger.Info)
-		} else {
-			gormConfig.Logger = logger.Default.LogMode(logger.Silent)
-		}
 		crmdb.db, err = gorm.Open(postgres.Open(dsn), gormConfig)
 	default:
 		return nil, fmt.Errorf("not implemented yet")
