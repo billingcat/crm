@@ -61,7 +61,11 @@ func (crmdb *CRMDatenbank) LoadCompany(id any, ownerID any) (*Company, error) {
 		return nil, fmt.Errorf("userid is nil")
 	}
 	c := &Company{}
-	result := crmdb.db.Preload("Invoices").Preload("Phones").Where("owner_id = ?", ownerID).First(c, id)
+	result := crmdb.db.
+		Preload("Invoices", func(db *gorm.DB) *gorm.DB {
+			return db.Order("created_at DESC")
+		}).
+		Preload("Phones").Where("owner_id = ?", ownerID).First(c, id)
 	if result.Error != nil {
 		return nil, result.Error
 	}

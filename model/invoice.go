@@ -18,10 +18,10 @@ import (
 type InvoiceStatus string
 
 const (
-	InvoiceStatusDraft  InvoiceStatus = "draft"  // Entwurf
-	InvoiceStatusIssued InvoiceStatus = "issued" // Gestellt/versendet
-	InvoiceStatusPaid   InvoiceStatus = "paid"   // Bezahlt
-	InvoiceStatusVoided InvoiceStatus = "voided" // Storniert
+	InvoiceStatusDraft  InvoiceStatus = "draft"
+	InvoiceStatusIssued InvoiceStatus = "issued"
+	InvoiceStatusPaid   InvoiceStatus = "paid"
+	InvoiceStatusVoided InvoiceStatus = "voided"
 )
 
 func (s InvoiceStatus) IsFinal() bool {
@@ -52,9 +52,9 @@ type Invoice struct {
 	TaxNumber        string
 	TaxType          string
 	Status           InvoiceStatus `gorm:"type:text;not null;default:draft;check:status IN ('draft','issued','paid','voided');index;index:idx_owner_status"`
-	IssuedAt         *time.Time    // gesetzt bei Status -> issued
-	PaidAt           *time.Time    // gesetzt bei Status -> paid
-	VoidedAt         *time.Time    // gesetzt bei Status -> voided
+	IssuedAt         *time.Time    // set when status -> issued
+	PaidAt           *time.Time    // set when status -> paid
+	VoidedAt         *time.Time    // set when status -> voided
 }
 
 // TaxAmount collects the amount for each rate
@@ -85,30 +85,30 @@ var hundred = decimal.NewFromInt(100)
 var one = decimal.NewFromInt(1)
 
 // SaveInvoice saves an invoice and all invoice positions
-// SaveInvoice: robust gegen Duplikate
+// SaveInvoice: robust against duplicates
 func (crmdb *CRMDatenbank) SaveInvoice(inv *Invoice, ownerid uint) error {
 	return crmdb.db.Transaction(func(tx *gorm.DB) error {
 		if inv.OwnerID != ownerid {
 			return fmt.Errorf("save invoice: ownerid mismatch")
 		}
 
-		// 1) Rechnung speichern/erstellen (gehört immer zu ownerid)
+		// 1) Save/create invoice (always belongs to ownerid)
 		if err := tx.Save(inv).Error; err != nil {
 			return err
 		}
 
-		// 2) Alte Positionen sicher entfernen (nur für diesen Owner)
+		// 2) Safely remove old positions (only for this owner)
 		if err := tx.Where("invoice_id = ? AND owner_id = ?", inv.ID, ownerid).
 			Delete(&InvoicePosition{}).Error; err != nil {
 			return err
 		}
 
-		// 3) Neue Positionen sauber anlegen
+		// 3) Create new positions cleanly
 		if len(inv.InvoicePositions) > 0 {
 			for i := range inv.InvoicePositions {
-				inv.InvoicePositions[i].ID = 0 // wichtig!
+				inv.InvoicePositions[i].ID = 0 // important!
 				inv.InvoicePositions[i].InvoiceID = inv.ID
-				inv.InvoicePositions[i].OwnerID = ownerid // erzwingen
+				inv.InvoicePositions[i].OwnerID = ownerid // enforce
 			}
 			if err := tx.Omit("ID").Create(&inv.InvoicePositions).Error; err != nil {
 				return err
@@ -141,32 +141,32 @@ func (crmdb *CRMDatenbank) UpdateInvoice(inv *Invoice, ownerid any) error {
 			return fmt.Errorf("update invoice: inv.ID is zero")
 		}
 
-		// In draft Totale nur transient
+		// In draft, totals are only transient
 		vals := *inv
 		if inv.Status == InvoiceStatusDraft {
 			vals.NetTotal = decimal.Zero
 			vals.GrossTotal = decimal.Zero
 		}
 
-		// 1) Invoice-Felder updaten (nur wenn OwnerID passt)
+		// 1) Update invoice fields (only if OwnerID matches)
 		if err := tx.Model(&Invoice{}).
 			Where("id = ? AND owner_id = ?", inv.ID, ownerid).
 			Updates(inv).Error; err != nil {
 			return fmt.Errorf("update invoice: %w", err)
 		}
 
-		// 2) Alte Positionen löschen (nur wenn OwnerID passt)
+		// 2) Delete old positions (only if OwnerID matches)
 		if err := tx.Where("invoice_id = ? AND owner_id = ?", inv.ID, ownerid).
 			Delete(&InvoicePosition{}).Error; err != nil {
 			return fmt.Errorf("delete positions: %w", err)
 		}
 
-		// 3) Neue Positionen anlegen
+		// 3) Create new positions
 		if len(inv.InvoicePositions) > 0 {
 			for i := range inv.InvoicePositions {
 				inv.InvoicePositions[i].ID = 0
 				inv.InvoicePositions[i].InvoiceID = inv.ID
-				inv.InvoicePositions[i].OwnerID = ownerid.(uint) // falls dein Model das Feld hat
+				inv.InvoicePositions[i].OwnerID = ownerid.(uint) // if your model has the field
 			}
 			if err := tx.Omit("ID").Create(&inv.InvoicePositions).Error; err != nil {
 				return fmt.Errorf("recreate positions: %w", err)
@@ -180,7 +180,7 @@ func (crmdb *CRMDatenbank) UpdateInvoice(inv *Invoice, ownerid any) error {
 // DeleteInvoice removes an invoice and all referenced invoice positions from
 // the database.
 func (crmdb *CRMDatenbank) DeleteInvoice(inv *Invoice, ownerid any) error {
-	// ensure we only delete invoices owned by the given owner
+	// Ensure we only delete invoices owned by the given owner
 	result := crmdb.db.Where("owner_id = ?", ownerid).Select("InvoicePositions").Delete(inv)
 	return result.Error
 }
@@ -195,14 +195,14 @@ func (crmdb *CRMDatenbank) LoadInvoice(id any, ownerid uint) (*Invoice, error) {
 		return nil, fmt.Errorf("load invoice %v: %w", id, err)
 	}
 
-	// In Entwürfen immer frisch rechnen
+	// Always recalculate in drafts
 	if inv.Status == InvoiceStatusDraft {
 		inv.RecomputeTotals()
 	}
 	return &inv, nil
 }
 
-// RecomputeTotals setzt NetTotal, GrossTotal und TaxAmounts anhand der Positionen.
+// RecomputeTotals sets NetTotal, GrossTotal and TaxAmounts based on the positions.
 func (i *Invoice) RecomputeTotals() {
 	i.TaxAmounts = i.TaxAmounts[:0]
 	totals := map[string]decimal.Decimal{}
@@ -240,7 +240,7 @@ func (i *Invoice) RecomputeTotals() {
 	i.GrossTotal = grossTotal
 }
 
-// countryID returns a to letter alpha code for the given country
+// countryID returns a two-letter alpha code for the given country
 func countryID(country string) string {
 	c := countries.ByName(country)
 	if c == countries.Unknown {
@@ -404,7 +404,7 @@ func (crmdb *CRMDatenbank) changeInvoiceStatus(
 		switch to {
 		case InvoiceStatusIssued:
 			updates["issued_at"] = t
-			// Positionen holen, Totale berechnen, festschreiben
+			// Fetch positions, calculate totals, persist
 			var full Invoice
 			if err := tx.Where("id = ? AND owner_id = ?", id, ownerID).
 				Preload("InvoicePositions", "owner_id = ?", ownerID).
@@ -435,7 +435,7 @@ func (crmdb *CRMDatenbank) changeInvoiceStatus(
 	})
 }
 
-// In deinem model (z. B. in invoice.go):
+// In your model (e.g. in invoice.go):
 
 // MarkInvoiceDraft rolls back an issued invoice to draft.
 // Business rules: clears IssuedAt (and optionally Number/Counter).
@@ -465,9 +465,9 @@ func (crmdb *CRMDatenbank) MarkInvoiceDraft(id uint, ownerID uint, t time.Time) 
 			"issued_at": nil,
 		}
 
-		// Optional (falls du Nummern erst bei 'issued' vergibst und beim Rückgang löschen willst):
-		// updates["number"]  = ""   // vorsichtig: nur wenn Nummer noch nicht an Kunden ging
-		// updates["counter"] = 0    // dito
+		// Optional (if you only assign numbers at 'issued' and want to delete them when reverting):
+		// updates["number"]  = ""   // caution: only if number has not yet been sent to customer
+		// updates["counter"] = 0    // same
 
 		return tx.Model(&Invoice{}).
 			Where("id = ? AND owner_id = ?", id, ownerID).

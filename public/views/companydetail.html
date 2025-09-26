@@ -60,7 +60,16 @@
       <div x-show="openInvoices" x-cloak @click.away="openInvoices = false"
            class="absolute z-10 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 overflow-hidden">
         {{ range . }}
-        <a href="/invoice/detail/{{.ID}}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">{{.Number}}</a>
+   <a href="/invoice/detail/{{.ID}}" class="flex items-center justify-between px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+  <span>{{ .Number }}</span>
+  <span class="ml-2 px-2 py-0.5 rounded-full text-xs font-medium
+    {{ if eq .Status "draft"  }} bg-yellow-100 text-yellow-800 {{ end }}
+    {{ if eq .Status "issued" }} bg-blue-100   text-blue-800   {{ end }}
+    {{ if eq .Status "paid"   }} bg-green-100  text-green-800  {{ end }}
+    {{ if eq .Status "voided" }} bg-red-100    text-red-800    {{ end }}">
+    {{ .Status | invoiceStatus }}
+  </span>
+</a>
         {{ end }}
       </div>
     </div>
