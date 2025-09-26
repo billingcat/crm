@@ -62,8 +62,8 @@ Contact: [hallo@billingcat.de]
 
 ## Trademarks & Logos
 
-The **billingcat** name and logo are registered trademarks of
-Patrick Gundlach. They are not part of the open-source license.
+The **billingcat** name is a registered trademark of
+Patrick Gundlach. The name and the billingcat logo are not part of the open-source license.
 Forks or self-hosted instances should replace them with their own branding.
 
 ---
