@@ -127,7 +127,12 @@ func (ctrl *controller) login(c echo.Context) error {
 
 	// Today, uid == ownerid. If you add teams later, store OwnerID explicitly.
 	sess.Values["uid"] = user.ID
-	sess.Values["ownerid"] = user.ID
+	sess.Values["ownerid"] = func() uint {
+		if user.OwnerID != 0 {
+			return user.OwnerID
+		}
+		return user.ID // fallback für Altbestände
+	}()
 
 	if err := sess.Save(c.Request(), c.Response()); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err)
@@ -358,6 +363,11 @@ func (ctrl *controller) verifyEmail(c echo.Context) error {
 		return c.Redirect(http.StatusSeeOther, "/login")
 	}
 
+	// ensure OwnerID is set for solo users
+	if u.OwnerID == 0 {
+		u.OwnerID = u.ID
+		_ = ctrl.model.UpdateUser(u) // best-effort
+	}
 	// Open a short-lived gate (e.g., 15 minutes) to let the user set a password.
 	sess, err := session.Get("session", c)
 	if err != nil {

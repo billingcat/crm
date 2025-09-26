@@ -284,7 +284,9 @@ func (ctrl *controller) root(c echo.Context) error {
 
 	// heads sind bereits sortiert; falls du robustness willst:
 	sort.SliceStable(changelog, func(i, j int) bool { return changelog[i].When.After(changelog[j].When) })
-
+	if len(hydr.Companies) == 0 {
+		m["nocompanies"] = true
+	}
 	m["lastchanges"] = changelog
 	return c.Render(http.StatusOK, "main.html", m)
 }

@@ -78,7 +78,6 @@ func (crmdb *CRMDatenbank) LoadAllCompanies(ownerid any) ([]*Company, error) {
 	return companies, result.Error
 }
 
-// FindAllCompaniesWithText sucht über alle Firmendaten eines Owners.
 func likeEscape(s string) string {
 	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 	return r.Replace(s)
@@ -93,7 +92,6 @@ func (crmdb *CRMDatenbank) FindAllCompaniesWithText(search string, ownerid uint)
 
 	switch crmdb.db.Dialector.Name() {
 	case "postgres":
-		// Schnell + trgm-freundlich
 		q = q.Where("owner_id = ? AND name ILIKE ? ESCAPE '\\'", ownerid, like)
 	default: // sqlite, mysql/mariadb
 		q = q.Where("owner_id = ? AND LOWER(name) LIKE LOWER(?) ESCAPE '\\'", ownerid, like)

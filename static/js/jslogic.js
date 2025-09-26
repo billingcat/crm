@@ -14,6 +14,13 @@ function updateSearchResults(ai) {
         listItem.appendChild(link);
         resultsContainer.appendChild(listItem);
     });
+    // if there are no results, show "No results found"
+    if (json.length === 0) {
+        const listItem = document.createElement("li");
+        listItem.className = "p-1";
+        listItem.textContent = "Keine Ergebnisse gefunden";
+        resultsContainer.appendChild(listItem);
+    }
 
     // add classes bg-accent-green font-bold rounded to the active item
     const activeItem = resultsContainer.children[ai];

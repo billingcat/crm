@@ -38,9 +38,9 @@ type User struct {
 	Password            string `gorm:"not null"`
 	PasswordResetToken  []byte
 	PasswordResetExpiry time.Time
-	// Optional field: true if the user has confirmed their email
-	Verified    bool `gorm:"not null;default:false"`
-	LastLoginAt *time.Time
+	Verified            bool `gorm:"not null;default:false"`
+	LastLoginAt         *time.Time
+	OwnerID             uint
 }
 
 // Normalize email before saving
