@@ -2,6 +2,7 @@ package controller
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/billingcat/crm/model"
 
@@ -29,6 +30,8 @@ type settings struct {
 func (ctrl *controller) settingsInit(e *echo.Echo) {
 	g := e.Group("/settings")
 	g.Use(ctrl.authMiddleware)
+	g.GET("/profile", ctrl.showProfile)
+	g.POST("/profile", ctrl.updateProfile)
 	g.GET("", ctrl.settingslist)
 	g.POST("", ctrl.settingslist)
 }
@@ -78,4 +81,33 @@ func (ctrl *controller) settingslist(c echo.Context) error {
 		return c.Redirect(http.StatusSeeOther, "/")
 	}
 	return nil
+}
+
+func (ctrl *controller) showProfile(c echo.Context) error {
+	uid := c.Get("uid").(uint)
+	u, err := ctrl.model.GetUserByID(uid)
+	if err != nil || u == nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "cannot load profile")
+	}
+	m := ctrl.defaultResponseMap(c, "Profile")
+	m["user"] = u
+	return c.Render(http.StatusOK, "profile.html", m)
+}
+
+func (ctrl *controller) updateProfile(c echo.Context) error {
+	uid := c.Get("uid").(uint)
+	u, err := ctrl.model.GetUserByID(uid)
+	if err != nil || u == nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "cannot load profile")
+	}
+
+	full := strings.TrimSpace(c.FormValue("fullname"))
+	u.FullName = full
+
+	if err := ctrl.model.UpdateUser(u); err != nil {
+		_ = AddFlash(c, "error", "Konnte die Daten nicht speichern.")
+		return c.Redirect(http.StatusSeeOther, "/settings/profile")
+	}
+	_ = AddFlash(c, "success", "Profil gespeichert.")
+	return c.Redirect(http.StatusSeeOther, "/settings/profile")
 }
