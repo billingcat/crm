@@ -3,34 +3,42 @@
 <div class="bg-surface border border-border rounded-card shadow-md p-6">
   <h2 class="text-xl font-semibold mb-4">{{.title}}</h2>
   {{ if eq (len .invoices) 0 }}
-    <div class="text-gray-500">Keine Einträge.</div>
+  <div class="text-gray-500">Keine Einträge.</div>
   {{ else }}
-    <table class="min-w-full text-sm">
-      <thead>
-        <tr class="text-left border-b">
-          <th class="py-2">Nr.</th>
-          <th class="py-2">Firma</th>
-          <th class="py-2">Datum</th>
-          <th class="py-2">Fällig</th>
-          <th class="py-2">Status</th>
-          <th class="py-2 text-right">Netto</th>
-          <th class="py-2 text-right">Brutto</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{ range .invoices }}
-        <tr class="border-b hover:bg-gray-50">
-          <td class="py-2"><a href="/invoice/detail/{{.ID}}" class="text-blue-700 hover:underline">{{.Number}}</a></td>
-          <td class="py-2">{{ if .Company }}{{ .Company.Name }}{{ else }}<span class="text-gray-400 italic">Keine Firma</span>{{ end }}</td>
-          <td class="py-2">{{ .Date.Format "02.01.2006" }}</td>
-          <td class="py-2">{{ .DueDate.Format "02.01.2006" }}</td>
-          <td class="py-2">{{ .Status | invoiceStatus }}</td>
-          <td class="py-2 text-right">{{ .NetTotal | rounddecimal }}</td>
-          <td class="py-2 text-right">{{ .GrossTotal | rounddecimal }}</td>
-        </tr>
-        {{ end }}
-      </tbody>
-    </table>
+  <table class="min-w-full text-sm">
+    <thead>
+      <tr class="text-left border-b">
+        <th class="py-2">Nr.</th>
+        <th class="py-2">Firma</th>
+        <th class="py-2">Datum</th>
+        <th class="py-2">Fällig</th>
+        <th class="py-2">Status</th>
+        <th class="py-2 text-right">Netto</th>
+        <th class="py-2 text-right">Brutto</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{ $now := now }}
+      {{ range .invoices }}
+      <tr class="border-b hover:bg-gray-50">
+        <td class="py-2"><a href="/invoice/detail/{{.ID}}" class="text-blue-700 hover:underline">{{.Number}}</a></td>
+        <td class="py-2">{{ if .Company }}{{ .Company.Name }}{{ else }}<span class="text-gray-400 italic">Keine
+            Firma</span>{{ end }}</td>
+        <td class="py-2">{{ .Date.Format "02.01.2006" }}</td>
+        <td class="py-2">{{ .DueDate.Format "02.01.2006" }}</td>
+
+        {{ $overdue := and (isOpen .Status) (before .DueDate $now) }}
+        <td class="py-2 {{ if $overdue }}text-red-600 font-semibold{{ end }}">
+          {{ .Status | invoiceStatus }}
+        </td>
+
+        <td class="py-2 text-right">{{ .NetTotal | rounddecimal }}</td>
+        <td class="py-2 text-right">{{ .GrossTotal | rounddecimal }}</td>
+      </tr>
+      {{ end }}
+
+    </tbody>
+  </table>
   {{ end }}
 </div>
 {{ template "footer.html" . }}

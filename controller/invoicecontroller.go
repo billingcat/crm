@@ -556,6 +556,7 @@ func (ctrl *controller) invoiceList(c echo.Context) error {
 		title = "Stornierte Rechnungen"
 		statuses = []model.InvoiceStatus{model.InvoiceStatusVoided}
 	default:
+		title = "Alle Rechnungen"
 		// any → kein Status-Filter
 	}
 

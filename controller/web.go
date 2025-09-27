@@ -452,7 +452,11 @@ func NewController(crmdb *model.CRMDatenbank) error {
 			}
 			return out
 		},
-	}
+		"now":    time.Now,
+		"before": func(a, b time.Time) bool { return a.Before(b) },
+		"isOpen": func(s model.InvoiceStatus) bool {
+			return s == "open" || s == "issued"
+		}}
 
 	tmpl := &Template{
 		templates: template.Must(template.New("t").Funcs(templateFunc).ParseGlob("public/views/*.html")),
