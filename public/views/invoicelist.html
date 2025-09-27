@@ -1,44 +1,103 @@
 <!-- invoicelist.html -->
 {{ template "header.html" . }}
 <div class="bg-surface border border-border rounded-card shadow-md p-6">
-  <h2 class="text-xl font-semibold mb-4">{{.title}}</h2>
+  <h2 class="text-xl font-semibold mb-4">{{ .title }}</h2>
+
   {{ if eq (len .invoices) 0 }}
   <div class="text-gray-500">Keine Einträge.</div>
   {{ else }}
-  <table class="min-w-full text-sm">
-    <thead>
-      <tr class="text-left border-b">
-        <th class="py-2">Nr.</th>
-        <th class="py-2">Firma</th>
-        <th class="py-2">Datum</th>
-        <th class="py-2">Fällig</th>
-        <th class="py-2">Status</th>
-        <th class="py-2 text-right">Netto</th>
-        <th class="py-2 text-right">Brutto</th>
-      </tr>
-    </thead>
-    <tbody>
-      {{ $now := now }}
-      {{ range .invoices }}
-      <tr class="border-b hover:bg-gray-50">
-        <td class="py-2"><a href="/invoice/detail/{{.ID}}" class="text-blue-700 hover:underline">{{.Number}}</a></td>
-        <td class="py-2">{{ if .Company }}{{ .Company.Name }}{{ else }}<span class="text-gray-400 italic">Keine
-            Firma</span>{{ end }}</td>
-        <td class="py-2">{{ .Date.Format "02.01.2006" }}</td>
-        <td class="py-2">{{ .DueDate.Format "02.01.2006" }}</td>
 
-        {{ $overdue := and (isOpen .Status) (before .DueDate $now) }}
-        <td class="py-2 {{ if $overdue }}text-red-600 font-semibold{{ end }}">
+  {{ $now := now }}
+
+  <!-- Mobile: card-view -->
+  <div class="space-y-3 md:hidden">
+    {{ range .invoices }}
+    {{ $overdue := and (isOpen .Status) (before .DueDate $now) }}
+    <div class="bg-white border border-gray-200 rounded-xl p-4">
+      <div class="flex items-start justify-between gap-3">
+        <a href="/invoice/detail/{{ .ID }}" class="font-medium text-gray-900 hover:underline">{{ .Number }}</a>
+        <span class="shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-xs
+            {{- if eq .Status " draft" }} bg-yellow-100 text-yellow-800 {{- else if eq .Status "issued" }} bg-blue-100
+          text-blue-800 {{- else if eq .Status "paid" }} bg-green-100 text-green-800 {{- else if eq .Status "voided" }}
+          bg-red-100 text-red-800 {{- end }}">
           {{ .Status | invoiceStatus }}
-        </td>
+        </span>
+      </div>
 
-        <td class="py-2 text-right">{{ .NetTotal | rounddecimal }}</td>
-        <td class="py-2 text-right">{{ .GrossTotal | rounddecimal }}</td>
-      </tr>
+      <dl class="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+        <div>
+          <dt class="text-gray-500">Firma</dt>
+          <dd class="text-gray-900">
+            {{ if .Company }}{{ .Company.Name }}{{ else }}<span class="text-gray-400 italic">Keine Firma</span>{{ end }}
+          </dd>
+        </div>
+        <div>
+          <dt class="text-gray-500">Datum</dt>
+          <dd class="text-gray-900">{{ .Date.Format "02.01.2006" }}</dd>
+        </div>
+        <div>
+          <dt class="text-gray-500">Fällig</dt>
+          <dd class="text-gray-900">{{ .DueDate.Format "02.01.2006" }}</dd>
+        </div>
+        <div>
+          <dt class="text-gray-500">Netto</dt>
+          <dd class="text-gray-900">{{ .NetTotal | rounddecimal }}</dd>
+        </div>
+        <div>
+          <dt class="text-gray-500">Brutto</dt>
+          <dd class="text-gray-900">{{ .GrossTotal | rounddecimal }}</dd>
+        </div>
+      </dl>
+
+      {{ if $overdue }}
+      <p class="mt-3 text-xs font-semibold text-red-600">Überfällig</p>
       {{ end }}
+    </div>
+    {{ end }}
+  </div>
 
-    </tbody>
-  </table>
+  <!-- Desktop: table -->
+  <div class="hidden md:block">
+    <div class="overflow-x-auto -mx-4 md:mx-0">
+      <table class="min-w-full text-sm md:text-base">
+        <thead>
+          <tr class="text-left border-b">
+            <th class="px-4 py-2">Nr.</th>
+            <th class="px-4 py-2">Firma</th>
+            <th class="px-4 py-2">Datum</th>
+            <th class="px-4 py-2">Fällig</th>
+            <th class="px-4 py-2">Status</th>
+            <th class="px-4 py-2 text-right">Netto</th>
+            <th class="px-4 py-2 text-right">Brutto</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{ range .invoices }}
+          {{ $overdue := and (isOpen .Status) (before .DueDate $now) }}
+          <tr class="border-b hover:bg-gray-50">
+            <td class="px-4 py-2">
+              <a href="/invoice/detail/{{ .ID }}" class="text-blue-700 hover:underline">{{ .Number }}</a>
+            </td>
+            <td class="px-4 py-2">
+              {{ if .Company }}{{ .Company.Name }}{{ else }}<span class="text-gray-400 italic">Keine Firma</span>{{ end
+              }}
+            </td>
+            <td class="px-4 py-2">{{ .Date.Format "02.01.2006" }}</td>
+            <td class="px-4 py-2">{{ .DueDate.Format "02.01.2006" }}</td>
+
+            <td class="px-4 py-2 {{ if $overdue }}text-red-600 font-semibold{{ end }}">
+              {{ .Status | invoiceStatus }}
+            </td>
+
+            <td class="px-4 py-2 text-right">{{ .NetTotal | rounddecimal }}</td>
+            <td class="px-4 py-2 text-right">{{ .GrossTotal | rounddecimal }}</td>
+          </tr>
+          {{ end }}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
   {{ end }}
 </div>
 {{ template "footer.html" . }}
