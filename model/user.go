@@ -26,6 +26,9 @@ var (
 	ErrTokenInvalid        = fmt.Errorf("token invalid")
 	ErrSignupTokenUsed     = fmt.Errorf("signup token already used")
 	ErrSignupTokenNotFound = fmt.Errorf("signup token not found")
+	ErrTokenNotFound       = fmt.Errorf("token not found")
+	ErrTokenDisabled       = fmt.Errorf("token disabled")
+	ErrUnauthorized        = fmt.Errorf("unauthorized")
 )
 
 // ===== User =====

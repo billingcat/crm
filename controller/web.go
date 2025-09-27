@@ -664,6 +664,8 @@ func NewController(crmdb *model.CRMDatenbank) error {
 	ctrl.settingsInit(e)
 	ctrl.fileManagerInit(e)
 	ctrl.noteInit(e)
+	ctrl.adminInit(e)
+	ctrl.apiInit(e)
 
 	if err := e.Start(fmt.Sprintf(":%d", crmdb.Config.Port)); err != nil {
 		return fmt.Errorf("cannot start application %w", err)

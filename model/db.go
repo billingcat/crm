@@ -74,6 +74,9 @@ func (crmdb *CRMDatenbank) autoMigrate() error {
 	if err = crmdb.db.AutoMigrate(&Note{}); err != nil {
 		return err
 	}
+	if err = crmdb.db.AutoMigrate(&APIToken{}); err != nil {
+		return err
+	}
 	crmdb.db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS ux_recent_user_entity
          ON recent_views(user_id, entity_type, entity_id)`)
 	crmdb.db.Exec(`CREATE INDEX IF NOT EXISTS idx_recent_user_viewed_at

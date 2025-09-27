@@ -16,8 +16,11 @@
     --color-yellow-100: oklch(97.3% 0.071 103.193);
     --color-yellow-200: oklch(94.5% 0.129 101.54);
     --color-yellow-800: oklch(47.6% 0.114 61.907);
+    --color-green-50: oklch(98.2% 0.018 155.826);
     --color-green-100: oklch(96.2% 0.044 156.743);
     --color-green-200: oklch(92.5% 0.084 155.995);
+    --color-green-300: oklch(87.1% 0.15 154.449);
+    --color-green-700: oklch(52.7% 0.154 150.069);
     --color-green-800: oklch(44.8% 0.119 151.328);
     --color-blue-50: oklch(97% 0.014 254.604);
     --color-blue-100: oklch(93.2% 0.032 255.585);
@@ -662,6 +665,9 @@
   .border-gray-700 {
     border-color: var(--color-gray-700);
   }
+  .border-green-300 {
+    border-color: var(--color-green-300);
+  }
   .border-primary-light {
     border-color: var(--color-primary-light);
   }
@@ -721,6 +727,9 @@
   }
   .bg-gray-300 {
     background-color: var(--color-gray-300);
+  }
+  .bg-green-50 {
+    background-color: var(--color-green-50);
   }
   .bg-green-100 {
     background-color: var(--color-green-100);
@@ -863,6 +872,9 @@
   .align-top {
     vertical-align: top;
   }
+  .font-mono {
+    font-family: var(--font-mono);
+  }
   .font-sans {
     font-family: var(--font-sans);
   }
@@ -918,6 +930,9 @@
     --tw-tracking: var(--tracking-tight);
     letter-spacing: var(--tracking-tight);
   }
+  .break-all {
+    word-break: break-all;
+  }
   .whitespace-pre-wrap {
     white-space: pre-wrap;
   }
@@ -954,11 +969,17 @@
   .text-gray-900 {
     color: var(--color-gray-900);
   }
+  .text-green-700 {
+    color: var(--color-green-700);
+  }
   .text-green-800 {
     color: var(--color-green-800);
   }
   .text-primary {
     color: var(--color-primary);
+  }
+  .text-red-600 {
+    color: var(--color-red-600);
   }
   .text-red-700 {
     color: var(--color-red-700);
@@ -997,6 +1018,9 @@
   }
   .opacity-0 {
     opacity: 0%;
+  }
+  .opacity-60 {
+    opacity: 60%;
   }
   .shadow {
     --tw-shadow: 0 1px 3px 0 var(--tw-shadow-color, rgb(0 0 0 / 0.1)), 0 1px 2px -1px var(--tw-shadow-color, rgb(0 0 0 / 0.1));

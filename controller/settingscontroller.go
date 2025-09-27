@@ -2,7 +2,9 @@ package controller
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/billingcat/crm/model"
 
@@ -32,8 +34,19 @@ func (ctrl *controller) settingsInit(e *echo.Echo) {
 	g.Use(ctrl.authMiddleware)
 	g.GET("/profile", ctrl.showProfile)
 	g.POST("/profile", ctrl.updateProfile)
+	g.POST("/tokens/create", ctrl.settingsTokenCreate)     // erstellt einen neuen Token
+	g.POST("/tokens/revoke/:id", ctrl.settingsTokenRevoke) // sperrt (revoked) einen Token
+
 	g.GET("", ctrl.settingslist)
 	g.POST("", ctrl.settingslist)
+}
+
+// controller/views.go
+type ProfilePageData struct {
+	CSRFToken string
+	User      *model.User
+	Tokens    []model.APIToken
+	NewToken  string // nur gesetzt direkt nach dem Erstellen
 }
 
 func (ctrl *controller) settingslist(c echo.Context) error {
@@ -85,12 +98,22 @@ func (ctrl *controller) settingslist(c echo.Context) error {
 
 func (ctrl *controller) showProfile(c echo.Context) error {
 	uid := c.Get("uid").(uint)
+
 	u, err := ctrl.model.GetUserByID(uid)
 	if err != nil || u == nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "cannot load profile")
 	}
+
+	// Tokens für den Owner laden
+	tokens, _, err := ctrl.model.ListAPITokensByOwner(u.OwnerID, 100, "")
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "cannot load api tokens")
+	}
+
 	m := ctrl.defaultResponseMap(c, "Profile")
 	m["user"] = u
+	m["tokens"] = tokens
+	// m["newToken"] kann (optional) vom Create-Handler gesetzt werden
 	return c.Render(http.StatusOK, "profile.html", m)
 }
 
@@ -110,4 +133,56 @@ func (ctrl *controller) updateProfile(c echo.Context) error {
 	}
 	_ = AddFlash(c, "success", "Profil gespeichert.")
 	return c.Redirect(http.StatusSeeOther, "/settings/profile")
+}
+
+func (ctrl *controller) settingsTokenCreate(c echo.Context) error {
+	uid := c.Get("uid").(uint)
+
+	u, err := ctrl.model.GetUserByID(uid)
+	if err != nil || u == nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "cannot load user")
+	}
+
+	name := strings.TrimSpace(c.FormValue("name"))
+	// MVP: keine Scopes/Ablaufzeit
+	var expiresAt *time.Time
+	plain, _, err := ctrl.model.CreateAPIToken(u.OwnerID, &u.ID, name, "", expiresAt)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "cannot create api token")
+	}
+
+	// Liste neu laden
+	tokens, _, err := ctrl.model.ListAPITokensByOwner(u.OwnerID, 100, "")
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "cannot load api tokens")
+	}
+
+	// Wichtig: kein Redirect – Klartext-Token direkt anzeigen
+	m := ctrl.defaultResponseMap(c, "Profile")
+	m["user"] = u
+	m["tokens"] = tokens
+	m["newToken"] = plain // <- im Template einmalig anzeigen
+	return c.Render(http.StatusOK, "profile.html", m)
+}
+
+func (ctrl *controller) settingsTokenRevoke(c echo.Context) error {
+	uid := c.Get("uid").(uint)
+
+	u, err := ctrl.model.GetUserByID(uid)
+	if err != nil || u == nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "cannot load user")
+	}
+
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil || id == 0 {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid token id")
+	}
+
+	if err := ctrl.model.RevokeAPIToken(u.OwnerID, uint(id)); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "cannot revoke token")
+	}
+
+	// zurück zum Profil (hier ist Redirect okay – kein Klartext nötig)
+	return c.Redirect(http.StatusFound, "/settings/profile")
 }
