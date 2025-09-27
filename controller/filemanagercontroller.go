@@ -86,7 +86,7 @@ func (ctrl *controller) filemanagerList(c echo.Context) error {
 	m["cancel"] = "/"
 	ownerID := c.Get("ownerid")
 
-	dirPath := filepath.Join(ctrl.model.Config.Basedir, "assets", "userassets", fmt.Sprintf("user%d", ownerID))
+	dirPath := filepath.Join(ctrl.model.Config.Basedir, "assets", "userassets", fmt.Sprintf("owner%d", ownerID))
 	// Sicherstellen, dass der Ordner existiert
 	if err := os.MkdirAll(dirPath, 0755); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -119,7 +119,7 @@ func (ctrl *controller) filemanagerList(c echo.Context) error {
 
 func (ctrl *controller) filemanagerUploadHandler(c echo.Context) error {
 	// Optional: Subdir
-	baseDir := filepath.Join(ctrl.model.Config.Basedir, "assets", "userassets", fmt.Sprintf("user%d", c.Get("ownerid")))
+	baseDir := filepath.Join(ctrl.model.Config.Basedir, "assets", "userassets", fmt.Sprintf("owner%d", c.Get("ownerid")))
 
 	// aktuelle Größe berechnen
 	used, err := calcDirSize(baseDir)
@@ -178,7 +178,7 @@ func (ctrl *controller) filemanagerUploadHandler(c echo.Context) error {
 
 func (ctrl *controller) filemanagerDeleteHandler(c echo.Context) error {
 	path := c.FormValue("path") // relativer Pfad vom UI
-	baseDir := filepath.Join(ctrl.model.Config.Basedir, "assets", "userassets", fmt.Sprintf("user%d", c.Get("ownerid")))
+	baseDir := filepath.Join(ctrl.model.Config.Basedir, "assets", "userassets", fmt.Sprintf("owner%d", c.Get("ownerid")))
 
 	full, err := safeJoin(baseDir, path)
 	if err != nil {
@@ -200,7 +200,7 @@ func (ctrl *controller) filemanagerDeleteHandler(c echo.Context) error {
 
 func (ctrl *controller) filemanagerDownloadHandler(c echo.Context) error {
 	rel := strings.TrimPrefix(c.Param("*"), "/")
-	baseDir := filepath.Join(ctrl.model.Config.Basedir, "assets", "userassets", fmt.Sprintf("user%d", c.Get("ownerid")))
+	baseDir := filepath.Join(ctrl.model.Config.Basedir, "assets", "userassets", fmt.Sprintf("owner%d", c.Get("ownerid")))
 
 	full, err := safeJoin(baseDir, rel)
 	if err != nil {
