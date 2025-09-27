@@ -4,7 +4,7 @@
 <img src="https://billingcat.de/images/billingcat.png" width="256">
 
 billingcat is a lightweight CRM and invoicing tool, made for freelancers and small businesses.
-It helps you manage contacts, companies and notes – but its main focus is on **invoicing**.
+It helps you manage contacts, companies and notes – but its main focus is on **invoicing** in a b2b environment.
 You can even generate **ZUGFeRD-compliant invoices** (both XML and PDF).
 
 Check out [billingcat.de](https://billingcat.de) – you can sign up for the newsletter there to get notified once the public alpha SaaS goes live!
