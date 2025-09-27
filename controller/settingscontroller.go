@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -11,7 +12,7 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-type settings struct {
+type settingsForm struct {
 	Companyname     string `form:"companyname"`
 	Contactperson   string `form:"contactperson"`
 	Ownemail        string `form:"ownemail"`
@@ -23,7 +24,7 @@ type settings struct {
 	VAT             string `form:"vat"`
 	TaxNo           string `form:"taxno"`
 	Invoicetemplate string `form:"invoicetemplate"`
-	Uselocalcounter bool   `form:"uselocalcounter"`
+	Uselocalcounter bool   `form:"uselocalcounter"` // kommt als "true"/"false"
 	Bankname        string `form:"bankname"`
 	Bankiban        string `form:"bankiban"`
 	Bankbic         string `form:"bankbic"`
@@ -64,28 +65,31 @@ func (ctrl *controller) settingslist(c echo.Context) error {
 		m["settings"] = settings
 		return c.Render(http.StatusOK, "settingslist.html", m)
 	case http.MethodPost:
-		cp := new(settings)
-		if err := c.Bind(cp); err != nil {
+		f := new(settingsForm)
+		if err := c.Bind(f); err != nil {
+			c.Get("logger").(*slog.Logger).Error("binding settings form failed", "err", err)
 			return ErrInvalid(err, "Fehler beim Verarbeiten der Formulardaten")
 		}
+		oid := c.Get("ownerid").(uint) // wichtig: als uint
+
 		dbSettings := &model.Settings{
-			InvoiceContact:        cp.Contactperson,
-			InvoiceEMail:          cp.Ownemail,
-			ZIP:                   cp.ZIP,
-			Address1:              cp.Address1,
-			Address2:              cp.Address2,
-			City:                  cp.City,
-			CountryCode:           cp.CountryCode,
-			VATID:                 cp.VAT,
-			TAXNumber:             cp.TaxNo,
-			InvoiceNumberTemplate: cp.Invoicetemplate,
-			UseLocalCounter:       cp.Uselocalcounter,
-			BankIBAN:              cp.Bankiban,
-			BankName:              cp.Bankname,
-			BankBIC:               cp.Bankbic,
-			CompanyName:           cp.Companyname,
+			OwnerID:               oid,
+			CompanyName:           f.Companyname,
+			InvoiceContact:        f.Contactperson,
+			InvoiceEMail:          f.Ownemail,
+			Address1:              f.Address1,
+			Address2:              f.Address2,
+			ZIP:                   f.ZIP,
+			City:                  f.City,
+			CountryCode:           f.CountryCode,
+			VATID:                 f.VAT,
+			TAXNumber:             f.TaxNo,
+			InvoiceNumberTemplate: f.Invoicetemplate,
+			UseLocalCounter:       f.Uselocalcounter,
+			BankName:              f.Bankname,
+			BankIBAN:              f.Bankiban,
+			BankBIC:               f.Bankbic,
 		}
-		dbSettings.ID = 1
 
 		if err := ctrl.model.SaveSettings(dbSettings); err != nil {
 			return ErrInvalid(err, "Fehler beim Speichern der Einstellungen")

@@ -66,11 +66,10 @@
             <input class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
                 type="text" name="invoicetemplate" id="invoicetemplate" value="{{.InvoiceNumberTemplate}}">
         </div>
-
         <div class="flex flex-col items-start space-y-1 sm:col-span-2">
             <label class="" for="uselocalcounter">Eigener Zähler je Kunde?</label>
             <input class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" type="checkbox"
-                name="uselocalcounter" id="uselocalcounter" value="{{.UseLocalCounter}}" checked>
+                name="uselocalcounter" id="uselocalcounter" value="true" {{ if .UseLocalCounter }}checked{{ end }}>
         </div>
         <div class="sm:col-span-2"></div>
         <div class="sm:col-span-2">

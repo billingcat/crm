@@ -33,7 +33,6 @@ func ensureDir(dirName string) error {
 // expected to exist at the given location and the PDF gets written to the
 // location given by the last argument.
 func (crmdb *CRMDatenbank) CreateZUGFeRDPDF(inv *Invoice, ownerID uint, xmlpath string, pdfpath string, logger *slog.Logger) error {
-
 	ep, err := api.NewEndpoint(crmdb.Config.PublishingServerUsername, crmdb.Config.PublishingServerAddress)
 	if err != nil {
 		return err
@@ -44,9 +43,9 @@ func (crmdb *CRMDatenbank) CreateZUGFeRDPDF(inv *Invoice, ownerID uint, xmlpath 
 		return err
 	}
 
-	p.Version = "5.1.25"
+	p.Version = "5.1.26"
 
-	userAssetsDir := filepath.Join(crmdb.Config.Basedir, "assets", "userassets", fmt.Sprintf("user%d", ownerID))
+	userAssetsDir := filepath.Join(crmdb.Config.Basedir, "assets", "userassets", fmt.Sprintf("owner%d", ownerID))
 
 	if err = ensureDir(userAssetsDir); err != nil {
 		return err

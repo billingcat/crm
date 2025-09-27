@@ -415,7 +415,7 @@ func (ctrl *controller) invoiceZUGFeRDPDF(c echo.Context) error {
 		return ErrInvalid(err, "Fehler beim Erstellen des Verzeichnisses für den Benutzer")
 	}
 
-	err = ctrl.model.CreateZUGFeRDPDF(i, 1, xmlPath, pdfPath, logger)
+	err = ctrl.model.CreateZUGFeRDPDF(i, ownerid, xmlPath, pdfPath, logger)
 	if err != nil {
 		return ErrInvalid(err, "Fehler beim Erstellen der ZUGFeRD PDF")
 	}
@@ -488,7 +488,7 @@ func (ctrl *controller) invoiceStatusChange(c echo.Context) error {
 			return
 		}
 		pdfPath := ctrl.getPDFPathForInvoice(inv)
-		if err = ctrl.model.CreateZUGFeRDPDF(inv, 1, xmlPath, pdfPath, logger); err != nil {
+		if err = ctrl.model.CreateZUGFeRDPDF(inv, ownerID, xmlPath, pdfPath, logger); err != nil {
 			logger.Error("creating zugferd pdf failed", "invoice_id", invoiceID, "err", err)
 			return
 		}
