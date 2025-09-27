@@ -3,7 +3,6 @@ port = 5555
 # mode="production"
 mode="development"
 registrationAllowed=false
-adminpassword="mypassword"
 basedir="dir to main.go"
 xmldir="/tmp/zugferdxml"
 
@@ -21,5 +20,9 @@ database = "sqlite3"
 dbname = "test.db"
 
 [servers.production]
-database = "sqlite3"
-dbname = "production.db"
+database = "postgresql"
+dbname = "crm_db"
+dbuser = "crm_user"
+dbhost = "localhost"
+dbpassword = "mysecretpassword"
+

@@ -16,7 +16,7 @@ type ActivityHead struct {
 }
 
 // Global neueste Items über alle Typen.
-func (crmdb *CRMDatenbank) GetActivityHeads(ownerID any, limit int) ([]ActivityHead, error) {
+func (crmdb *CRMDatenbank) GetActivityHeads(userID any, limit int) ([]ActivityHead, error) {
 	if limit <= 0 {
 		limit = 20
 	}
@@ -56,7 +56,7 @@ WHERE owner_id = ?
 
 ORDER BY created_at DESC
 LIMIT ?;	`
-	if err := crmdb.db.Raw(raw, ownerID, ownerID, ownerID, limit).Scan(&rows).Error; err != nil {
+	if err := crmdb.db.Raw(raw, userID, userID, userID, limit).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
 	return rows, nil

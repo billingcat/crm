@@ -18,7 +18,6 @@ type CRMDatenbank struct {
 }
 
 type Config struct {
-	Adminpassword            string
 	Basedir                  string
 	CookieSecret             string
 	MailAPIKey               string

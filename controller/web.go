@@ -123,7 +123,15 @@ func (ctrl *controller) defaultResponseMap(c echo.Context, title string) map[str
 	}
 	responseMap["ownerid"] = ownerID
 	responseMap["uid"] = userID.(uint)
-	user, _ := ctrl.model.GetUserByID(ownerID)
+	user, err := ctrl.model.GetUserByID(ownerID)
+	if err != nil {
+		c.Get("logger").(*slog.Logger).Warn("cannot get user by ID", "error", err)
+		responseMap["uid"] = nil
+		responseMap["ownerid"] = nil
+		c.Set("uid", nil)
+		c.Set("ownerid", nil)
+		return responseMap
+	}
 	if user != nil {
 		responseMap["email"] = user.Email
 		responseMap["fullname"] = user.FullName
@@ -163,12 +171,16 @@ func (ctrl *controller) root(c echo.Context) error {
 	m := ctrl.defaultResponseMap(c, "Startseite")
 
 	ownerID := c.Get("ownerid")
-	owner, err := ctrl.model.GetUserByID(ownerID)
+	userID := c.Get("uid")
+	if ownerID == nil || userID == nil {
+		return c.Render(http.StatusOK, "login.html", m)
+	}
+	owner, err := ctrl.model.GetUserByID(userID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Errorf("cannot get user by ID: %w", err))
 	}
 
-	hydr, err := ctrl.model.LoadActivity(ownerID, 10)
+	hydr, err := ctrl.model.LoadActivity(userID, 10)
 	if err != nil {
 		return ErrInvalid(err, "Fehler beim Laden der Änderungen")
 	}
