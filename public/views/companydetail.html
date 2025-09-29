@@ -21,9 +21,9 @@
       USt-IdNr: {{.VATID}}</p>
 
     <div class="mt-4">
-      <i>Rufnummern:</i>
-      {{ range .Phones}}
-      <p>{{.Location}}: {{ .Number}}</p>
+      <i>Kontaktdaten:</i>
+      {{ range .ContactInfos}}
+      <p>{{.Label}}: {{ .Value}}</p>
       {{end}}
     </div>
 

@@ -7,14 +7,14 @@ import (
 // A Person is a natural identity
 type Person struct {
 	gorm.Model
-	OwnerID   uint
-	Name      string
-	Position  string
-	EMail     string
-	CompanyID int
-	Company   Company
-	Phones    []Phone `gorm:"polymorphic:Parent;"`
-	Notes     []Note  `gorm:"polymorphic:Parent;constraint:OnDelete:CASCADE;"`
+	OwnerID      uint
+	Name         string
+	Position     string
+	EMail        string
+	CompanyID    int
+	Company      Company
+	ContactInfos []ContactInfo `gorm:"polymorphic:Parent;"`
+	Notes        []Note        `gorm:"polymorphic:Parent;constraint:OnDelete:CASCADE;"`
 }
 
 // CreatePerson person
@@ -45,7 +45,7 @@ func (crmdb *CRMDatenbank) SavePerson(p *Person, uid any) error {
 // LoadPeopleForCompany loads all contacts for a company
 func (crmdb *CRMDatenbank) LoadPeopleForCompany(id any, ownerID any) ([]*Person, error) {
 	var people = make([]*Person, 0)
-	result := crmdb.db.Preload("Phones").Where("owner_id = ?", ownerID).Where("company_id = ?", id).Find(&people)
+	result := crmdb.db.Preload("ContactInfos").Where("owner_id = ?", ownerID).Where("company_id = ?", id).Find(&people)
 	return people, result.Error
 }
 
@@ -71,7 +71,7 @@ func (crmdb *CRMDatenbank) RemovePerson(id any, ownerID any) error {
 // LoadPerson loads a Person
 func (crmdb *CRMDatenbank) LoadPerson(id any, ownerID any) (*Person, error) {
 	c := &Person{}
-	result := crmdb.db.Preload("Phones").Preload("Company").Where("owner_id = ?", ownerID).First(c, id)
+	result := crmdb.db.Preload("ContactInfos").Preload("Company").Where("owner_id = ?", ownerID).First(c, id)
 	return c, result.Error
 }
 
@@ -81,7 +81,7 @@ func (crmdb *CRMDatenbank) FindAllPeopleWithText(search string, ownerid uint) ([
 	like := "%" + search + "%"
 
 	var people []*Person
-	q := crmdb.db.Preload("Phones")
+	q := crmdb.db.Preload("ContactInfos")
 
 	switch crmdb.db.Dialector.Name() {
 	case "postgres":

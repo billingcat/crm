@@ -5,12 +5,12 @@
 
   <fieldset class="mt-3 p-3 border rounded grid grid-cols-4 gap-2">
     <legend>Stammdaten</legend>
-    <div class="w-full col-span-4       ">
+    <div class="w-full col-span-4">
       <label for="companyname">Firmenname</label>
       <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
         name="name" id="companyname" placeholder="Muster GmbH" value="{{$company.Name}}">
     </div>
-    <div class="col-span-4      ">
+    <div class="col-span-4">
       <label for="background">Hintergrund</label>
       <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
         id="background" name="background" placeholder="Kontakt über Musterfirma" value="{{$company.Background}}">
@@ -134,59 +134,111 @@
     </div>
   </fieldset>
 
-  <fieldset class="border rounded p-3 mt-3" x-data="{ counter: 1, showDivs: [] }">
-    <legend>Rufnummern</legend>
-    {{ range $i, $p := $company.Phones }}
-    <div id="phoneedit{{$i}}" class="grid grid-cols-5 gap-2" data-pos="{{$i}}">
-      <div class="col-span-2">
-        <label for="phone{{$i}}location"></label>
-        <input id="phone{{$i}}location" list="locationlist" name="phone[{{$i}}].location"
-          class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5" value="{{$p.Location}}">
-      </div>
-      <div class="col-span-2">
-        <label for="phone{{$i}}number"></label>
-        <input id="phone{{$i}}number" type="text" name="phone[{{$i}}].number"
-          class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
-          value="{{$p.Number}}">
-      </div>
-      <div class="ps-4">
-        <a class="btn" style="position: relative; bottom: -16px; left: -7px"
-          onclick="document.getElementById('phoneedit{{$i}}').remove();">
-          <img src="/static/images/trash.svg">
-        </a>
-      </div>
-    </div>
-    {{ end }}
-    {{ $l := len $company.Phones }}
-    <template x-for="(div, index) in showDivs" :key="div.id">
-      <div class="grid grid-cols-5 gap-2 mt-2">
-        <div class="col-span-2">
-          <label :for="'phone' + (index +  {{ $l }} ) + 'location'"></label>
-          <input :id="'phone' + (index +  {{ $l }} ) + 'location'" list="locationlist"
-            :name="'phone[' + (index +  {{ $l }}) + '].location'"
-            class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5">
-        </div>
-        <div class="col-span-2">
-          <label :for="'phone' + (index + {{ $l }} ) + 'number'"></label>
-          <input :id="'phone' + (index + {{ $l }} ) + 'number'" type="text" :name="'phone[' + (index + {{ $l }}) + '].number'"
-            class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5">
-        </div>
-        <div class="ps-4">
-          <a class="btn" style="position: relative; bottom: -16px; left: -7px" @click="showDivs.splice(index, 1)">
-            <img src="/static/images/trash.svg">
-          </a>
-        </div>
-      </div>
-    </template>
+<fieldset class="border rounded p-3 mt-3" x-data="{ counter: 1, showDivs: [] }">
+  <legend>Kontaktdaten</legend>
 
-    <div id="telefonnummern" class="mt-3">
-      <button @click="showDivs.push({ id: counter, location: '', number: '' }); counter++"
-        class="bg-primary-light text-text  rounded-button font-bold hover:bg-hover hover:text-white transition-colors"
-        type="button">
-        Zeile hinzufügen
+  <!-- bestehende Einträge -->
+  {{ range $i, $p := $company.ContactInfos }}
+  <div id="contactedit{{$i}}" class="grid grid-cols-6 gap-2 items-start" data-pos="{{$i}}">
+    <!-- Type -->
+    <div>
+      <label class="block text-xs mb-1" for="contact{{$i}}type">Typ</label>
+      <select id="contact{{$i}}type" name="phone[{{$i}}].type"
+              class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5">
+        {{ $t := $p.Type }}
+        <option value="phone"   {{ if eq $t "phone" }}selected{{ end }}>Telefon</option>
+        <option value="fax"     {{ if eq $t "fax" }}selected{{ end }}>Fax</option>
+        <option value="email"   {{ if eq $t "email" }}selected{{ end }}>E-Mail</option>
+        <option value="website" {{ if eq $t "website" }}selected{{ end }}>Website</option>
+        <option value="linkedin"{{ if eq $t "linkedin" }}selected{{ end }}>LinkedIn</option>
+        <option value="twitter" {{ if eq $t "twitter" }}selected{{ end }}>Twitter</option>
+        <option value="github"  {{ if eq $t "github" }}selected{{ end }}>GitHub</option>
+        <option value="other"   {{ if eq $t "other" }}selected{{ end }}>Sonstiges</option>
+      </select>
+    </div>
+
+    <!-- Label -->
+    <div class="col-span-2">
+      <label class="block text-xs mb-1" for="contact{{$i}}label">Bezeichnung</label>
+      <input id="contact{{$i}}label" list="locationlist" name="phone[{{$i}}].label"
+             class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+             value="{{$p.Label}}">
+    </div>
+
+    <!-- Value -->
+    <div class="col-span-2">
+      <label class="block text-xs mb-1" for="contact{{$i}}value">Angabe</label>
+      <input id="contact{{$i}}value" type="text" name="phone[{{$i}}].value"
+             class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+             value="{{$p.Value}}">
+    </div>
+
+    <!-- Remove -->
+    <div class="pt-6">
+      <button class="btn" type="button"
+              onclick="document.getElementById('contactedit{{$i}}').remove();">
+        <img src="/static/images/trash.svg" alt="Löschen">
       </button>
     </div>
-  </fieldset>
+  </div>
+  {{ end }}
+
+  {{ $l := len $company.ContactInfos }}
+
+  <template x-for="(div, index) in showDivs" :key="div.id">
+    <div class="grid grid-cols-6 gap-2 mt-2 items-start">
+      <!-- Type -->
+      <div>
+        <label class="block text-xs mb-1" :for="'contact' + (index + {{ $l }}) + 'type'">Typ</label>
+        <select :id="'contact' + (index + {{ $l }}) + 'type'"
+                :name="'phone[' + (index + {{ $l }}) + '].type'"
+                class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5">
+          <option value="phone">Telefon</option>
+          <option value="fax">Fax</option>
+          <option value="email">E-Mail</option>
+          <option value="website">Website</option>
+          <option value="linkedin">LinkedIn</option>
+          <option value="twitter">Twitter</option>
+          <option value="github">GitHub</option>
+          <option value="other">Sonstiges</option>
+        </select>
+      </div>
+
+      <!-- Label -->
+      <div class="col-span-2">
+        <label class="block text-xs mb-1" :for="'contact' + (index + {{ $l }}) + 'label'">Bezeichnung</label>
+        <input :id="'contact' + (index + {{ $l }}) + 'label'" list="locationlist"
+               :name="'phone[' + (index + {{ $l }}) + '].label'"
+               class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5">
+      </div>
+
+      <!-- Value -->
+      <div class="col-span-2">
+        <label class="block text-xs mb-1" :for="'contact' + (index + {{ $l }}) + 'value'">Angabe</label>
+        <input :id="'contact' + (index + {{ $l }}) + 'value'" type="text"
+               :name="'phone[' + (index + {{ $l }}) + '].value'"
+               class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5">
+      </div>
+
+      <!-- Remove -->
+      <div class="pt-6">
+        <button class="btn" type="button" @click="showDivs.splice(index, 1)">
+          <img src="/static/images/trash.svg" alt="Löschen">
+        </button>
+      </div>
+    </div>
+  </template>
+
+  <!-- Button -->
+  <div class="mt-3">
+    <button @click="showDivs.push({ id: counter, type: 'phone', label: '', value: '' }); counter++"
+            class="bg-primary-light text-text rounded-button font-bold hover:bg-hover hover:text-white transition-colors"
+            type="button">
+      Zeile hinzufügen
+    </button>
+  </div>
+</fieldset>
+
 
 
   <button
@@ -203,12 +255,14 @@
     <option>CHF</option>
   </datalist>
   <datalist id="locationlist">
-    <option value="Mobil">
-    <option value="Arbeit">
-    <option value="Fax">
-    <option value="Privat">
-    <option value="Zentrale">
-    <option value="Durchwahl">
+    <option value="Arbeit"></option>
+    <option value="Büro"></option>
+    <option value="Durchwahl"></option>
+    <option value="Fax"></option>
+    <option value="Mobil"></option>
+    <option value="Privat"></option>
+    <option value="Support"></option>
+    <option value="Zentrale"></option>
   </datalist>
 </form>
 

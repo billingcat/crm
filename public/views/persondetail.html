@@ -10,8 +10,8 @@
     <p>{{.Position}}</p>
     <p><a href="mailto:{{.EMail}}">{{.EMail}}</a></p>
     <p><a href="/company/{{.Company.ID}}">Firma: {{.Company.Name}}</a></p>
-    {{ range .Phones}}
-      <p>{{.Location}}: {{ .Number}}</p>
+    {{ range .ContactInfos}}
+      <p>{{.Label}}: {{ .Value}}</p>
     {{end}}
   </div>
 

@@ -3,9 +3,9 @@ package controller
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/billingcat/crm/model"
-
 	"github.com/go-playground/form/v4"
 	"github.com/labstack/echo/v4"
 	"github.com/shopspring/decimal"
@@ -22,36 +22,34 @@ func (ctrl *controller) companyInit(e *echo.Echo) {
 	g.GET("/:id", ctrl.companydetail)
 }
 
-type phoneForm struct {
-	Number   string `form:"number"`
-	Location string `form:"location"`
+// ---- Form-Types ----
+
+type contactInfoForm struct {
+	Type  string `form:"type"`  // phone | fax | email | website | linkedin | twitter | github | other
+	Label string `form:"label"` // Bezeichnung (z.B. Büro, Support)
+	Value string `form:"value"` // eigentliche Nummer/URL/E-Mail
 }
 
-type company struct {
-	Background             string      `form:"background"`
-	Name                   string      `form:"name"`
-	Kundennummer           string      `form:"kundennummer"`
-	RechnungEmail          string      `form:"rechnungemail"`
-	SupplierNumber         string      `form:"suppliernumber"`
-	ContactInvoice         string      `form:"contactinvoice"`
-	DefaultTaxRate         string      `form:"defaulttaxrate"`
-	Adresse1               string      `form:"adresse1"`
-	Adresse2               string      `form:"adresse2"`
-	PLZ                    string      `form:"plz"`
-	Ort                    string      `form:"ort"`
-	Phone                  []phoneForm `form:"phone"`
-	Land                   string      `form:"land"`
-	VATID                  string      `form:"vatid"`
-	InvoiceOpening         string      `form:"invoiceopening"`
-	InvoiceCurrency        string      `form:"invoicecurrency"`
-	InvoiceTaxType         string      `form:"invoicetaxtype"`
-	InvoiceFooter          string      `form:"invoicefooter"`
-	InvoiceExemptionReason string      `form:"invoiceexemptionreason"`
-}
-
-type phone struct {
-	Number   string
-	Location string
+type companyForm struct {
+	Background             string            `form:"background"`
+	Name                   string            `form:"name"`
+	Kundennummer           string            `form:"kundennummer"`
+	RechnungEmail          string            `form:"rechnungemail"`
+	SupplierNumber         string            `form:"suppliernumber"`
+	ContactInvoice         string            `form:"contactinvoice"`
+	DefaultTaxRate         string            `form:"defaulttaxrate"`
+	Adresse1               string            `form:"adresse1"`
+	Adresse2               string            `form:"adresse2"`
+	PLZ                    string            `form:"plz"`
+	Ort                    string            `form:"ort"`
+	Phone                  []contactInfoForm `form:"phone"` // <- bleibt "phone", damit das Template passt
+	Land                   string            `form:"land"`
+	VATID                  string            `form:"vatid"`
+	InvoiceOpening         string            `form:"invoiceopening"`
+	InvoiceCurrency        string            `form:"invoicecurrency"`
+	InvoiceTaxType         string            `form:"invoicetaxtype"`
+	InvoiceFooter          string            `form:"invoicefooter"`
+	InvoiceExemptionReason string            `form:"invoiceexemptionreason"`
 }
 
 func (ctrl *controller) companynew(c echo.Context) error {
@@ -63,22 +61,18 @@ func (ctrl *controller) companynew(c echo.Context) error {
 		m["cancel"] = "/"
 		m["company"] = model.Company{}
 		return c.Render(http.StatusOK, "companyedit.html", m)
+
 	case http.MethodPost:
 		ownerID := c.Get("ownerid").(uint)
-		var comp company
-		var err error
-		err = c.Request().ParseForm()
-		if err != nil {
-			return ErrInvalid(err, "Fehler beim Verarbeiten der Formulardaten")
-		}
-		dec := form.NewDecoder()
-		err = dec.Decode(&c, c.Request().Form)
-		if err != nil {
-			return ErrInvalid(err, "Fehler beim Verarbeiten der Formulardaten")
-		}
 
-		if err := c.Bind(&comp); err != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, "bad request")
+		// Form dekodieren
+		if err := c.Request().ParseForm(); err != nil {
+			return ErrInvalid(err, "Fehler beim Verarbeiten der Formulardaten")
+		}
+		var comp companyForm
+		dec := form.NewDecoder()
+		if err := dec.Decode(&comp, c.Request().Form); err != nil {
+			return ErrInvalid(err, "Fehler beim Verarbeiten der Formulardaten")
 		}
 
 		dbCompany := &model.Company{
@@ -101,25 +95,35 @@ func (ctrl *controller) companynew(c echo.Context) error {
 			SupplierNumber:         comp.SupplierNumber,
 			VATID:                  comp.VATID,
 		}
-		for _, ph := range comp.Phone {
-			dbPhone := model.Phone{
-				Number:     ph.Number,
-				Location:   ph.Location,
-				OwnerID:    ownerID,
-				ParentID:   int(dbCompany.ID),
-				ParentType: "company",
+
+		// Kontaktinfos übernehmen (nur nicht-leere Value)
+		for _, ci := range comp.Phone {
+			ci.Type = strings.TrimSpace(ci.Type)
+			ci.Label = strings.TrimSpace(ci.Label)
+			ci.Value = strings.TrimSpace(ci.Value)
+			if ci.Value == "" {
+				continue
 			}
-			dbCompany.Phones = append(dbCompany.Phones, dbPhone)
+			dbCI := model.ContactInfo{
+				Type:       ci.Type,
+				Label:      ci.Label,
+				Value:      ci.Value,
+				OwnerID:    ownerID,
+				ParentType: "company", // wichtig bei Polymorphie
+				// ParentID wird von GORM beim Assoc-Save gesetzt
+			}
+			dbCompany.ContactInfos = append(dbCompany.ContactInfos, dbCI)
 		}
-		dbCompany.DefaultTaxRate, err = decimal.NewFromString(comp.DefaultTaxRate)
+
+		var err error
+		dbCompany.DefaultTaxRate, err = decimal.NewFromString(strings.TrimSpace(comp.DefaultTaxRate))
 		if err != nil {
 			return ErrInvalid(err, "Fehler beim Verarbeiten der Mehrwertsteuer")
 		}
 
-		if err := ctrl.model.SaveCompany(dbCompany, dbCompany.OwnerID); err != nil {
+		if err := ctrl.model.SaveCompany(dbCompany, ownerID); err != nil {
 			return ErrInvalid(err, "Fehler beim Speichern der Firma")
 		}
-
 		return c.Redirect(http.StatusSeeOther, fmt.Sprintf("/company/%d", dbCompany.ID))
 	}
 	return fmt.Errorf("Unknown method %s", c.Request().Method)
@@ -147,6 +151,7 @@ func (ctrl *controller) companydetail(c echo.Context) error {
 func (ctrl *controller) companyedit(c echo.Context) error {
 	m := ctrl.defaultResponseMap(c, "Firma bearbeiten")
 	ownerID := c.Get("ownerid").(uint)
+
 	switch c.Request().Method {
 	case http.MethodGet:
 		paramCompanyID := c.Param("id")
@@ -161,23 +166,25 @@ func (ctrl *controller) companyedit(c echo.Context) error {
 		m["cancel"] = fmt.Sprintf("/company/%d", company.ID)
 		m["submit"] = "Daten ändern"
 		return c.Render(http.StatusOK, "companyedit.html", m)
+
 	case http.MethodPost:
-		var comp company
-		var err error
-		err = c.Request().ParseForm()
-		if err != nil {
+		// Form dekodieren
+		if err := c.Request().ParseForm(); err != nil {
 			return ErrInvalid(err, "Fehler beim Verarbeiten der Formulardaten")
 		}
+		var comp companyForm
 		dec := form.NewDecoder()
-		err = dec.Decode(&comp, c.Request().Form)
-		if err != nil {
+		if err := dec.Decode(&comp, c.Request().Form); err != nil {
 			return ErrInvalid(err, "Fehler beim Verarbeiten der Formulardaten")
 		}
+
 		paramCompanyID := c.Param("id")
 		dbCompany, err := ctrl.model.LoadCompany(paramCompanyID, ownerID)
 		if err != nil {
 			return ErrInvalid(fmt.Errorf("cannot find company with id %v and ownerid %v", paramCompanyID, ownerID), "Kann Firma nicht laden")
 		}
+
+		// Stammdaten aktualisieren
 		dbCompany.Background = comp.Background
 		dbCompany.Name = comp.Name
 		dbCompany.Kundennummer = comp.Kundennummer
@@ -195,20 +202,28 @@ func (ctrl *controller) companyedit(c echo.Context) error {
 		dbCompany.InvoiceTaxType = comp.InvoiceTaxType
 		dbCompany.InvoiceFooter = comp.InvoiceFooter
 		dbCompany.InvoiceExemptionReason = comp.InvoiceExemptionReason
-		dbCompany.DefaultTaxRate, err = decimal.NewFromString(comp.DefaultTaxRate)
-		dbCompany.Phones = []model.Phone{}
-		if err != nil {
+
+		if dbCompany.DefaultTaxRate, err = decimal.NewFromString(strings.TrimSpace(comp.DefaultTaxRate)); err != nil {
 			return ErrInvalid(err, "Fehler beim Verarbeiten der Mehrwertsteuer")
 		}
-		for _, ph := range comp.Phone {
-			dbPhone := model.Phone{
-				Number:     ph.Number,
-				Location:   ph.Location,
+
+		// Kontaktinfos neu setzen (einfachste Variante: ersetzen)
+		dbCompany.ContactInfos = []model.ContactInfo{}
+		for _, ci := range comp.Phone {
+			ci.Type = strings.TrimSpace(ci.Type)
+			ci.Label = strings.TrimSpace(ci.Label)
+			ci.Value = strings.TrimSpace(ci.Value)
+			if ci.Value == "" {
+				continue
+			}
+			dbCI := model.ContactInfo{
+				Type:       ci.Type,
+				Label:      ci.Label,
+				Value:      ci.Value,
 				OwnerID:    ownerID,
-				ParentID:   int(dbCompany.ID),
 				ParentType: "company",
 			}
-			dbCompany.Phones = append(dbCompany.Phones, dbPhone)
+			dbCompany.ContactInfos = append(dbCompany.ContactInfos, dbCI)
 		}
 
 		if err := ctrl.model.SaveCompany(dbCompany, ownerID); err != nil {

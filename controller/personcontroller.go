@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/billingcat/crm/model"
 
@@ -23,21 +24,20 @@ func (ctrl *controller) personInit(e *echo.Echo) {
 	g.GET("/edit/:id", ctrl.personedit)
 	g.POST("/edit/:id", ctrl.personedit)
 	g.DELETE("/delete/:id", ctrl.deletePersonWithID)
-
 }
 
-type person struct {
-	Name     string      `form:"name"`
-	Firma    int         `form:"firma"`
-	Email    string      `form:"email"`
-	Funktion string      `form:"funktion"`
-	Phone    []phoneForm `form:"phone"`
+type personForm struct {
+	Name     string            `form:"name"`
+	Firma    int               `form:"firma"`
+	Email    string            `form:"email"`
+	Funktion string            `form:"funktion"`
+	Phone    []contactInfoForm `form:"phone"` // neuer Satz Felder: type/label/value
 }
 
 func (ctrl *controller) personnew(c echo.Context) error {
 	m := ctrl.defaultResponseMap(c, "Neuen Kontakt anlegen")
-	ownerID := c.Get("ownerid")
-	var err error
+	ownerID := c.Get("ownerid").(uint)
+
 	switch c.Request().Method {
 	case http.MethodGet:
 		if cmpyID := c.Param("company"); cmpyID != "" {
@@ -47,6 +47,7 @@ func (ctrl *controller) personnew(c echo.Context) error {
 			}
 			m["companies"] = []*model.Company{cmpy}
 		} else {
+			var err error
 			m["companies"], err = ctrl.model.LoadAllCompanies(ownerID)
 			if err != nil {
 				return ErrInvalid(err, "Fehler beim Laden der Firmen")
@@ -57,26 +58,52 @@ func (ctrl *controller) personnew(c echo.Context) error {
 		m["submit"] = "Kontakt anlegen"
 		m["cancel"] = "/"
 		m["showremove"] = false
-
 		return c.Render(http.StatusOK, "personedit.html", m)
+
 	case http.MethodPost:
-		cp := new(person)
-		if err := c.Bind(cp); err != nil {
+		// Form dekodieren (inkl. Arrays: phone[i].type/label/value)
+		if err := c.Request().ParseForm(); err != nil {
 			return ErrInvalid(err, "Fehler beim Verarbeiten der Formulardaten")
 		}
-		personDB := model.Person{
-			Name:      cp.Name,
-			EMail:     cp.Email,
-			Position:  cp.Funktion,
-			CompanyID: cp.Firma,
-			OwnerID:   ownerID.(uint),
+		var pf personForm
+		dec := form.NewDecoder()
+		if err := dec.Decode(&pf, c.Request().Form); err != nil {
+			return ErrInvalid(err, "Fehler beim Verarbeiten der Formulardaten")
 		}
 
-		if err = ctrl.model.CreatePerson(&personDB); err != nil {
+		personDB := model.Person{
+			Name:      strings.TrimSpace(pf.Name),
+			EMail:     strings.TrimSpace(pf.Email),
+			Position:  strings.TrimSpace(pf.Funktion),
+			CompanyID: pf.Firma,
+			OwnerID:   ownerID,
+		}
+
+		// Kontaktinfos übernehmen
+		for _, ci := range pf.Phone {
+			ci.Type = strings.TrimSpace(ci.Type)
+			ci.Label = strings.TrimSpace(ci.Label)
+			ci.Value = strings.TrimSpace(ci.Value)
+			if ci.Value == "" {
+				continue
+			}
+			if ci.Type == "" {
+				ci.Type = "phone"
+			}
+			personDB.ContactInfos = append(personDB.ContactInfos, model.ContactInfo{
+				Type:       ci.Type,
+				Label:      ci.Label,
+				Value:      ci.Value,
+				OwnerID:    ownerID,
+				ParentType: "person", // wichtig: gehört zur Person
+				// ParentID setzt GORM beim Assoc-Save
+			})
+		}
+
+		if err := ctrl.model.CreatePerson(&personDB); err != nil {
 			return ErrInvalid(err, "Fehler beim Anlegen des Kontakts")
 		}
 		return c.Redirect(http.StatusSeeOther, fmt.Sprintf("/person/%d", personDB.ID))
-
 	}
 	return nil
 }
@@ -84,7 +111,6 @@ func (ctrl *controller) personnew(c echo.Context) error {
 func (ctrl *controller) deletePersonWithID(c echo.Context) error {
 	ownerID := c.Get("ownerid").(uint)
 	personID := c.Param("id")
-	// load the person to check if it exists
 	personDB, err := ctrl.model.LoadPerson(personID, ownerID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -94,7 +120,6 @@ func (ctrl *controller) deletePersonWithID(c echo.Context) error {
 	if personDB.OwnerID != ownerID {
 		return echo.ErrForbidden
 	}
-
 	if err := ctrl.model.RemovePerson(personID, ownerID); err != nil {
 		return ErrInvalid(err, "Fehler beim Löschen des Kontakts")
 	}
@@ -130,31 +155,28 @@ func (ctrl *controller) personedit(c echo.Context) error {
 	switch c.Request().Method {
 	case http.MethodGet:
 		m := ctrl.defaultResponseMap(c, "Kontakt bearbeiten")
-		persondB, err := ctrl.model.LoadPerson(id, ownerID)
+		personDB, err := ctrl.model.LoadPerson(id, ownerID)
 		if err != nil {
 			return ErrInvalid(err, "Fehler beim Laden des Kontakts")
 		}
-		m["cancel"] = fmt.Sprintf("/person/%s/%s", id, persondB.Name)
+		m["cancel"] = fmt.Sprintf("/person/%s/%s", id, personDB.Name)
 		m["right"] = "personedit"
-		m["title"] = persondB.Name
+		m["title"] = personDB.Name
 		m["action"] = fmt.Sprintf("/person/edit/%s", id)
 		m["submit"] = "Speichern"
 		m["showremove"] = true
-		m["persondetail"] = persondB
-		m["companies"] = []*model.Company{&persondB.Company}
-		m["companyid"] = persondB.CompanyID
+		m["persondetail"] = personDB
+		m["companies"] = []*model.Company{&personDB.Company}
+		m["companyid"] = personDB.CompanyID
 		return c.Render(http.StatusOK, "personedit.html", m)
+
 	case http.MethodPost:
-		m := ctrl.defaultResponseMap(c, "Kontakt bearbeiten")
-		var err error
-		var cp person
-		err = c.Request().ParseForm()
-		if err != nil {
+		if err := c.Request().ParseForm(); err != nil {
 			return ErrInvalid(err, "Fehler beim Verarbeiten der Formulardaten")
 		}
+		var pf personForm
 		dec := form.NewDecoder()
-		err = dec.Decode(&cp, c.Request().Form)
-		if err != nil {
+		if err := dec.Decode(&pf, c.Request().Form); err != nil {
 			return ErrInvalid(err, "Fehler beim Verarbeiten der Formulardaten")
 		}
 
@@ -166,36 +188,42 @@ func (ctrl *controller) personedit(c echo.Context) error {
 			return ErrInvalid(err, "Fehler beim Laden des Kontakts")
 		}
 
-		dbPerson.Name = cp.Name
-		dbPerson.EMail = cp.Email
-		dbPerson.Position = cp.Funktion
-		dbPerson.CompanyID = cp.Firma
-		company, err := ctrl.model.LoadCompany(cp.Firma, ownerID)
+		dbPerson.Name = strings.TrimSpace(pf.Name)
+		dbPerson.EMail = strings.TrimSpace(pf.Email)
+		dbPerson.Position = strings.TrimSpace(pf.Funktion)
+		dbPerson.CompanyID = pf.Firma
+
+		company, err := ctrl.model.LoadCompany(pf.Firma, ownerID)
 		if err != nil {
 			return ErrInvalid(err, "Fehler beim Laden der Firma")
 		}
 		dbPerson.Company = *company
-		dbPerson.Phones = []model.Phone{}
 
-		for _, ph := range cp.Phone {
-			if ph.Number == "" || ph.Location == "" {
+		// Kontaktinfos ersetzen (einfacher Weg)
+		dbPerson.ContactInfos = []model.ContactInfo{}
+		for _, ci := range pf.Phone {
+			ci.Type = strings.TrimSpace(ci.Type)
+			ci.Label = strings.TrimSpace(ci.Label)
+			ci.Value = strings.TrimSpace(ci.Value)
+			if ci.Value == "" {
 				continue
 			}
-			dbPhone := model.Phone{
-				Number:     ph.Number,
-				Location:   ph.Location,
-				OwnerID:    ownerID,
-				ParentID:   int(dbPerson.ID),
-				ParentType: "company",
+			if ci.Type == "" {
+				ci.Type = "phone"
 			}
-			dbPerson.Phones = append(dbPerson.Phones, dbPhone)
+			dbPerson.ContactInfos = append(dbPerson.ContactInfos, model.ContactInfo{
+				Type:       ci.Type,
+				Label:      ci.Label,
+				Value:      ci.Value,
+				OwnerID:    ownerID,
+				ParentType: "person", // wichtig
+			})
 		}
+
 		if err := ctrl.model.SavePerson(dbPerson, ownerID); err != nil {
 			return ErrInvalid(err, "Fehler beim Speichern des Kontakts")
 		}
-		m["persondetail"] = dbPerson
 		return c.Redirect(http.StatusSeeOther, fmt.Sprintf("/person/%d", dbPerson.ID))
 	}
-
 	return nil
 }

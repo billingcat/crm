@@ -42,11 +42,12 @@ type server struct {
 
 func (crmdb *CRMDatenbank) autoMigrate() error {
 	// Migrate the schema
+
 	var err error
 	if err = crmdb.db.AutoMigrate(&Company{}); err != nil {
 		return err
 	}
-	if err = crmdb.db.AutoMigrate(&Phone{}); err != nil {
+	if err = crmdb.db.AutoMigrate(&ContactInfo{}); err != nil {
 		return err
 	}
 	if err = crmdb.db.AutoMigrate(&Person{}); err != nil {

@@ -27,8 +27,8 @@ type Company struct {
 	Name                   string
 	Ort                    string
 	OwnerID                uint
-	Phones                 []Phone   `gorm:"polymorphic:Parent;"`
-	Contacts               []*Person `gorm:"-"`
+	ContactInfos           []ContactInfo `gorm:"polymorphic:Parent;"`
+	Contacts               []*Person     `gorm:"-"`
 	PLZ                    string
 	RechnungEmail          string
 	SupplierNumber         string
@@ -63,9 +63,10 @@ func (crmdb *CRMDatenbank) LoadCompany(id any, ownerID any) (*Company, error) {
 	c := &Company{}
 	result := crmdb.db.
 		Preload("Invoices", func(db *gorm.DB) *gorm.DB {
-			return db.Order("created_at DESC")
+			return db.Order("invoices.created_at DESC")
 		}).
-		Preload("Phones").Where("owner_id = ?", ownerID).First(c, id)
+		Preload("ContactInfos").
+		First(c, "owner_id = ? AND id = ?", ownerID, id)
 	if result.Error != nil {
 		return nil, result.Error
 	}
@@ -78,7 +79,7 @@ func (crmdb *CRMDatenbank) LoadCompany(id any, ownerID any) (*Company, error) {
 
 func (crmdb *CRMDatenbank) LoadAllCompanies(ownerid any) ([]*Company, error) {
 	var companies = make([]*Company, 0)
-	result := crmdb.db.Preload("Phones").Where("owner_id = ?", ownerid).Find(&companies)
+	result := crmdb.db.Preload("ContactInfos").Where("owner_id = ?", ownerid).Find(&companies)
 	return companies, result.Error
 }
 
@@ -92,7 +93,7 @@ func (crmdb *CRMDatenbank) FindAllCompaniesWithText(search string, ownerid uint)
 	like := "%" + search + "%"
 	var companies []*Company
 
-	q := crmdb.db.Preload("Phones")
+	q := crmdb.db.Preload("ContactInfos")
 
 	switch crmdb.db.Dialector.Name() {
 	case "postgres":
