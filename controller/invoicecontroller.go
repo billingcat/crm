@@ -42,7 +42,7 @@ func (ctrl *controller) invoiceInit(e *echo.Echo) {
 	g.GET("/zugferdxml/:id", ctrl.invoiceZUGFeRDXML)
 	g.GET("/zugferdpdf/:id", ctrl.invoiceZUGFeRDPDF)
 	g.POST("/status/:id", ctrl.invoiceStatusChange)
-
+	g.POST("/import-positions", ctrl.importPositionsAPI)
 	lg := e.Group("/invoices", ctrl.authMiddleware)
 	lg.GET("", ctrl.invoiceList)
 }
