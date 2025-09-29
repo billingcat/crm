@@ -21,7 +21,9 @@ import (
 var (
 	commaperiod            = strings.NewReplacer(",", ".")
 	customerNumberReplacer = regexp.MustCompile(`%CN%`)
-	counterReplacer        = regexp.MustCompile(`%(0?)(\d+)C%`)
+	counterReplacer        = regexp.MustCompile(`%(0?)(\d*)C%`)
+	year4Replacer          = regexp.MustCompile(`%YYYY%`)
+	year2Replacer          = regexp.MustCompile(`%YY%`)
 )
 
 func (ctrl *controller) invoiceInit(e *echo.Echo) {
@@ -139,16 +141,30 @@ func bindInvoice(c echo.Context) (*model.Invoice, error) {
 }
 
 func formatInvoiceNumber(in string, customernumber string, counter int) string {
+	// Replace customer number
 	in = customerNumberReplacer.ReplaceAllLiteralString(in, customernumber)
+
+	// Replace year placeholders
+	now := time.Now()
+	year := now.Year()
+	in = year4Replacer.ReplaceAllLiteralString(in, fmt.Sprintf("%04d", year))
+	in = year2Replacer.ReplaceAllLiteralString(in, fmt.Sprintf("%02d", year%100))
+
+	// Replace counter
 	if counterReplacer.MatchString(in) {
-		var formatString string
 		x := counterReplacer.FindAllStringSubmatch(in, -1)
-		if x[0][1] == "0" {
-			formatString = "%0" + x[0][2] + "d"
-		} else {
-			formatString = "%d"
+		for _, m := range x {
+			var formatted string
+			if m[2] == "" { // no width → just %d
+				formatted = fmt.Sprintf("%d", counter)
+			} else if m[1] == "0" {
+				formatted = fmt.Sprintf("%0"+m[2]+"d", counter)
+			} else {
+				// width given but no leading zero → %d
+				formatted = fmt.Sprintf("%d", counter)
+			}
+			in = counterReplacer.ReplaceAllString(in, formatted)
 		}
-		in = counterReplacer.ReplaceAllString(in, fmt.Sprintf(formatString, counter))
 	}
 	return in
 }
