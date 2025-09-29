@@ -1,15 +1,18 @@
 package controller
 
 import (
+	"encoding/csv"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/billingcat/crm/model"
 
@@ -547,13 +550,69 @@ func toInvoiceStatus(s string) (model.InvoiceStatus, bool) {
 	}
 }
 
+// Mappe Status auf deutsche Labels (wie dein Template-Filter `invoiceStatus`)
+func invoiceStatusDE(s model.InvoiceStatus) string {
+	switch strings.ToLower(string(s)) {
+	case "draft":
+		return "Entwurf"
+	case "issued":
+		return "Gestellt"
+	case "paid":
+		return "Bezahlt"
+	case "voided":
+		return "Verworfen"
+	default:
+		return string(s)
+	}
+}
+
+// Builds a CSV export URL from the current request by setting format=csv,
+// keeping all active filters, sorting, and pagination.
+func currentCSVURL(u *url.URL) string {
+	q := u.Query()
+	q.Set("format", "csv")
+	u2 := *u
+	u2.RawQuery = q.Encode()
+	return u2.RequestURI()
+}
+
+// Tries to format amounts in a defensive way.
+// 1) If value implements StringFixed(2), use it (e.g., decimal.Decimal).
+// 2) If it's an integer number of cents (int64), format as euros with 2 decimals.
+// 3) Fallback: fmt.Sprintf with 2 decimals.
+func formatAmount2(v any) string {
+	// Case 1: decimal-like with StringFixed(2)
+	type decimalLike interface{ StringFixed(int32) string }
+	if d, ok := v.(decimalLike); ok {
+		return d.StringFixed(2)
+	}
+
+	// Case 2: pointer to decimal-like
+	if d, ok := any(v).(interface{ StringFixed(int32) string }); ok {
+		return d.StringFixed(2)
+	}
+
+	// Case 3: cents as int64
+	if c, ok := v.(int64); ok {
+		return fmt.Sprintf("%.2f", float64(c)/100.0)
+	}
+
+	// Case 4: pointer to int64
+	if pc, ok := v.(*int64); ok && pc != nil {
+		return fmt.Sprintf("%.2f", float64(*pc)/100.0)
+	}
+
+	// Fallback
+	return fmt.Sprintf("%.2f", v)
+}
+
 func (ctrl *controller) invoiceList(c echo.Context) error {
 	ownerID := c.Get("ownerid").(uint)
 	title := "Rechnungen"
 	status := strings.ToLower(c.QueryParam("status"))
 	format := strings.ToLower(c.QueryParam("format"))
 
-	// --- Status-Mapping ---
+	// --- Status mapping (affects title and DB filter) ---
 	var statuses []model.InvoiceStatus
 	switch status {
 	case "open":
@@ -573,10 +632,10 @@ func (ctrl *controller) invoiceList(c echo.Context) error {
 		statuses = []model.InvoiceStatus{model.InvoiceStatusVoided}
 	default:
 		title = "Alle Rechnungen"
-		// any → kein Status-Filter
+		// no status filter
 	}
 
-	// --- CompanyID optional ---
+	// --- Optional company filter ---
 	var companyID *uint
 	if cid := c.QueryParam("company_id"); cid != "" {
 		if v, err := strconv.ParseUint(cid, 10, 64); err == nil {
@@ -585,7 +644,7 @@ func (ctrl *controller) invoiceList(c echo.Context) error {
 		}
 	}
 
-	// --- Zeitraum ---
+	// --- Period field & date range parsing ---
 	periodField := strings.ToLower(c.QueryParam("period_field"))
 	if periodField != "due" {
 		periodField = "date"
@@ -605,7 +664,7 @@ func (ctrl *controller) invoiceList(c echo.Context) error {
 	dateFrom := parseDate(c.QueryParam("date_from"))
 	dateTo := parseDate(c.QueryParam("date_to"))
 
-	// --- Sortierung ---
+	// --- Sorting ---
 	order := "date desc, id desc"
 	switch strings.ToLower(c.QueryParam("sort")) {
 	case "date_asc":
@@ -631,7 +690,7 @@ func (ctrl *controller) invoiceList(c echo.Context) error {
 	}
 	offset := (page - 1) * pageSize
 
-	// --- Daten via Repo laden ---
+	// --- Fetch rows using the existing repository method ---
 	rows, total, err := ctrl.model.FindInvoices(
 		ownerID,
 		statuses,
@@ -647,7 +706,120 @@ func (ctrl *controller) invoiceList(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "query_failed"})
 	}
 
-	// --- JSON-Ausgabe ---
+	// --- CSV output (keeps current filters/sorting/pagination) ---
+	// --- CSV output (exports ALL matching rows regardless of current page) ---
+	if format == "csv" {
+		// If the first paginated query didn't fetch everything, re-fetch all rows.
+		if int(total) > len(rows) {
+			// Safety cap: avoid excessive memory usage by capping to a reasonable upper bound.
+			// Adjust or remove the cap to your needs.
+			const hardCap = 500_000
+			want := int(total)
+			if want > hardCap {
+				want = hardCap
+			}
+
+			allRows, _, err := ctrl.model.FindInvoices(
+				ownerID,
+				statuses,
+				companyID,
+				periodField,
+				dateFrom,
+				dateTo,
+				want, // pageSize = total (capped)
+				0,    // offset = 0 (from the beginning)
+				order,
+			)
+			if err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]string{"error": "query_failed_all"})
+			}
+			rows = allRows
+		}
+
+		// Collect distinct company IDs from ALL rows to avoid N+1 queries.
+		idset := make(map[uint]struct{})
+		for _, r := range rows {
+			if r.CompanyID != 0 {
+				idset[r.CompanyID] = struct{}{}
+			}
+		}
+		ids := make([]uint, 0, len(idset))
+		for id := range idset {
+			ids = append(ids, id)
+		}
+
+		// Bulk lookup of company names (must exist in your model).
+		companyNames, err := ctrl.model.CompanyNamesByIDs(ownerID, ids)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "companies_lookup_failed"})
+		}
+
+		// Prepare download response headers.
+		filename := "invoices_" + time.Now().Format("yyyy-mm-dd") + ".csv" // will be adjusted below
+		// Use Go time layout for YYYY-MM-DD
+		filename = "invoices_" + time.Now().Format("2006-01-02") + ".csv"
+
+		res := c.Response()
+		res.Header().Set(echo.HeaderContentType, "text/csv; charset=utf-8")
+		res.Header().Set(echo.HeaderContentDisposition, `attachment; filename="`+filename+`"`)
+
+		// Write UTF-8 BOM for Excel compatibility.
+		res.WriteHeader(http.StatusOK)
+		if _, err := res.Write([]byte{0xEF, 0xBB, 0xBF}); err != nil {
+			return err
+		}
+
+		// Create CSV writer. Use semicolon as delimiter (common for DE locale).
+		w := csv.NewWriter(res)
+		w.Comma = ';'
+
+		// Header row: exactly the columns you display in the list.
+		if err := w.Write([]string{"Nr.", "Firma", "Datum", "Fällig", "Status", "Netto", "Brutto"}); err != nil {
+			return err
+		}
+
+		// Data rows.
+		for _, r := range rows {
+			company := companyNames[r.CompanyID] // empty if 0/unknown
+
+			net := formatAmount2(r.NetTotal)
+			gross := formatAmount2(r.GrossTotal)
+
+			row := []string{
+				r.Number,
+				company,
+				r.Date.Format("02.01.2006"),
+				r.DueDate.Format("02.01.2006"),
+				invoiceStatusDE(r.Status),
+				net,
+				gross,
+			}
+
+			// Ensure all fields are valid UTF-8 (defensive).
+			for i := range row {
+				if !utf8.ValidString(row[i]) {
+					row[i] = strings.ToValidUTF8(row[i], "")
+				}
+			}
+
+			if err := w.Write(row); err != nil {
+				return err
+			}
+		}
+
+		w.Flush()
+		return w.Error()
+	}
+
+	var sumNet decimal.Decimal
+	var sumGross decimal.Decimal
+
+	for _, r := range rows {
+		sumNet = sumNet.Add(r.NetTotal)
+		sumGross = sumGross.Add(r.GrossTotal)
+	}
+
+	// --- JSON output ---
 	if format == "json" || strings.Contains(c.Request().Header.Get("Accept"), "application/json") {
 		type item struct {
 			ID         uint                `json:"id"`
@@ -675,12 +847,16 @@ func (ctrl *controller) invoiceList(c echo.Context) error {
 		})
 	}
 
-	// --- HTML-Render ---
+	// --- HTML render (adds exportURL for the button) ---
 	m := ctrl.defaultResponseMap(c, title)
+	m["sumNet"] = sumNet.StringFixed(2)
+	m["sumGross"] = sumGross.StringFixed(2)
 	m["invoices"] = rows
 	m["total"] = total
 	m["page"] = page
 	m["page_size"] = pageSize
-	m["isViewActive"] = (status == "open") // für aktiven Menüpunkt
+	m["isViewActive"] = (status == "open")
+	m["exportURL"] = currentCSVURL(c.Request().URL)
+
 	return c.Render(http.StatusOK, "invoicelist.html", m)
 }

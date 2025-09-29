@@ -105,3 +105,28 @@ func (crmdb *CRMDatenbank) FindAllCompaniesWithText(search string, ownerid uint)
 	err := q.Find(&companies).Error
 	return companies, err
 }
+
+// In deinem model/Repo-Paket:
+func (crmdb *CRMDatenbank) CompanyNamesByIDs(ownerID uint, ids []uint) (map[uint]string, error) {
+	if len(ids) == 0 {
+		return map[uint]string{}, nil
+	}
+	type row struct {
+		ID   uint
+		Name string
+	}
+	var rs []row
+	if err := crmdb.db.
+		Table("companies").
+		Select("id, name").
+		Where("owner_id = ? AND id IN ?", ownerID, ids).
+		Scan(&rs).Error; err != nil {
+		return nil, err
+	}
+
+	out := make(map[uint]string, len(rs))
+	for _, r := range rs {
+		out[r.ID] = r.Name
+	}
+	return out, nil
+}

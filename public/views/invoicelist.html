@@ -1,7 +1,14 @@
-<!-- invoicelist.html -->
 {{ template "header.html" . }}
 <div class="bg-surface border border-border rounded-card shadow-md p-6">
-  <h2 class="text-xl font-semibold mb-4">{{ .title }}</h2>
+
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="text-xl font-semibold">{{ .title }}</h2>
+    <a href="{{ .exportURL }}"
+      class="inline-flex items-center rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-white"
+      title="Aktuelle Ansicht als CSV herunterladen">
+      CSV exportieren
+    </a>
+  </div>
 
   {{ if eq (len .invoices) 0 }}
   <div class="text-gray-500">Keine Einträge.</div>
@@ -54,6 +61,17 @@
       {{ end }}
     </div>
     {{ end }}
+    <!-- Mobile totals (current page) -->
+    <div class="mt-4 p-4 rounded-lg border bg-white md:hidden">
+      <div class="flex justify-between">
+        <span class="font-medium">Summe (Seite) netto</span>
+        <span>{{ .sumNet }}</span>
+      </div>
+      <div class="flex justify-between mt-1">
+        <span class="font-medium">Summe (Seite) brutto</span>
+        <span>{{ .sumGross }}</span>
+      </div>
+    </div>
   </div>
 
   <!-- Desktop: table -->
@@ -94,6 +112,13 @@
           </tr>
           {{ end }}
         </tbody>
+        <tfoot>
+          <tr class="border-t font-semibold">
+            <td class="px-4 py-2" colspan="5">Summe (Seite)</td>
+            <td class="px-4 py-2 text-right">{{ .sumNet }}</td>
+            <td class="px-4 py-2 text-right">{{ .sumGross }}</td>
+          </tr>
+        </tfoot>
       </table>
     </div>
   </div>
