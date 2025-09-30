@@ -354,22 +354,39 @@ func (ctrl *controller) invoiceEdit(c echo.Context) error {
 
 // getXMLPathForInvoice returns the full path where the XML for the invoice is stored
 func (ctrl *controller) getXMLPathForInvoice(inv *model.Invoice) string {
-	return filepath.Join(ctrl.model.Config.XMLDir, fmt.Sprintf("user%d", inv.OwnerID), fmt.Sprintf("%d.xml", inv.ID))
+	ownerXMLPath := filepath.Join(ctrl.model.Config.XMLDir, fmt.Sprintf("owner%d", inv.OwnerID))
+	ensureDir(ownerXMLPath)
+	return filepath.Join(ownerXMLPath, fmt.Sprintf("%d.xml", inv.ID))
 }
 
 // getPDFPathForInvoice returns the full path where the PDF for the invoice is stored
 func (ctrl *controller) getPDFPathForInvoice(inv *model.Invoice) string {
-	return filepath.Join(ctrl.model.Config.XMLDir, fmt.Sprintf("user%d", inv.OwnerID), fmt.Sprintf("%d.pdf", inv.ID))
+	return filepath.Join(ctrl.model.Config.XMLDir, fmt.Sprintf("owner%d", inv.OwnerID), fmt.Sprintf("%d.pdf", inv.ID))
 }
 
 func (ctrl *controller) invoiceZUGFeRDXML(c echo.Context) error {
 	ownerID := c.Get("ownerid").(uint)
 	logger := c.Get("logger").(*slog.Logger)
 
-	i, err := ctrl.model.LoadInvoice(c.Param("id"), ownerID)
+	i, problems, err := ctrl.model.LoadAndVerifyInvoice(c.Param("id"), ownerID)
 	if err != nil {
 		return ErrInvalid(err, "Kann Rechnung nicht laden")
 	}
+
+	if len(problems) > 0 {
+		m := ctrl.defaultResponseMap(c, "Fehlerhafte Rechnung")
+		m["Problems"] = problems
+		var cpy *model.Company
+		if cpy, err = ctrl.model.LoadCompany(i.CompanyID, ownerID); err != nil {
+			return ErrInvalid(err, "Kann Firma nicht laden")
+		}
+		m["title"] = "Rechnung " + i.Number
+		m["invoice"] = i
+		m["company"] = cpy
+
+		return c.Render(http.StatusOK, "invoicedetail.html", m)
+	}
+
 	outPath := ctrl.getXMLPathForInvoice(i)
 	userFilename := fmt.Sprintf("%s.xml", i.Number)
 	// when not draft, just send existing file if exists
@@ -402,9 +419,22 @@ func ensureDir(dirName string) error {
 func (ctrl *controller) invoiceZUGFeRDPDF(c echo.Context) error {
 	logger := c.Get("logger").(*slog.Logger)
 	ownerid := c.Get("ownerid").(uint)
-	i, err := ctrl.model.LoadInvoice(c.Param("id"), ownerid)
+
+	i, problems, err := ctrl.model.LoadAndVerifyInvoice(c.Param("id"), ownerid)
 	if err != nil {
 		return ErrInvalid(err, "Kann Rechnung nicht laden")
+	}
+	if len(problems) > 0 {
+		m := ctrl.defaultResponseMap(c, "Fehlerhafte Rechnung")
+		m["Problems"] = problems
+		var cpy *model.Company
+		if cpy, err = ctrl.model.LoadCompany(i.CompanyID, ownerid); err != nil {
+			return ErrInvalid(err, "Kann Firma nicht laden")
+		}
+		m["title"] = "Rechnung " + i.Number
+		m["invoice"] = i
+		m["company"] = cpy
+		return c.Render(http.StatusOK, "invoicedetail.html", m)
 	}
 
 	pdfname := fmt.Sprintf("%s.pdf", i.Number)

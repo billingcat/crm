@@ -11,9 +11,9 @@
         name="name" id="companyname" placeholder="Muster GmbH" value="{{$company.Name}}">
     </div>
     <div class="col-span-4">
-      <label for="background">Hintergrund</label>
+      <label for="background">Zusatzinformation (intern)</label>
       <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
-        id="background" name="background" placeholder="Kontakt über Musterfirma" value="{{$company.Background}}">
+        id="background" name="background" placeholder="z.B. Branche" value="{{$company.Background}}">
     </div>
     <div class="col-span-4">
       <label for="address">Adresse</label>
@@ -75,7 +75,7 @@
         id="lieferantennummer" name="suppliernumber" placeholder="12345" value="{{$company.SupplierNumber}}">
     </div>
     <div class="col-md-3">
-      <label for="invoicecurrency">Währung</label>
+      <label for="invoicecurrency">Währung (EUR, ...)</label>
       <input list="currency" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
         id="invoicecurrency" name="invoicecurrency" value="{{$company.InvoiceCurrency}}">
     </div>

@@ -260,6 +260,52 @@ func filterEmpty(ss ...string) []string {
 	return out
 }
 
+type InvoiceProblem struct {
+	Level   string // "error", "warning", "info"
+	Message string
+}
+
+func (crmdb *CRMDatenbank) VerifyInvoice(inv *Invoice, settings *Settings) []InvoiceProblem {
+	var problems []InvoiceProblem
+	isIntraCommunity := inv.TaxType == "K"
+	isReverseCharge := inv.TaxType == "AE"
+	if (isIntraCommunity || isReverseCharge) && inv.ExemptionReason == "" {
+		problems = append(problems, InvoiceProblem{
+			Level:   "error",
+			Message: "Es muss ein Befreiungsgrund angegeben werden für eine innergemeinschaftliche Lieferung bzw. eine Rechnung mit Steuerschuldumkehr.",
+		})
+	}
+	if isIntraCommunity {
+		if inv.Company.VATID == "" {
+			problems = append(problems, InvoiceProblem{
+				Level:   "error",
+				Message: "Es muss eine USt-IdNr. des Kunden angegeben werden für eine innergemeinschaftliche Lieferung.",
+			})
+		}
+		if settings.VATID == "" {
+			problems = append(problems, InvoiceProblem{
+				Level:   "error",
+				Message: "Es ist keine USt-IdNr. des eigenen Unternehmens hinterlegt. Diese wird für eine innergemeinschaftliche Lieferung benötigt.",
+			})
+		}
+	}
+
+	return problems
+}
+
+func (crmdb *CRMDatenbank) LoadAndVerifyInvoice(id any, ownerID uint) (*Invoice, []InvoiceProblem, error) {
+	inv, err := crmdb.LoadInvoice(id, ownerID)
+	if err != nil {
+		return nil, nil, err
+	}
+	settings, err := crmdb.LoadSettings(ownerID)
+	if err != nil {
+		return nil, nil, err
+	}
+	problems := crmdb.VerifyInvoice(inv, settings)
+	return inv, problems, nil
+}
+
 // CreateZUGFeRDXML writes the ZUGFeRD XML file to the hard drive. The file name
 // is the invoice id plus the extension ".xml".
 func (crmdb *CRMDatenbank) CreateZUGFeRDXML(inv *Invoice, ownerID any, path string) error {
@@ -347,7 +393,7 @@ func (crmdb *CRMDatenbank) CreateZUGFeRDXML(inv *Invoice, ownerID any, path stri
 		}
 		zi.InvoiceLines = append(zi.InvoiceLines, li)
 	}
-	zi.UpdateApplicableTradeTax(map[string]string{"AE": inv.ExemptionReason})
+	zi.UpdateApplicableTradeTax(map[string]string{"AE": inv.ExemptionReason, "K": inv.ExemptionReason})
 	zi.UpdateTotals()
 
 	err = zi.Write(&sb)
