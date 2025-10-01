@@ -2,6 +2,7 @@
 {{ $invoice := index . "invoice"}}
 {{ $company := index . "company"}}
 
+{{ if .Problems }}
 {{ with .Problems }}
 <!-- Problems Panel (shown only when $.Problems has entries) -->
 <div x-data="{ open: true }" x-show="open" x-cloak
@@ -45,6 +46,27 @@
     </div>
   </div>
 </div>
+{{ end }}
+{{ else }}
+{{ if .ValidationOK }}
+<div x-data="{ open: true }" x-show="open" x-cloak
+     class="mb-4 rounded-xl border border-green-200 bg-green-50 text-green-800 shadow p-4 flex items-start gap-3">
+  <!-- Icon -->
+  <svg class="h-5 w-5 flex-shrink-0 mt-0.5 text-green-600" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+  </svg>
+
+  <div class="flex-1">
+    <div class="flex items-center justify-between gap-3">
+      <p class="text-sm leading-5 font-medium">Alles okay – keine Probleme gefunden</p>
+      <button type="button" @click="open=false"
+              class="rounded-md border border-green-300 px-3 py-1 text-sm hover:bg-green-100">
+        Schließen
+      </button>
+    </div>
+  </div>
+</div>
+  {{ end }}
 {{ end }}
 
 <div class="grid gap-4 sm:grid-cols-2">
@@ -185,6 +207,13 @@
          hover:bg-hover hover:text-white disabled:opacity-50 disabled:cursor-not-allowed">
     Löschen
   </button>
+
+    <a href="/invoice/zugferd/validate/{{$invoice.ID}}">
+    <button type="button"
+      class="bg-accent-green text-text px-6 py-3 rounded-button font-bold hover:bg-hover hover:text-white transition-colors">
+      Rechnung prüfen
+    </button>
+  </a>
 
   <a href="/invoice/zugferdxml/{{$invoice.ID}}">
     <button type="button"

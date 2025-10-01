@@ -265,34 +265,6 @@ type InvoiceProblem struct {
 	Message string
 }
 
-func (crmdb *CRMDatenbank) VerifyInvoice(inv *Invoice, settings *Settings) []InvoiceProblem {
-	var problems []InvoiceProblem
-	isIntraCommunity := inv.TaxType == "K"
-	isReverseCharge := inv.TaxType == "AE"
-	if (isIntraCommunity || isReverseCharge) && inv.ExemptionReason == "" {
-		problems = append(problems, InvoiceProblem{
-			Level:   "error",
-			Message: "Es muss ein Befreiungsgrund angegeben werden für eine innergemeinschaftliche Lieferung bzw. eine Rechnung mit Steuerschuldumkehr.",
-		})
-	}
-	if isIntraCommunity {
-		if inv.Company.VATID == "" {
-			problems = append(problems, InvoiceProblem{
-				Level:   "error",
-				Message: "Es muss eine USt-IdNr. des Kunden angegeben werden für eine innergemeinschaftliche Lieferung.",
-			})
-		}
-		if settings.VATID == "" {
-			problems = append(problems, InvoiceProblem{
-				Level:   "error",
-				Message: "Es ist keine USt-IdNr. des eigenen Unternehmens hinterlegt. Diese wird für eine innergemeinschaftliche Lieferung benötigt.",
-			})
-		}
-	}
-
-	return problems
-}
-
 func (crmdb *CRMDatenbank) LoadAndVerifyInvoice(id any, ownerID uint) (*Invoice, []InvoiceProblem, error) {
 	inv, err := crmdb.LoadInvoice(id, ownerID)
 	if err != nil {

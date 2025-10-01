@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 	"github.com/billingcat/crm/model"
 
 	"github.com/go-playground/form/v4"
+	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
 	"github.com/shopspring/decimal"
 )
@@ -29,6 +31,9 @@ var (
 	year2Replacer          = regexp.MustCompile(`%YY%`)
 )
 
+// invoiceInit wires all invoice routes.
+// Note: ZUGFeRD validation has its own dedicated route now.
+// XML/PDF routes will ALWAYS generate/serve files, even if validation finds problems.
 func (ctrl *controller) invoiceInit(e *echo.Echo) {
 	g := e.Group("/invoice")
 	g.Use(ctrl.authMiddleware)
@@ -39,6 +44,7 @@ func (ctrl *controller) invoiceInit(e *echo.Echo) {
 	g.GET("/duplicate/:id", ctrl.invoiceDuplicate)
 	g.GET("/edit/:id", ctrl.invoiceEdit)
 	g.POST("/edit/:id", ctrl.invoiceEdit)
+	g.GET("/zugferd/validate/:id", ctrl.invoiceZUGFeRDValidateRedirect)
 	g.GET("/zugferdxml/:id", ctrl.invoiceZUGFeRDXML)
 	g.GET("/zugferdpdf/:id", ctrl.invoiceZUGFeRDPDF)
 	g.POST("/status/:id", ctrl.invoiceStatusChange)
@@ -153,7 +159,7 @@ func formatInvoiceNumber(in string, customernumber string, counter int) string {
 	in = year4Replacer.ReplaceAllLiteralString(in, fmt.Sprintf("%04d", year))
 	in = year2Replacer.ReplaceAllLiteralString(in, fmt.Sprintf("%02d", year%100))
 
-	// Replace counter
+	// Replace counter (supports %C% and %0nC%)
 	if counterReplacer.MatchString(in) {
 		x := counterReplacer.FindAllStringSubmatch(in, -1)
 		for _, m := range x {
@@ -251,6 +257,40 @@ func (ctrl *controller) invoiceDelete(c echo.Context) error {
 	return c.Redirect(http.StatusSeeOther, fmt.Sprintf("/company/%d", companyid))
 }
 
+// Store problems in session under a namespaced key and clear-on-read.
+func putProblemsInSession(c echo.Context, invoiceID uint, problems []model.InvoiceProblem) error {
+	sess, err := session.Get("session", c)
+	if err != nil {
+		return err
+	}
+	key := fmt.Sprintf("problems:%d", invoiceID)
+	b, err := json.Marshal(problems)
+	if err != nil {
+		return err
+	}
+	sess.Values[key] = string(b)
+	return sess.Save(c.Request(), c.Response())
+}
+
+func popProblemsFromSession(c echo.Context, invoiceID uint) (any, bool) {
+	sess, err := session.Get("session", c)
+	if err != nil {
+		return nil, false
+	}
+	key := fmt.Sprintf("problems:%d", invoiceID)
+	v, ok := sess.Values[key]
+	if !ok {
+		return nil, false
+	}
+	delete(sess.Values, key)
+	_ = sess.Save(c.Request(), c.Response())
+	var out []model.InvoiceProblem
+	if s, ok := v.(string); ok {
+		_ = json.Unmarshal([]byte(s), &out)
+		return out, true
+	}
+	return v, true
+}
 func (ctrl *controller) invoiceDetail(c echo.Context) error {
 	m := ctrl.defaultResponseMap(c, "Rechnung-Details")
 	ownerID := c.Get("ownerid").(uint)
@@ -265,6 +305,15 @@ func (ctrl *controller) invoiceDetail(c echo.Context) error {
 	m["title"] = "Rechnung " + i.Number
 	m["invoice"] = i
 	m["company"] = cpy
+
+	// NEW: pick up problems from session (set by redirect handler)
+	if v, ok := popProblemsFromSession(c, i.ID); ok {
+		if arr, ok2 := v.([]model.InvoiceProblem); ok2 && len(arr) > 0 {
+			m["Problems"] = arr
+		} else {
+			m["ValidationOK"] = true
+		}
+	}
 	return c.Render(http.StatusOK, "invoicedetail.html", m)
 }
 
@@ -364,32 +413,37 @@ func (ctrl *controller) getPDFPathForInvoice(inv *model.Invoice) string {
 	return filepath.Join(ctrl.model.Config.XMLDir, fmt.Sprintf("owner%d", inv.OwnerID), fmt.Sprintf("%d.pdf", inv.ID))
 }
 
+// Validate, stash problems in session, then redirect to /invoice/detail/:id.
+// This yields a clean URL while keeping the messages.
+func (ctrl *controller) invoiceZUGFeRDValidateRedirect(c echo.Context) error {
+	ownerID := c.Get("ownerid").(uint)
+	inv, problems, err := ctrl.model.LoadAndVerifyInvoice(c.Param("id"), ownerID)
+	if err != nil {
+		return ErrInvalid(err, "Kann Rechnung nicht validieren")
+	}
+	if err := putProblemsInSession(c, inv.ID, problems); err != nil {
+		return ErrInvalid(err, "Fehler beim Speichern der Validierung")
+	}
+	// 303: safe redirect after GET
+	return c.Redirect(http.StatusSeeOther, fmt.Sprintf("/invoice/detail/%d", inv.ID))
+}
+
+// invoiceZUGFeRDXML now ALWAYS generates/serves the XML, regardless of validation results.
+// If the invoice is not a draft and an XML already exists, it is re-used.
 func (ctrl *controller) invoiceZUGFeRDXML(c echo.Context) error {
 	ownerID := c.Get("ownerid").(uint)
 	logger := c.Get("logger").(*slog.Logger)
 
-	i, problems, err := ctrl.model.LoadAndVerifyInvoice(c.Param("id"), ownerID)
+	// Load invoice WITHOUT validation – validation lives on /zugferd/validate
+	i, err := ctrl.model.LoadInvoice(c.Param("id"), ownerID)
 	if err != nil {
 		return ErrInvalid(err, "Kann Rechnung nicht laden")
 	}
 
-	if len(problems) > 0 {
-		m := ctrl.defaultResponseMap(c, "Fehlerhafte Rechnung")
-		m["Problems"] = problems
-		var cpy *model.Company
-		if cpy, err = ctrl.model.LoadCompany(i.CompanyID, ownerID); err != nil {
-			return ErrInvalid(err, "Kann Firma nicht laden")
-		}
-		m["title"] = "Rechnung " + i.Number
-		m["invoice"] = i
-		m["company"] = cpy
-
-		return c.Render(http.StatusOK, "invoicedetail.html", m)
-	}
-
 	outPath := ctrl.getXMLPathForInvoice(i)
 	userFilename := fmt.Sprintf("%s.xml", i.Number)
-	// when not draft, just send existing file if exists
+
+	// When not draft, re-use existing file if present
 	if i.Status != model.InvoiceStatusDraft {
 		if _, err = os.Stat(outPath); err == nil {
 			logger.Info("re-using existing zugferd xml", "invoice_id", i.ID, "path", outPath)
@@ -397,11 +451,13 @@ func (ctrl *controller) invoiceZUGFeRDXML(c echo.Context) error {
 		}
 		logger.Info("zugferd xml not found, re-creating", "invoice_id", i.ID, "path", outPath)
 	}
+
 	if err = ensureDir(filepath.Dir(outPath)); err != nil {
 		return ErrInvalid(err, "Fehler beim Erstellen des Verzeichnisses für die XML-Datei")
 	}
-	err = ctrl.model.CreateZUGFeRDXML(i, ownerID, outPath)
-	if err != nil {
+
+	// Generate XML even if there would be validation problems
+	if err = ctrl.model.CreateZUGFeRDXML(i, ownerID, outPath); err != nil {
 		return ErrInvalid(err, "Fehler beim Erstellen der ZUGFeRD XML")
 	}
 
@@ -416,30 +472,22 @@ func ensureDir(dirName string) error {
 	return nil
 }
 
+// invoiceZUGFeRDPDF now ALWAYS generates/serves the PDF, regardless of validation results.
+// If the invoice is not a draft and a PDF already exists, it is re-used.
+// It (re)creates the XML first because the PDF builder usually embeds/consumes it.
 func (ctrl *controller) invoiceZUGFeRDPDF(c echo.Context) error {
 	logger := c.Get("logger").(*slog.Logger)
 	ownerid := c.Get("ownerid").(uint)
 
-	i, problems, err := ctrl.model.LoadAndVerifyInvoice(c.Param("id"), ownerid)
+	// Load invoice WITHOUT validation – validation lives on /zugferd/validate
+	i, err := ctrl.model.LoadInvoice(c.Param("id"), ownerid)
 	if err != nil {
 		return ErrInvalid(err, "Kann Rechnung nicht laden")
-	}
-	if len(problems) > 0 {
-		m := ctrl.defaultResponseMap(c, "Fehlerhafte Rechnung")
-		m["Problems"] = problems
-		var cpy *model.Company
-		if cpy, err = ctrl.model.LoadCompany(i.CompanyID, ownerid); err != nil {
-			return ErrInvalid(err, "Kann Firma nicht laden")
-		}
-		m["title"] = "Rechnung " + i.Number
-		m["invoice"] = i
-		m["company"] = cpy
-		return c.Render(http.StatusOK, "invoicedetail.html", m)
 	}
 
 	pdfname := fmt.Sprintf("%s.pdf", i.Number)
 
-	// when not draft, just send existing file if exists
+	// When not draft, re-use existing file if present
 	if i.Status != model.InvoiceStatusDraft {
 		pdfPath := ctrl.getPDFPathForInvoice(i)
 		if _, err = os.Stat(pdfPath); err == nil {
@@ -449,23 +497,24 @@ func (ctrl *controller) invoiceZUGFeRDPDF(c echo.Context) error {
 		logger.Info("zugferd pdf not found, re-creating", "invoice_id", i.ID, "path", pdfPath)
 	}
 
+	// Ensure XML exists/refresh it
 	xmlPath := ctrl.getXMLPathForInvoice(i)
-
-	err = ctrl.model.CreateZUGFeRDXML(i, ownerid, xmlPath)
-	if err != nil {
+	if err = ensureDir(filepath.Dir(xmlPath)); err != nil {
+		return ErrInvalid(err, "Fehler beim Erstellen des Verzeichnisses für die XML-Datei")
+	}
+	if err = ctrl.model.CreateZUGFeRDXML(i, ownerid, xmlPath); err != nil {
 		return ErrInvalid(err, "Fehler beim Erstellen der ZUGFeRD XML")
 	}
-	pdfPath := ctrl.getPDFPathForInvoice(i)
 
-	// make directory user if not exists
+	// Derive PDF path and ensure user dir exists (as before)
+	pdfPath := ctrl.getPDFPathForInvoice(i)
 	userdir := filepath.Join(ctrl.model.Config.XMLDir, fmt.Sprintf("user%d", ownerid))
-	err = ensureDir(userdir)
-	if err != nil {
+	if err = ensureDir(userdir); err != nil {
 		return ErrInvalid(err, "Fehler beim Erstellen des Verzeichnisses für den Benutzer")
 	}
 
-	err = ctrl.model.CreateZUGFeRDPDF(i, ownerid, xmlPath, pdfPath, logger)
-	if err != nil {
+	// Generate PDF even if there would be validation problems
+	if err = ctrl.model.CreateZUGFeRDPDF(i, ownerid, xmlPath, pdfPath, logger); err != nil {
 		return ErrInvalid(err, "Fehler beim Erstellen der ZUGFeRD PDF")
 	}
 
@@ -515,20 +564,18 @@ func (ctrl *controller) invoiceStatusChange(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "unsupported transition")
 	}
 	if err != nil {
-		// Gib dem Nutzer eine klare Meldung (z.B. „paid invoices cannot be voided“)
+		// Give the user a clear message (e.g., “paid invoices cannot be voided”)
 		slog.Error("invoice status change failed", "invoice_id", invoiceID, "err", err)
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	// AJAX: kein Reload nötig – 204 reicht (Frontend checkt nur res.ok)
-	// Wenn du später Zeiten zurückgeben willst, könntest du 200 + JSON senden.
-	// reload auslassen, aber Daten mitschicken
+	// AJAX: 200 + JSON with relevant timestamps is handy for optimistic UI updates.
 	inv, loadErr := ctrl.model.LoadInvoice(invoiceID, ownerID)
 	if loadErr != nil {
-		return c.NoContent(http.StatusNoContent) // still ok – UI bleibt konsistent
+		return c.NoContent(http.StatusNoContent) // still ok – UI remains consistent
 	}
 
-	// render PDF and XML in background, ignore errors
+	// Render PDF and XML in background; errors are logged only.
 	go func() {
 		logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 		xmlPath := ctrl.getXMLPathForInvoice(inv)
@@ -736,13 +783,11 @@ func (ctrl *controller) invoiceList(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "query_failed"})
 	}
 
-	// --- CSV output (keeps current filters/sorting/pagination) ---
 	// --- CSV output (exports ALL matching rows regardless of current page) ---
 	if format == "csv" {
 		// If the first paginated query didn't fetch everything, re-fetch all rows.
 		if int(total) > len(rows) {
 			// Safety cap: avoid excessive memory usage by capping to a reasonable upper bound.
-			// Adjust or remove the cap to your needs.
 			const hardCap = 500_000
 			want := int(total)
 			if want > hardCap {
