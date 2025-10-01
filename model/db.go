@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 
 	"github.com/glebarez/sqlite"
-	// "gorm.io/driver/sqlite"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -38,6 +37,7 @@ type server struct {
 	DBUser     string
 	DBPassword string
 	DBHost     string
+	DBLogger   string
 }
 
 func (crmdb *CRMDatenbank) autoMigrate() error {
@@ -92,10 +92,17 @@ func InitDatabase(cfg *Config) (*CRMDatenbank, error) {
 	crmdb := &CRMDatenbank{Config: cfg}
 	svr := cfg.Servers[cfg.Mode]
 	gormConfig := &gorm.Config{}
-	if cfg.Mode == "development" {
+	switch svr.DBLogger {
+	case "info":
 		gormConfig.Logger = logger.Default.LogMode(logger.Info)
-	} else {
+	case "silent":
 		gormConfig.Logger = logger.Default.LogMode(logger.Silent)
+	default:
+		if cfg.Mode == "development" {
+			gormConfig.Logger = logger.Default.LogMode(logger.Info)
+		} else {
+			gormConfig.Logger = logger.Default.LogMode(logger.Silent)
+		}
 	}
 
 	switch svr.Database {

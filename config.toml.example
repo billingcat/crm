@@ -18,6 +18,8 @@ cookiesecret="some secret"
 [servers.development]
 database = "sqlite3"
 dbname = "test.db"
+dblogger = "info"
+
 
 [servers.production]
 database = "postgresql"
@@ -25,4 +27,4 @@ dbname = "crm_db"
 dbuser = "crm_user"
 dbhost = "localhost"
 dbpassword = "mysecretpassword"
-
+dblogger = "silent"
