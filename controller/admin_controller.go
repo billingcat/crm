@@ -11,7 +11,6 @@ import (
 
 // adminInit wires the /admin routes.
 func (ctrl *controller) adminInit(e *echo.Echo) {
-	// Auth + Admin gates. Reuse your existing authMiddleware.
 	g := e.Group("/admin", ctrl.authMiddleware, ctrl.adminMiddleware)
 
 	// Users list with optional search & pagination.
@@ -19,14 +18,11 @@ func (ctrl *controller) adminInit(e *echo.Echo) {
 }
 
 // adminMiddleware ensures only privileged users can access /admin.
-// Adjust this to your real-world admin detection (session flag, role, env allowlist, etc.).
 func (ctrl *controller) adminMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
-		// Preferred: set this in your auth middleware.
 		if b, ok := c.Get("is_admin").(bool); ok && b {
 			return next(c)
 		}
-
 		return echo.NewHTTPError(http.StatusForbidden, "Not found")
 	}
 }

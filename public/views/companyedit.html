@@ -4,14 +4,14 @@
   <input type="hidden" name="csrf" value="{{ .CSRFToken }}">
 
   <fieldset class="mt-3 p-3 border rounded grid grid-cols-4 gap-2">
-    <legend>Firmendaten</legend>
+    <legend>Kundendaten</legend>
     <div class="w-full col-span-4">
-      <label for="companyname">Firmenname</label>
+      <label for="companyname">Firmenname {{ template "help-link" "customerdata/#allgemeine-informationen"}}</label>
       <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
         name="name" id="companyname" placeholder="Muster GmbH" value="{{$company.Name}}">
     </div>
     <div class="col-span-4">
-      <label for="background">Zusatzinformation (intern)</label>
+      <label for="background">Zusatzinformation</label>
       <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
         id="background" name="background" placeholder="z.B. Branche" value="{{$company.Background}}">
     </div>
