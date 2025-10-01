@@ -16,6 +16,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/billingcat/crm/model"
+	"github.com/xuri/excelize/v2"
 
 	"github.com/go-playground/form/v4"
 	"github.com/labstack/echo-contrib/session"
@@ -653,34 +654,12 @@ func currentCSVURL(u *url.URL) string {
 	return u2.RequestURI()
 }
 
-// Tries to format amounts in a defensive way.
-// 1) If value implements StringFixed(2), use it (e.g., decimal.Decimal).
-// 2) If it's an integer number of cents (int64), format as euros with 2 decimals.
-// 3) Fallback: fmt.Sprintf with 2 decimals.
-func formatAmount2(v any) string {
-	// Case 1: decimal-like with StringFixed(2)
-	type decimalLike interface{ StringFixed(int32) string }
-	if d, ok := v.(decimalLike); ok {
-		return d.StringFixed(2)
-	}
-
-	// Case 2: pointer to decimal-like
-	if d, ok := any(v).(interface{ StringFixed(int32) string }); ok {
-		return d.StringFixed(2)
-	}
-
-	// Case 3: cents as int64
-	if c, ok := v.(int64); ok {
-		return fmt.Sprintf("%.2f", float64(c)/100.0)
-	}
-
-	// Case 4: pointer to int64
-	if pc, ok := v.(*int64); ok && pc != nil {
-		return fmt.Sprintf("%.2f", float64(*pc)/100.0)
-	}
-
-	// Fallback
-	return fmt.Sprintf("%.2f", v)
+func currentExcelURL(u *url.URL) string {
+	q := u.Query()
+	q.Set("format", "xlsx")
+	u2 := *u
+	u2.RawQuery = q.Encode()
+	return u2.RequestURI()
 }
 
 func (ctrl *controller) invoiceList(c echo.Context) error {
@@ -856,18 +835,14 @@ func (ctrl *controller) invoiceList(c echo.Context) error {
 		// Data rows.
 		for _, r := range rows {
 			company := companyNames[r.CompanyID] // empty if 0/unknown
-
-			net := formatAmount2(r.NetTotal)
-			gross := formatAmount2(r.GrossTotal)
-
 			row := []string{
 				r.Number,
 				company,
 				r.Date.Format("02.01.2006"),
 				r.DueDate.Format("02.01.2006"),
 				invoiceStatusDE(r.Status),
-				net,
-				gross,
+				r.NetTotal.StringFixed(2),
+				r.GrossTotal.StringFixed(2),
 			}
 
 			// Ensure all fields are valid UTF-8 (defensive).
@@ -884,6 +859,123 @@ func (ctrl *controller) invoiceList(c echo.Context) error {
 
 		w.Flush()
 		return w.Error()
+	} else if format == "xlsx" || format == "excel" {
+		// If the first paginated query didn't fetch everything, re-fetch all rows.
+		if int(total) > len(rows) {
+			// Safety cap: avoid excessive memory usage by capping to a reasonable upper bound.
+			const hardCap = 500_000
+			want := int(total)
+			if want > hardCap {
+				want = hardCap
+			}
+			allRows, _, err := ctrl.model.FindInvoices(
+				ownerID,
+				statuses,
+				companyID,
+				periodField,
+				dateFrom,
+				dateTo,
+				want, // pageSize = total (capped)
+				0,    // offset = 0 (from the beginning)
+				order,
+			)
+			if err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]string{"error": "query_failed_all"})
+			}
+			rows = allRows
+		}
+
+		// Collect distinct company IDs from ALL rows to avoid N+1 queries.
+		idset := make(map[uint]struct{})
+		for _, r := range rows {
+			if r.CompanyID != 0 {
+				idset[r.CompanyID] = struct{}{}
+			}
+		}
+		ids := make([]uint, 0, len(idset))
+		for id := range idset {
+			ids = append(ids, id)
+		}
+
+		// Bulk lookup of company names (must exist in your model).
+		companyNames, err := ctrl.model.CompanyNamesByIDs(ownerID, ids)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "companies_lookup_failed"})
+		}
+
+		// Prepare download response headers.
+		filename := "invoices_" + time.Now().Format("2006-01-02") + ".xlsx"
+		res := c.Response()
+		res.Header().Set(echo.HeaderContentType, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+		res.Header().Set(echo.HeaderContentDisposition, `attachment; filename="`+filename+`"`)
+		res.WriteHeader(http.StatusOK)
+
+		// Build XLSX using excelize (streaming).
+		f := excelize.NewFile()
+		const sheet = "Invoices"
+		_ = f.SetSheetName("Sheet1", sheet)
+
+		sw, err := f.NewStreamWriter(sheet)
+		if err != nil {
+			return err
+		}
+
+		// Header row (row 1)
+		header := []interface{}{"No.", "Company", "Date", "Due", "Status", "Net", "Gross"}
+		if err := sw.SetRow("A1", header); err != nil {
+			return err
+		}
+
+		// Write data rows starting at row 2
+		rowIdx := 2
+		for _, r := range rows {
+			company := companyNames[r.CompanyID] // empty if 0/unknown
+
+			// Convert decimals to float64 for real numeric cells in Excel.
+			// NOTE: Rounded to 2 decimals to match display/CSV.
+			netF64 := r.NetTotal.Round(2).InexactFloat64()
+			grossF64 := r.GrossTotal.Round(2).InexactFloat64()
+
+			row := []interface{}{
+				r.Number,                  // A
+				company,                   // B
+				r.Date,                    // C (as time.Time, will be styled as date)
+				r.DueDate,                 // D (as time.Time)
+				invoiceStatusDE(r.Status), // E
+				netF64,                    // F (numeric)
+				grossF64,                  // G (numeric)
+			}
+
+			cell, _ := excelize.CoordinatesToCellName(1, rowIdx)
+			if err := sw.SetRow(cell, row); err != nil {
+				return err
+			}
+			rowIdx++
+		}
+
+		// Flush streaming content
+		if err := sw.Flush(); err != nil {
+			return err
+		}
+
+		// Column widths (nice-to-have)
+		_ = f.SetColWidth(sheet, "A", "A", 14) // No.
+		_ = f.SetColWidth(sheet, "B", "B", 28) // Company
+		_ = f.SetColWidth(sheet, "C", "D", 14) // Date, Due
+		_ = f.SetColWidth(sheet, "E", "E", 16) // Status
+		_ = f.SetColWidth(sheet, "F", "G", 14) // Net, Gross
+
+		// Styles: date and number formats applied per column (affect Numbers/Excel display)
+		// NumFmt 14 ~ date, NumFmt 2 ~ "0.00"
+		dateStyle, _ := f.NewStyle(&excelize.Style{NumFmt: 14})
+		moneyStyle, _ := f.NewStyle(&excelize.Style{NumFmt: 2})
+
+		_ = f.SetColStyle(sheet, "C:D", dateStyle)  // Dates
+		_ = f.SetColStyle(sheet, "F:G", moneyStyle) // Money with 2 decimals
+
+		// Stream the XLSX directly to the HTTP response.
+		_, err = f.WriteTo(res)
+		return err
 	}
 
 	var sumNet decimal.Decimal
@@ -932,6 +1024,7 @@ func (ctrl *controller) invoiceList(c echo.Context) error {
 	m["page_size"] = pageSize
 	m["isViewActive"] = (status == "open")
 	m["exportURL"] = currentCSVURL(c.Request().URL)
+	m["exportURLExcel"] = currentExcelURL(c.Request().URL)
 
 	return c.Render(http.StatusOK, "invoicelist.html", m)
 }

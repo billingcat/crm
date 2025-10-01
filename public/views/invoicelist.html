@@ -1,14 +1,22 @@
 {{ template "header.html" . }}
 <div class="bg-surface border border-border rounded-card shadow-md p-6">
 
-  <div class="flex items-center justify-between mb-4">
-    <h2 class="text-xl font-semibold">{{ .title }}</h2>
+<div class="flex items-center justify-between mb-4">
+  <h2 class="text-xl font-semibold">{{ .title }}</h2>
+  <div class="flex gap-2">
     <a href="{{ .exportURL }}"
       class="inline-flex items-center rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-white"
       title="Aktuelle Ansicht als CSV herunterladen">
       CSV exportieren
     </a>
+    <a href="{{ .exportURLExcel }}"
+      class="inline-flex items-center rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-white"
+      title="Aktuelle Ansicht als Excel-Datei herunterladen">
+      Excel exportieren
+    </a>
   </div>
+</div>
+
 
   {{ if eq (len .invoices) 0 }}
   <div class="text-gray-500">Keine Einträge.</div>
