@@ -58,7 +58,9 @@ func (ctrl *controller) authMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, fmt.Errorf("cannot get session %w", err))
 		}
-		if uid, ok := sess.Values["uid"].(uint); ok {
+		var uid uint
+		var ok bool
+		if uid, ok = sess.Values["uid"].(uint); ok {
 			c.Set("uid", uid)
 		} else {
 			return c.Redirect(http.StatusSeeOther, "/login")
@@ -67,6 +69,10 @@ func (ctrl *controller) authMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 			c.Set("ownerid", ownerid)
 		} else {
 			return c.Redirect(http.StatusSeeOther, "/login")
+		}
+		// if uid == 1 then set is_admin = true
+		if uid == 1 {
+			c.Set("is_admin", true)
 		}
 		return next(c)
 	}

@@ -2,37 +2,91 @@ package controller
 
 import (
 	"net/http"
-	"time"
+	"net/url"
+	"strconv"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 )
 
+// adminInit wires the /admin routes.
 func (ctrl *controller) adminInit(e *echo.Echo) {
-	if ctrl.model.Config.Mode == "development" {
-		e.GET("/__admin/create-token", ctrl.adminCreateToken)
+	// Auth + Admin gates. Reuse your existing authMiddleware.
+	g := e.Group("/admin", ctrl.authMiddleware, ctrl.adminMiddleware)
+
+	// Users list with optional search & pagination.
+	g.GET("/users", ctrl.adminUsersList)
+}
+
+// adminMiddleware ensures only privileged users can access /admin.
+// Adjust this to your real-world admin detection (session flag, role, env allowlist, etc.).
+func (ctrl *controller) adminMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		// Preferred: set this in your auth middleware.
+		if b, ok := c.Get("is_admin").(bool); ok && b {
+			return next(c)
+		}
+
+		return echo.NewHTTPError(http.StatusForbidden, "Not found")
 	}
 }
 
-// never use in production!
-func (ctrl *controller) adminCreateToken(c echo.Context) error {
-	ownerID := uint(1)
-	userID := uint(1)
+// adminUsersList renders a simple searchable, paginated list of users.
+func (ctrl *controller) adminUsersList(c echo.Context) error {
+	m := ctrl.defaultResponseMap(c, "Benutzer (Admin)")
+	q := strings.TrimSpace(c.QueryParam("q"))
 
-	// Token erstellen
-	plain, rec, err := ctrl.model.CreateAPIToken(ownerID, &userID, "AdminBootstrap", "invoices:read", nil)
+	// Pagination params
+	const defaultPerPage = 20
+	const maxPerPage = 100
+
+	page, _ := strconv.Atoi(c.QueryParam("page"))
+	if page < 1 {
+		page = 1
+	}
+	perPage, _ := strconv.Atoi(c.QueryParam("per"))
+	if perPage <= 0 || perPage > maxPerPage {
+		perPage = defaultPerPage
+	}
+	offset := (page - 1) * perPage
+
+	users, total, err := ctrl.model.ListUsers(q, offset, perPage)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": err.Error(),
-		})
+		return err
 	}
 
-	// Einmalig Klartext-Token zurückgeben
-	return c.JSON(http.StatusOK, map[string]any{
-		"id":      rec.ID,
-		"prefix":  rec.TokenPrefix,
-		"token":   plain,
-		"ownerID": rec.OwnerID,
-		"scope":   rec.Scope,
-		"created": rec.CreatedAt.Format(time.RFC3339),
-	})
+	// Build simple pagination info
+	totalPages := int((total + int64(perPage) - 1) / int64(perPage))
+	hasPrev := page > 1
+	hasNext := page < totalPages
+
+	// Data for the view
+	m["q"] = q
+	m["users"] = users
+	m["page"] = page
+	m["per"] = perPage
+	m["total"] = total
+	m["totalPages"] = totalPages
+	m["hasPrev"] = hasPrev
+	m["hasNext"] = hasNext
+
+	// Helper URLs for buttons/links
+	buildURL := func(p int) string {
+		// Keep q and per in the query while changing page
+		return "/admin/users?q=" + url.QueryEscape(q) +
+			"&per=" + strconv.Itoa(perPage) +
+			"&page=" + strconv.Itoa(p)
+	}
+
+	m["prevURL"] = ""
+	m["nextURL"] = ""
+	if hasPrev {
+		m["prevURL"] = buildURL(page - 1)
+	}
+	if hasNext {
+		m["nextURL"] = buildURL(page + 1)
+	}
+	m["selfURL"] = buildURL(page)
+
+	return c.Render(http.StatusOK, "admin_users.html", m)
 }

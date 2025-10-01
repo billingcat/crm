@@ -121,6 +121,10 @@ func (ctrl *controller) defaultResponseMap(c echo.Context, title string) map[str
 	if ownerID == nil || userID == nil {
 		return responseMap
 	}
+	// if is_admin then set is_admin = true in responseMap
+	if c.Get("is_admin") != nil {
+		responseMap["is_admin"] = c.Get("is_admin").(bool)
+	}
 	responseMap["ownerid"] = ownerID
 	responseMap["uid"] = userID.(uint)
 	user, err := ctrl.model.GetUserByID(ownerID)

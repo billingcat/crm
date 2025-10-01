@@ -68,7 +68,12 @@
                                 </div>
                             </div>
                         </div>
-
+                        {{/*  when is_admin == true, show /admin/users button  */}}
+                        {{ if .is_admin }}
+                        <a href="/admin/users" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium
+          {{if eq $.path " /admin/users"}}border-primary-light text-white{{else}}border-transparent text-gray-700
+                            hover:border-hover hover:text-white{{end}}">Benutzer</a>
+                        {{ end }}
                     </div>
                 </div>
 

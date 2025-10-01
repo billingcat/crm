@@ -1,0 +1,111 @@
+{{template "header.html" .}}
+<div class="flex-1 p-8">
+  {{template "_flash" .}}
+
+  <div class="bg-surface border border-border rounded-card shadow-md p-6 mb-8">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-2xl font-bold">Benutzer</h2>
+      <!-- you could add actions here later (export, create, etc.) -->
+    </div>
+
+    <!-- Search form -->
+    <form class="mb-4" method="GET" action="/admin/users" novalidate>
+      <input type="hidden" name="csrf" value="{{ .CSRFToken }}">
+      <div class="flex gap-2 items-center">
+        <input
+          type="text"
+          name="q"
+          value="{{ .q }}"
+          placeholder="Suche nach E-Mail oder Name…"
+          class="bg-white rounded-lg px-4 py-2 border border-border rounded-button focus:ring-2 focus:ring-primary focus:border-transparent w-full"
+        />
+        <!-- Keep per when searching -->
+        <input type="hidden" name="per" value="{{ .per }}">
+        <button class="bg-primary text-text px-4 py-2 rounded-button font-semibold hover:bg-hover hover:text-white transition-colors">
+          Suchen
+        </button>
+        {{ if .q }}
+        <a href="/admin/users?per={{ .per }}" class="text-sm text-gray-600 hover:underline">Zurücksetzen</a>
+        {{ end }}
+      </div>
+      {{ if .q }}
+      <p class="text-xs text-gray-500 mt-2">Gefiltert nach: „{{ .q }}“</p>
+      {{ end }}
+    </form>
+
+    <!-- Result meta -->
+    <div class="text-sm text-gray-600 mb-3">
+      {{ .total }} Benutzer gesamt · Seite {{ .page }} von {{ .totalPages }}
+    </div>
+
+    <!-- Users table -->
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left border-b border-border">
+            <th class="py-2 pr-2">E-Mail</th>
+            <th class="py-2 pr-2">Name</th>
+            <th class="py-2 pr-2">Verifiziert</th>
+            <th class="py-2 pr-2">Letzter Login</th>
+            <th class="py-2 pr-2">Erstellt</th>
+            <th class="py-2 pr-2">Aktionen</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{ range .users }}
+          <tr class="border-b border-border/60 hover:bg-white/50">
+            <td class="py-2 pr-2 font-medium">{{ .Email }}</td>
+            <td class="py-2 pr-2">{{ .FullName }}</td>
+            <td class="py-2 pr-2">
+              {{ if .Verified }}
+                <span class="inline-flex items-center text-green-700">Ja</span>
+              {{ else }}
+                <span class="inline-flex items-center text-red-700">Nein</span>
+              {{ end }}
+            </td>
+            <td class="py-2 pr-2">
+              {{ if .LastLoginAt }}{{ .LastLoginAt.Format "2006-01-02 15:04" }}{{ else }}–{{ end }}
+            </td>
+            <td class="py-2 pr-2">{{ .CreatedAt.Format "2006-01-02 15:04" }}</td>
+            <td class="py-2 pr-2">
+              <!-- Placeholder actions for later expansion -->
+              <a class="text-primary hover:underline" href="/admin/users/{{ .ID }}">Ansehen</a>
+            </td>
+          </tr>
+          {{ end }}
+          {{ if not .users }}
+          <tr>
+            <td class="py-6 text-center text-gray-500" colspan="6">
+              Keine Benutzer gefunden.
+            </td>
+          </tr>
+          {{ end }}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="flex items-center justify-between mt-4">
+      <div class="text-xs text-gray-500">
+        Pro Seite: {{ .per }}
+      </div>
+      <div class="flex items-center gap-2">
+        <a
+          class="inline-flex items-center rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-white {{ if not .hasPrev }}pointer-events-none opacity-50{{ end }}"
+          href="{{ if .hasPrev }}{{ .prevURL }}{{ else }}#{{ end }}"
+          aria-disabled="{{ if .hasPrev }}false{{ else }}true{{ end }}">
+          ← Zurück
+        </a>
+        <span class="text-sm text-gray-700">Seite {{ .page }} / {{ .totalPages }}</span>
+        <a
+          class="inline-flex items-center rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-white {{ if not .hasNext }}pointer-events-none opacity-50{{ end }}"
+          href="{{ if .hasNext }}{{ .nextURL }}{{ else }}#{{ end }}"
+          aria-disabled="{{ if .hasNext }}false{{ else }}true{{ end }}">
+          Weiter →
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{{template "footer.html" .}}
+
