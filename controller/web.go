@@ -32,12 +32,19 @@ type Flash struct {
 	Message string
 }
 
-// FlashLoader zieht Flashes aus der Session (und leert sie) und legt sie in echo.Context.
+// FlashLoader pulls flash messages from the session (and clears them),
+// stores them on the Echo context, and keeps remember-me intact by using SessionWriter.
 func FlashLoader(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
-		sess, _ := session.Get("session", c)
-		raw := sess.Flashes() // liest & leert
-		_ = sess.Save(c.Request(), c.Response())
+		sw, err := LoadSession(c)
+		if err != nil {
+			// Session not available; continue without flashes.
+			c.Set("flashes", []Flash{})
+			return next(c)
+		}
+		raw := sw.sess.Flashes() // consumes flashes
+		// Save with proper cookie options so remember-me is preserved.
+		_ = sw.Save()
 
 		flashes := make([]Flash, 0, len(raw))
 		for _, it := range raw {
@@ -50,9 +57,8 @@ func FlashLoader(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
-// AddFlash stores a flash message in the session and keeps the "remember me"
-// option intact, because SessionWriter.Save() always reapplies the correct
-// cookie options before saving.
+// AddFlash stores a flash message in the session and preserves remember-me
+// because SessionWriter.Save() reapplies cookie options on every save.
 func AddFlash(c echo.Context, kind, msg string) error {
 	sw, err := LoadSession(c)
 	if err != nil {
@@ -66,16 +72,16 @@ func AddFlash(c echo.Context, kind, msg string) error {
 }
 
 type appError struct {
-	Code   string // stabiler, interner Fehlercode für Ops/Support
-	Status int    // passender HTTP-Status
-	Err    error  // ursprünglicher Fehler (wird nie an den Client gegeben)
-	Public string // sicherer Text für Nutzer (optional)
+	Code   string // stable, internal error code for ops/support
+	Status int    // mapped HTTP status
+	Err    error  // original error (never exposed to clients)
+	Public string // safe, optional user-facing message
 }
 
 func (e *appError) Error() string { return fmt.Sprintf("%s: %v", e.Code, e.Err) }
 func (e *appError) Unwrap() error { return e.Err }
 
-// Hilfsfunktionen zum Bauen typischer Fehler
+// Helpers to construct common app errors.
 func ErrNotFound(err error) *appError {
 	return &appError{Code: "NOT_FOUND", Status: http.StatusNotFound, Err: err}
 }
@@ -87,15 +93,16 @@ func ErrInternal(err error) *appError {
 }
 
 var (
+	// Configure "timeago" once (no max window, German strings for UI).
 	timeagoGerman = timeago.NoMax(timeago.German)
 )
 
-// The Template interface implements rendering functionality for echo.
+// Template implements Echo's renderer interface.
 type Template struct {
 	templates *template.Template
 }
 
-// Render is the echo way of rendering templates.
+// Render satisfies Echo's renderer interface.
 func (t *Template) Render(w io.Writer, name string, data interface{}, _ echo.Context) error {
 	return t.templates.ExecuteTemplate(w, name, data)
 }
@@ -104,6 +111,7 @@ type controller struct {
 	model *model.CRMDatenbank
 }
 
+// defaultResponseMap builds a base map used by most views (title, flashes, auth info, etc.).
 func (ctrl *controller) defaultResponseMap(c echo.Context, title string) map[string]any {
 	responseMap := map[string]any{
 		"title":    title,
@@ -117,6 +125,7 @@ func (ctrl *controller) defaultResponseMap(c echo.Context, title string) map[str
 		responseMap["flashes"] = []Flash{}
 	}
 
+	// CSRF token (if middleware provided it on the context)
 	if t := c.Get(middleware.DefaultCSRFConfig.ContextKey); t != nil {
 		responseMap["CSRFToken"] = t.(string)
 	}
@@ -126,12 +135,15 @@ func (ctrl *controller) defaultResponseMap(c echo.Context, title string) map[str
 	if ownerID == nil || userID == nil {
 		return responseMap
 	}
-	// if is_admin then set is_admin = true in responseMap
+
+	// Admin flag passthrough
 	if c.Get("is_admin") != nil {
 		responseMap["is_admin"] = c.Get("is_admin").(bool)
 	}
 	responseMap["ownerid"] = ownerID
 	responseMap["uid"] = userID.(uint)
+
+	// Load minimal user info for header/menus
 	user, err := ctrl.model.GetUserByID(ownerID)
 	if err != nil {
 		c.Get("logger").(*slog.Logger).Warn("cannot get user by ID", "error", err)
@@ -147,6 +159,7 @@ func (ctrl *controller) defaultResponseMap(c echo.Context, title string) map[str
 		responseMap["loggedin"] = true
 	}
 
+	// Recent items for sidebar/dashboard
 	items, err := ctrl.model.GetRecentItems(ownerID.(uint), 5)
 	if err != nil {
 		c.Get("logger").(*slog.Logger).Warn("cannot get recent items", "error", err)
@@ -162,7 +175,7 @@ type lastChanges struct {
 	When time.Time
 }
 
-// kleine Helfer
+// Safe HTML helpers for templates.
 func escape(s string) string { return html.EscapeString(s) }
 func safeLink(href, text string) template.HTML {
 	return template.HTML(fmt.Sprintf(`<a href="%s">%s</a>`, escape(href), escape(text)))
@@ -176,6 +189,8 @@ func snippet(s string, max int) string {
 	}
 	return string(rs[:max-1]) + "…"
 }
+
+// root handles the dashboard/homepage.
 func (ctrl *controller) root(c echo.Context) error {
 	m := ctrl.defaultResponseMap(c, "Startseite")
 
@@ -229,10 +244,10 @@ func (ctrl *controller) root(c echo.Context) error {
 		case "note":
 			n, ok := hydr.Notes[h.ItemID]
 			if !ok {
-				continue // Note wurde evtl. gelöscht
+				continue // note might have been deleted
 			}
 
-			// kurzer, sicherer Textauszug
+			// short, safe excerpt
 			body := snippet(n.Body, 140)
 			bodyEsc := escape(body)
 
@@ -249,10 +264,10 @@ func (ctrl *controller) root(c echo.Context) error {
 							`hat eine Notiz zu %s erstellt: <span class="text-slate-600 italic">%s</span>`,
 							target, bodyEsc,
 						)),
-						When: n.CreatedAt, // bleib konsistent zu ORDER BY created_at
+						When: n.CreatedAt,
 					})
 				} else {
-					// Fallback, falls die Firma nicht (mehr) geladen werden konnte
+					// Fallback if company not available anymore
 					changelog = append(changelog, lastChanges{
 						Who: owner.FullName,
 						What: template.HTML(fmt.Sprintf(
@@ -289,7 +304,7 @@ func (ctrl *controller) root(c echo.Context) error {
 				}
 
 			default:
-				// Unbekannter Parent-Typ (sollte nicht vorkommen)
+				// Unknown parent type (should not happen)
 				changelog = append(changelog, lastChanges{
 					Who: owner.FullName,
 					What: template.HTML(fmt.Sprintf(
@@ -299,11 +314,10 @@ func (ctrl *controller) root(c echo.Context) error {
 					When: n.CreatedAt,
 				})
 			}
-
 		}
 	}
 
-	// heads sind bereits sortiert; falls du robustness willst:
+	// Heads are likely sorted already; enforce stability just in case.
 	sort.SliceStable(changelog, func(i, j int) bool { return changelog[i].When.After(changelog[j].When) })
 	if len(hydr.Companies) == 0 {
 		m["nocompanies"] = true
@@ -312,6 +326,7 @@ func (ctrl *controller) root(c echo.Context) error {
 	return c.Render(http.StatusOK, "main.html", m)
 }
 
+// search handles a small full-text search across companies and people.
 func (ctrl *controller) search(c echo.Context) error {
 	var err error
 	ownerID := c.Get("ownerid").(uint)
@@ -330,7 +345,7 @@ func (ctrl *controller) search(c echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, "Search query must contain a 'query' field")
 		}
 	} else {
-		// if the query is not a json string, we assume it is a simple string
+		// simple string query
 		str = strings.TrimSpace(str)
 	}
 	if str == "" {
@@ -355,42 +370,39 @@ func (ctrl *controller) search(c echo.Context) error {
 
 	for _, company := range companies {
 		searchResults = append(searchResults, searchResult{
-			Text:   fmt.Sprintf("%s", company.Name),
+			Text:   company.Name,
 			Action: fmt.Sprintf("/company/%d/%s", company.ID, url.PathEscape(company.Name)),
 		})
 	}
 
 	for _, person := range people {
 		searchResults = append(searchResults, searchResult{
-			Text:   fmt.Sprintf("%s", person.Name),
+			Text:   person.Name,
 			Action: fmt.Sprintf("/person/%d/%s", person.ID, url.PathEscape(person.Name)),
 		})
-
 	}
+
 	return c.JSON(http.StatusOK, searchResults)
 }
 
-// NewController ist der Einstiegspunkt.
+// NewController wires routes, middleware, renderer, and starts the server.
 func NewController(crmdb *model.CRMDatenbank) error {
-	// Environment-gesteuerte Log-Details
-	// Prod: JSON, Info+; Dev: Text, Debug
+	// Environment-driven logger: Dev=Text+Debug, Prod=JSON+Info
 	var logger *slog.Logger
 	if crmdb.Config.Mode == "development" {
 		logger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	} else {
 		logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	}
+
+	// Register types used in gorilla/sessions (e.g., Flash) to avoid gob errors.
 	gob.Register(Flash{})
+
+	// Template functions available in views.
 	var templateFunc = template.FuncMap{
-		"htmldate": func(in time.Time) string {
-			return in.Format("2006-01-02")
-		},
-		"userdate": func(in time.Time) string {
-			return in.Format("02.01.2006")
-		},
-		"timeago": func(in time.Time) string {
-			return timeagoGerman.Format(in)
-		},
+		"htmldate": func(in time.Time) string { return in.Format("2006-01-02") },
+		"userdate": func(in time.Time) string { return in.Format("02.01.2006") },
+		"timeago":  func(in time.Time) string { return timeagoGerman.Format(in) },
 		"taxtype": func(in string) string {
 			taxtype := map[string]string{
 				"S":  "Umsatzsteuerpflichtige Umsätze",
@@ -404,9 +416,7 @@ func NewController(crmdb *model.CRMDatenbank) error {
 			}
 			return "unbekannt"
 		},
-		"rounddecimal": func(in decimal.Decimal) string {
-			return in.Round(2).StringFixed(2)
-		},
+		"rounddecimal": func(in decimal.Decimal) string { return in.Round(2).StringFixed(2) },
 		"invoiceStatus": func(in model.InvoiceStatus) string {
 			status := map[model.InvoiceStatus]string{
 				model.InvoiceStatusDraft:  "Entwurf",
@@ -433,13 +443,8 @@ func NewController(crmdb *model.CRMDatenbank) error {
 			}
 			return "unbekannt"
 		},
-		"array": func(els ...any) []any {
-			return els
-		},
-		"toJSON": func(v any) template.JS {
-			b, _ := json.Marshal(v)
-			return template.JS(b)
-		},
+		"array":  func(els ...any) []any { return els },
+		"toJSON": func(v any) template.JS { b, _ := json.Marshal(v); return template.JS(b) },
 		"fmtTime": func(t time.Time) string {
 			if t.IsZero() {
 				return ""
@@ -463,10 +468,10 @@ func NewController(crmdb *model.CRMDatenbank) error {
 		},
 		"now":    time.Now,
 		"before": func(a, b time.Time) bool { return a.Before(b) },
-		"isOpen": func(s model.InvoiceStatus) bool {
-			return s == "open" || s == "issued"
-		}}
+		"isOpen": func(s model.InvoiceStatus) bool { return s == "open" || s == "issued" },
+	}
 
+	// Set up renderer
 	tmpl := &Template{
 		templates: template.Must(template.New("t").Funcs(templateFunc).ParseGlob("public/views/*.html")),
 	}
@@ -475,6 +480,7 @@ func NewController(crmdb *model.CRMDatenbank) error {
 	e.HideBanner = true
 	e.HidePort = true
 
+	// --- Core middleware
 	e.Pre(middleware.MethodOverrideWithConfig(middleware.MethodOverrideConfig{
 		Getter: middleware.MethodFromForm("_method"),
 	}))
@@ -482,20 +488,19 @@ func NewController(crmdb *model.CRMDatenbank) error {
 	e.Use(middleware.BodyLimit("20M"))
 	e.Use(middleware.RequestID()) // adds X-Request-ID
 	e.Use(middleware.RecoverWithConfig(middleware.RecoverConfig{
-		DisableStackAll:   false, // only log stack trace
+		DisableStackAll:   false, // log stack trace only
 		DisablePrintStack: true,
 	}))
 
+	// Request-scoped logger (adds structured attributes and unified access log).
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			start := time.Now()
 
-			// Request-ID (setzt vorher z.B. echo/middleware.RequestID)
 			req := c.Request()
 			res := c.Response()
 			rid := res.Header().Get(echo.HeaderXRequestID)
 
-			// Request-scoped Logger bauen und in den Context legen
 			reqLogger := slog.With(
 				"request_id", rid,
 			).WithGroup("http").With(
@@ -505,20 +510,16 @@ func NewController(crmdb *model.CRMDatenbank) error {
 			)
 			c.Set("logger", reqLogger)
 
-			// Handler ausführen
 			err := next(c)
 
 			if shouldSkipAccessLog(c) {
 				return err
 			}
 			latency := time.Since(start)
-
 			attrs := []any{
 				"status", res.Status,
 				"latency_ms", float64(latency.Microseconds()) / 1000.0,
 			}
-
-			// Level anhand Status wählen – benutze den request-scoped Logger
 			switch {
 			case res.Status >= 500:
 				reqLogger.Error("http_request", attrs...)
@@ -531,7 +532,7 @@ func NewController(crmdb *model.CRMDatenbank) error {
 		}
 	})
 
-	// Eigene HTTPErrorHandler: intern alles loggen, extern nur sichere Payload
+	// Central HTTP error handler: log internally, show safe messages externally.
 	e.HTTPErrorHandler = func(err error, c echo.Context) {
 		l, _ := c.Get("logger").(*slog.Logger)
 		if l == nil {
@@ -542,16 +543,15 @@ func NewController(crmdb *model.CRMDatenbank) error {
 		var he *echo.HTTPError
 		switch {
 		case errors.As(err, &ae):
-			// schon unsere appError
+			// already an appError
 		case errors.As(err, &he):
-			// Nur 4xx-Mitteilungen an Nutzer durchlassen; 5xx maskieren
+			// expose 4xx messages only; mask 5xx
 			public := ""
 			if he.Code >= 400 && he.Code < 500 {
-				public = fmt.Sprint(he.Message) // sicherer, explizit gesetzter Text
+				public = fmt.Sprint(he.Message)
 			}
-			// mappe auf App-Fehler; in Err landet die Roh-Nachricht (nur fürs Log)
 			ae = &appError{
-				Code:   httpStatusToCode(he.Code), // helper s.u.
+				Code:   httpStatusToCode(he.Code),
 				Status: he.Code,
 				Err:    fmt.Errorf("%v", he.Message),
 				Public: public,
@@ -565,7 +565,7 @@ func NewController(crmdb *model.CRMDatenbank) error {
 		}
 
 		attrs := []any{
-			"status", ae.Status, // ursprünglicher HTTP-Status (z.B. 400)
+			"status", ae.Status,
 			"code", ae.Code,
 			"error", ae.Err.Error(),
 		}
@@ -575,17 +575,15 @@ func NewController(crmdb *model.CRMDatenbank) error {
 			l.Warn("handler_error", attrs...)
 		}
 
-		// HTML vs. JSON wie zuvor:
+		// HTML vs JSON response
 		if wantsHTML(c.Request()) {
 			kind := "error"
 			if ae.Status >= 400 && ae.Status < 500 {
 				kind = "warning"
 			}
 			if err = AddFlash(c, kind, userMessage(ae)); err != nil {
-				// Nur Loggen, weil wir eh schon im Fehler sind
 				l.Error("cannot add flash message", "error", err)
 			}
-			// Redirect (Referer oder Fallback)
 			target := c.Request().Referer()
 			if target == "" {
 				target = "/"
@@ -601,18 +599,27 @@ func NewController(crmdb *model.CRMDatenbank) error {
 		})
 	}
 
+	// gorilla/sessions cookie store (client-side). Defaults are conservative;
+	// remember-me MaxAge is controlled per-save by SessionWriter.
 	store := sessions.NewCookieStore([]byte(crmdb.Config.CookieSecret))
+	e.Use(session.Middleware(store))
 	store.Options = &sessions.Options{
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		// Secure: true, // in PROD mit HTTPS aktivieren
+		Secure:   crmdb.Config.Mode == "production", // set Secure in prod (HTTPS)
+		// Domain: set via CookieCfg if you share across subdomains
 	}
-	e.Use(session.Middleware(store))
+
+	// Inject cookie config (used by SessionWriter to apply cookie options on save).
+	ctrl := controller{model: crmdb}
+	e.Use(ctrl.CookieCfgMiddleware)
+
+	// Flash loader must run after session middleware and before handlers.
 	e.Use(FlashLoader)
-	// irgendwo in NewController, NUR in dev:
+
+	// In development, disable caching for static files and provide a flash demo route.
 	if crmdb.Config.Mode == "development" {
-		// Disable caching for static files
 		e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 			return func(c echo.Context) error {
 				if strings.HasPrefix(c.Request().URL.Path, "/static/") {
@@ -637,22 +644,24 @@ func NewController(crmdb *model.CRMDatenbank) error {
 			if to == "" {
 				to = "/"
 			}
-
 			if err := AddFlash(c, kind, msg); err != nil {
 				return err
 			}
 			return c.Redirect(http.StatusFound, to)
 		})
 	}
+
+	// CSRF protection. Cookie is Lax and Secure in prod.
 	e.Use(middleware.CSRFWithConfig(middleware.CSRFConfig{
 		TokenLength:    32,
-		TokenLookup:    "form:csrf,header:X-CSRF-Token", // wo Echo den Token erwartet
-		CookieName:     "csrf",                          // Name des CSRF-Cookies
+		TokenLookup:    "form:csrf,header:X-CSRF-Token",
+		CookieName:     "csrf",
 		CookiePath:     "/",
 		CookieHTTPOnly: true,
 		CookieSameSite: http.SameSiteLaxMode,
-		// CookieSecure: true, // in PROD mit HTTPS aktivieren
+		CookieSecure:   crmdb.Config.Mode == "production",
 		Skipper: func(c echo.Context) bool {
+			// allow POSTs to these endpoints without CSRF (e.g., public forms)
 			if c.Request().Method == http.MethodPost {
 				if strings.HasPrefix(c.Path(), "/passwordreset") {
 					return true
@@ -666,23 +675,30 @@ func NewController(crmdb *model.CRMDatenbank) error {
 	}))
 
 	e.Renderer = tmpl
-	ctrl := controller{model: crmdb}
+
+	// --- Routes
 	e.GET("/", ctrl.root, ctrl.authMiddleware)
 	e.GET("/search", ctrl.search, ctrl.authMiddleware)
+
 	e.GET("/login", ctrl.login)
 	e.POST("/login", ctrl.login)
 	e.GET("/logout", ctrl.logout)
+
 	e.GET("/register", ctrl.register)
 	e.POST("/register", ctrl.register)
 	e.GET("/verify", ctrl.verifyEmail)
+
 	e.GET("/set-password", ctrl.showSetPasswordForm)
 	e.POST("/set-password", ctrl.handleSetPasswordSubmit)
+
 	e.GET("/passwordreset/:token", ctrl.showPasswordResetForm)
 	e.POST("/passwordreset/:token", ctrl.handlePasswordResetSubmit)
 	e.GET("/passwordreset", ctrl.showPasswordResetRequest)
 	e.POST("/passwordreset", ctrl.handlePasswordResetRequest)
 
 	e.Static("/static", "static")
+
+	// Feature modules
 	ctrl.invoiceInit(e)
 	ctrl.companyInit(e)
 	ctrl.personInit(e)
@@ -698,6 +714,7 @@ func NewController(crmdb *model.CRMDatenbank) error {
 	return nil
 }
 
+// userMessage maps an appError to a safe, German, user-facing message.
 func userMessage(ae *appError) string {
 	if ae.Public != "" {
 		return ae.Public
@@ -714,9 +731,10 @@ func userMessage(ae *appError) string {
 	}
 }
 
-// kleine Helfer
+// wantsHTML returns true if the client accepts HTML.
 func wantsHTML(r *http.Request) bool { return strings.Contains(r.Header.Get("Accept"), "text/html") }
 
+// httpStatusToCode maps HTTP status codes to internal error codes.
 func httpStatusToCode(status int) string {
 	switch status {
 	case 400:
@@ -737,6 +755,7 @@ func httpStatusToCode(status int) string {
 	}
 }
 
+// shouldSkipAccessLog filters out noise from the access log (static assets, etc.).
 func shouldSkipAccessLog(c echo.Context) bool {
 	p := c.Request().URL.Path
 	if strings.HasPrefix(p, "/static/") || strings.HasPrefix(p, "/assets/") {
@@ -746,13 +765,13 @@ func shouldSkipAccessLog(c echo.Context) bool {
 	case "/favicon.ico", "/robots.txt", "/metrics":
 		return true
 	}
-	// Optional: nach Dateiendungen filtern
+	// Optional: filter by file extensions
 	ext := strings.ToLower(path.Ext(p))
 	switch ext {
 	case ".css", ".js", ".map", ".png", ".jpg", ".jpeg", ".svg", ".ico", ".webp":
 		return true
 	}
-	// Optional: HEAD/OPTIONS ausblenden
+	// Optional: drop HEAD/OPTIONS
 	m := c.Request().Method
 	if m == http.MethodHead || m == http.MethodOptions {
 		return true
