@@ -19,7 +19,6 @@ import (
 	"github.com/xuri/excelize/v2"
 
 	"github.com/go-playground/form/v4"
-	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
 	"github.com/shopspring/decimal"
 )
@@ -258,40 +257,56 @@ func (ctrl *controller) invoiceDelete(c echo.Context) error {
 	return c.Redirect(http.StatusSeeOther, fmt.Sprintf("/company/%d", companyid))
 }
 
-// Store problems in session under a namespaced key and clear-on-read.
+// putProblemsInSession stores a slice of problems in the session under a
+// namespaced key (per invoiceID). Data is marshaled as JSON so it can be
+// serialized safely into the cookie. Be aware of cookie size limits (~4KB).
 func putProblemsInSession(c echo.Context, invoiceID uint, problems []model.InvoiceProblem) error {
-	sess, err := session.Get("session", c)
+	sw, err := LoadSession(c)
 	if err != nil {
 		return err
 	}
 	key := fmt.Sprintf("problems:%d", invoiceID)
+
 	b, err := json.Marshal(problems)
 	if err != nil {
 		return err
 	}
-	sess.Values[key] = string(b)
-	return sess.Save(c.Request(), c.Response())
+	sw.Values()[key] = string(b)
+
+	if err := sw.Save(); err != nil {
+		return ErrInvalid(err, "error saving session")
+	}
+	return nil
 }
 
+// popProblemsFromSession retrieves problems for a given invoiceID (if present)
+// and removes the key from the session. The session is saved afterwards with
+// the correct cookie options (so "remember me" stays intact).
 func popProblemsFromSession(c echo.Context, invoiceID uint) (any, bool) {
-	sess, err := session.Get("session", c)
+	sw, err := LoadSession(c)
 	if err != nil {
 		return nil, false
 	}
 	key := fmt.Sprintf("problems:%d", invoiceID)
-	v, ok := sess.Values[key]
+
+	v, ok := sw.Values()[key]
 	if !ok {
 		return nil, false
 	}
-	delete(sess.Values, key)
-	_ = sess.Save(c.Request(), c.Response())
-	var out []model.InvoiceProblem
+
+	// Delete key and save the session (keeps remember-me settings intact).
+	delete(sw.Values(), key)
+	_ = sw.Save() // error is non-critical for returning the data
+
+	// Try to unmarshal if the stored value is JSON string.
 	if s, ok := v.(string); ok {
+		var out []model.InvoiceProblem
 		_ = json.Unmarshal([]byte(s), &out)
 		return out, true
 	}
 	return v, true
 }
+
 func (ctrl *controller) invoiceDetail(c echo.Context) error {
 	m := ctrl.defaultResponseMap(c, "Rechnung-Details")
 	ownerID := c.Get("ownerid").(uint)

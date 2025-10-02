@@ -50,12 +50,17 @@ func FlashLoader(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
-// AddFlash setzt eine Flash-Message (nutzt Gorilla Sessions via echo-contrib/session).
+// AddFlash stores a flash message in the session and keeps the "remember me"
+// option intact, because SessionWriter.Save() always reapplies the correct
+// cookie options before saving.
 func AddFlash(c echo.Context, kind, msg string) error {
-	sess, _ := session.Get("session", c)
-	sess.AddFlash(Flash{Kind: kind, Message: msg})
-	if err := sess.Save(c.Request(), c.Response()); err != nil {
-		return ErrInvalid(err, "Fehler beim Speichern der Session")
+	sw, err := LoadSession(c)
+	if err != nil {
+		return ErrInvalid(err, "error loading session")
+	}
+	sw.AddFlash(Flash{Kind: kind, Message: msg})
+	if err := sw.Save(); err != nil {
+		return ErrInvalid(err, "error saving session")
 	}
 	return nil
 }

@@ -20,16 +20,16 @@ import (
 )
 
 // CookieCfg controls how the session cookie is scoped and secured.
+// NOTE: Options are applied centrally by SessionWriter.Save() via applySessionOptionsFromPersist.
+// This file only sets the "persist" flag (remember me) where needed.
 type CookieCfg struct {
-	IsProd       bool   // true in production
-	ShareSubdoms bool   // true to share cookie across subdomains
-	ParentDomain string // e.g. "billingcat.de" (only if ShareSubdoms = true)
+	IsProd       bool
+	ShareSubdoms bool
+	ParentDomain string
 }
 
 // cookieOptions builds secure cookie options based on environment.
-// - In production, Secure MUST be true (HTTPS).
-// - Domain is only set if you truly need cross-subdomain sessions.
-// - SameSite=Lax is safe-by-default for typical app flows.
+// Kept for completeness if you need it elsewhere; SessionWriter uses this internally.
 func cookieOptions(maxAge int, cfg CookieCfg) *sessions.Options {
 	opts := &sessions.Options{
 		Path:     "/",
@@ -38,39 +38,47 @@ func cookieOptions(maxAge int, cfg CookieCfg) *sessions.Options {
 		SameSite: http.SameSiteLaxMode,
 	}
 	if cfg.IsProd {
-		opts.Secure = true // e.g., https://app.billingcat.de MUST be true
+		opts.Secure = true
 		if cfg.ShareSubdoms && cfg.ParentDomain != "" {
-			opts.Domain = "." + cfg.ParentDomain // e.g., ".billingcat.de"
+			opts.Domain = "." + cfg.ParentDomain
 		}
 	} else {
-		// Local development on http://localhost
-		opts.Secure = false // otherwise cookie won't be set on http
-		// Domain left empty (host-only for "localhost")
+		opts.Secure = false
 	}
 	return opts
 }
 
 // authMiddleware ensures a user is authenticated before accessing protected routes.
-// It populates "uid" and "ownerid" into the context on success, or redirects to /login.
+// It reads uid/ownerid from the session; on failure it redirects to /login.
 func (ctrl *controller) authMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
-		sess, err := session.Get("session", c)
+		sw, err := LoadSession(c)
 		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, fmt.Errorf("cannot get session %w", err))
+			return echo.NewHTTPError(http.StatusInternalServerError, fmt.Errorf("cannot load session: %w", err))
 		}
-		var uid uint
+
+		// IMPORTANT: type assertions must match what you store (here: uint).
 		var ok bool
-		if uid, ok = sess.Values["uid"].(uint); ok {
-			c.Set("uid", uid)
+		var uid uint
+		if v, exists := sw.Values()["uid"]; exists {
+			uid, ok = v.(uint)
+		}
+		if !ok || uid == 0 {
+			return c.Redirect(http.StatusSeeOther, "/login")
+		}
+		c.Set("uid", uid)
+
+		if v, exists := sw.Values()["ownerid"]; exists {
+			if ownerid, ok := v.(uint); ok && ownerid != 0 {
+				c.Set("ownerid", ownerid)
+			} else {
+				return c.Redirect(http.StatusSeeOther, "/login")
+			}
 		} else {
 			return c.Redirect(http.StatusSeeOther, "/login")
 		}
-		if ownerid, ok := sess.Values["ownerid"].(uint); ok {
-			c.Set("ownerid", ownerid)
-		} else {
-			return c.Redirect(http.StatusSeeOther, "/login")
-		}
-		// if uid == 1 then set is_admin = true
+
+		// Simple admin flag example.
 		if uid == 1 {
 			c.Set("is_admin", true)
 		}
@@ -78,8 +86,9 @@ func (ctrl *controller) authMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
-// login handles GET (render form) and POST (authenticate) for password-based login.
-// For failed attempts, it returns a neutral message (no user enumeration).
+// login handles GET (render form) and POST (authenticate).
+// On successful POST, it stores uid/ownerid and the "persist" flag (remember me) in the session.
+// The actual cookie MaxAge is applied automatically by SessionWriter.Save().
 func (ctrl *controller) login(c echo.Context) error {
 	if c.Request().Method == http.MethodGet {
 		m := ctrl.defaultResponseMap(c, "Login")
@@ -91,64 +100,46 @@ func (ctrl *controller) login(c echo.Context) error {
 	password := c.FormValue("password")
 	remember := c.FormValue("rememberMe") != ""
 
-	// Authenticate using model; returns ErrInvalidPassword or gorm.ErrRecordNotFound under the hood.
+	// Authenticate (do not leak whether the user exists).
 	user, err := ctrl.model.AuthenticateUser(email, password)
 	if err != nil || user == nil {
-		// Deliberately neutral – do not leak whether email exists.
 		if err := AddFlash(c, "error", "Login failed. Please check your input."); err != nil {
 			return ErrInvalid(err, "error while saving the session")
 		}
 		return c.Redirect(http.StatusSeeOther, "/login")
 	}
 
-	// Optional: require verified email (if you added Verified to User)
-	// If not verified, act neutral and nudge to check inbox.
+	// Optional: require verified email.
 	if user.Verified == false {
 		_ = AddFlash(c, "info", "Please confirm your email first. We've sent you instructions if needed.")
 		return c.Redirect(http.StatusSeeOther, "/login")
 	}
 
-	sess, err := session.Get("session", c)
+	// Open session and set values. We only set "persist"; Save() will apply cookie options.
+	sw, err := LoadSession(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err)
 	}
 
-	// "Remember me" = 1 year; otherwise, session cookie (MaxAge=0)
-	maxAge := 0
-	if remember {
-		maxAge = 60 * 60 * 24 * 365 // 1 year
-	}
-
-	// Secure cookie options depending on environment
-	opts := cookieOptions(maxAge, CookieCfg{
-		IsProd:       ctrl.model.Config.Mode == "production",
-		ShareSubdoms: false,           // set to true only if you really need it
-		ParentDomain: "billingcat.de", // only relevant if ShareSubdoms=true
-	})
-	// NOTE: If you rely on cross-site redirects during OAuth and need the cookie sent cross-site,
-	// you would use SameSite=None + Secure=true (production only).
-	// opts.SameSite = http.SameSiteNoneMode // ONLY with opts.Secure=true in production
-
-	sess.Options = opts
-
-	// Today, uid == ownerid. If you add teams later, store OwnerID explicitly.
-	sess.Values["uid"] = user.ID
-	sess.Values["ownerid"] = func() uint {
+	sw.Values()["uid"] = user.ID
+	sw.Values()["ownerid"] = func() uint {
 		if user.OwnerID != 0 {
 			return user.OwnerID
 		}
-		return user.ID // fallback für Altbestände
+		return user.ID // fallback for legacy data
 	}()
+	sw.Values()["persist"] = remember // this controls remember-me behavior
 
-	if err := sess.Save(c.Request(), c.Response()); err != nil {
+	if err := sw.Save(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err)
 	}
-	_ = ctrl.model.TouchLastLogin(user) // non-blocking ok
+
+	_ = ctrl.model.TouchLastLogin(user) // best-effort
 	return c.Redirect(http.StatusSeeOther, "/")
 }
 
-// logout destroys the session and redirects to /login.
-// Sets MaxAge=-1 to ensure browsers like Safari actually delete it.
+// logout clears the session and deletes the cookie.
+// We bypass SessionWriter here to force MaxAge = -1 (cookie deletion) regardless of "persist".
 func (ctrl *controller) logout(c echo.Context) error {
 	sess, err := session.Get("session", c)
 	if err != nil {
@@ -157,7 +148,9 @@ func (ctrl *controller) logout(c echo.Context) error {
 	delete(sess.Values, "uid")
 	delete(sess.Values, "ownerid")
 	delete(sess.Values, "csrf")
+	delete(sess.Values, "persist")
 
+	// Force-delete the cookie for all browsers (including Safari).
 	if sess.Options == nil {
 		sess.Options = &sessions.Options{Path: "/"}
 	}
@@ -182,7 +175,7 @@ func generateRandomToken() (token string, hash []byte, err error) {
 	return token, h[:], nil
 }
 
-// constantTimeMatchToken compares a provided plaintext token to a stored hash safely.
+// constantTimeMatchToken safely compares a provided plaintext token to a stored hash.
 func constantTimeMatchToken(providedToken string, storedHash []byte) bool {
 	sum := sha256.Sum256([]byte(providedToken))
 	return len(storedHash) == len(sum[:]) && hmac.Equal(storedHash, sum[:])
@@ -195,7 +188,6 @@ func (ctrl *controller) showPasswordResetRequest(c echo.Context) error {
 }
 
 // handlePasswordResetRequest handles the reset request (POST) in an enumeration-safe way.
-// It always returns the same response, whether a user exists or not.
 func (ctrl *controller) handlePasswordResetRequest(c echo.Context) error {
 	logger := c.Get("logger").(*slog.Logger)
 	email := strings.TrimSpace(strings.ToLower(c.FormValue("email")))
@@ -207,7 +199,6 @@ func (ctrl *controller) handlePasswordResetRequest(c echo.Context) error {
 
 	user, err := ctrl.model.GetUserByEMail(email)
 	if err != nil || user == nil {
-		// intentionally identical outward response
 		return genericResponse()
 	}
 
@@ -281,22 +272,19 @@ func (ctrl *controller) handlePasswordResetSubmit(c echo.Context) error {
 		_ = AddFlash(c, "error", "Internal error. Please try again later.")
 		return c.Redirect(http.StatusSeeOther, "/login")
 	}
-	// Clear token
+	// Clear token (best-effort after password update).
 	user.PasswordResetToken = nil
 	user.PasswordResetExpiry = time.Time{}
 	if err := ctrl.model.UpdateUser(user); err != nil {
 		logger.Error("cannot clear reset token", "error", err)
-		// Password is already set; continue with success.
 	}
+
 	_ = AddFlash(c, "success", "Your password has been updated. You can sign in now.")
 	return c.Redirect(http.StatusSeeOther, "/login")
 }
 
 // register handles GET (render form) and POST (start enumeration-safe signup).
-// On POST:
-//   - If the email already exists, send a sign-in/reset email.
-//   - If it’s new, create a pending signup token and send a verification email.
-//   - In both cases, respond with the same neutral success message.
+// For POST: if email exists, send sign-in/reset mail; otherwise create a pending signup token.
 func (ctrl *controller) register(c echo.Context) error {
 	if !ctrl.model.Config.RegistrationAllowed {
 		return echo.NewHTTPError(http.StatusForbidden, "Registration is disabled")
@@ -307,41 +295,34 @@ func (ctrl *controller) register(c echo.Context) error {
 	}
 
 	email := strings.TrimSpace(strings.ToLower(c.FormValue("email")))
-	password := c.FormValue("password") // optional: server-side password policy checks
+	password := c.FormValue("password")
 
-	// Unified outward response (avoid account enumeration)
 	neutral := func() error {
 		m := ctrl.defaultResponseMap(c, "Register")
 		m["flash_success"] = "If we can create or locate an account for that email, we have sent you an email with next steps."
 		return c.Render(http.StatusOK, "register_submitted.html", m)
 	}
 
-	// Look up existing user
 	existingUser, err := ctrl.model.GetUserByEMail(email)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		// Log internally, present neutral response to user
 		return neutral()
 	}
 	if existingUser != nil {
-		// Existing account → send sign-in or reset email (do not reveal state)
 		body := "Someone tried to sign up with your email. If this was you, sign in here or reset your password."
-		_ = ctrl.sendEmail(email, "Sign in to billingcat", body) // replace with magic-link/reset in your project
+		_ = ctrl.sendEmail(email, "Sign in to billingcat", body)
 		return neutral()
 	}
 
-	// New email → create signup token and send verification link
 	signupToken, tokenHash, err := generateRandomToken()
 	if err != nil {
 		return neutral()
 	}
 	if _, err := ctrl.model.CreateSignupToken(email, password, 30*time.Minute, signupToken); err != nil {
-		// Handle potential races/uniqueness quietly; still neutral outside
 		return neutral()
 	}
 
-	// Build verify URL like: https://host/verify?token=...
 	verifyURL := fmt.Sprintf("%s://%s/verify?token=%s", c.Scheme(), c.Request().Host, url.QueryEscape(signupToken))
-	_ = tokenHash // tokenHash is stored by CreateSignupToken via sha256; kept here only for clarity.
+	_ = tokenHash
 
 	body := fmt.Sprintf(
 		"Please confirm your email for billingcat:\n\n%s\n\nThe link is valid for 30 minutes. If you did not request this, you can ignore this message.",
@@ -352,9 +333,8 @@ func (ctrl *controller) register(c echo.Context) error {
 	return neutral()
 }
 
-// verifyEmail consumes the email verification token (verify-first).
-// On success it creates/verifies the user (via model.ConsumeSignupToken)
-// and opens a short-lived session gate to /set-password.
+// verifyEmail consumes the email verification token and opens a short-lived gate to /set-password.
+// The short-lived gate is stored in the session; Save() applies cookie options automatically.
 func (ctrl *controller) verifyEmail(c echo.Context) error {
 	token := c.QueryParam("token")
 	if token == "" {
@@ -364,56 +344,54 @@ func (ctrl *controller) verifyEmail(c echo.Context) error {
 
 	u, err := ctrl.model.ConsumeSignupToken(token)
 	if err != nil || u == nil {
-		// Deliberately neutral outwardly.
 		_ = AddFlash(c, "error", "Invalid or expired link.")
 		return c.Redirect(http.StatusSeeOther, "/login")
 	}
 
-	// ensure OwnerID is set for solo users
+	// Ensure OwnerID for solo users (idempotent).
 	if u.OwnerID == 0 {
 		u.OwnerID = u.ID
 		_ = ctrl.model.UpdateUser(u) // best-effort
 	}
-	// Open a short-lived gate (e.g., 15 minutes) to let the user set a password.
-	sess, err := session.Get("session", c)
+
+	sw, err := LoadSession(c)
 	if err != nil {
 		_ = AddFlash(c, "error", "Internal error. Please try again.")
 		return c.Redirect(http.StatusSeeOther, "/login")
 	}
 
-	// We keep the existing cookie options; the session is already configured elsewhere.
-	// Gate keys – keep them short and explicit.
+	// Short-lived gate (~15 minutes) to set password.
 	const gateUIDKey = "pw_setup_uid"
 	const gateExpKey = "pw_setup_exp" // unix seconds
+	sw.Values()[gateUIDKey] = u.ID
+	sw.Values()[gateExpKey] = time.Now().Add(15 * time.Minute).Unix()
 
-	sess.Values[gateUIDKey] = u.ID
-	sess.Values[gateExpKey] = time.Now().Add(15 * time.Minute).Unix()
-
-	if err := sess.Save(c.Request(), c.Response()); err != nil {
+	if err := sw.Save(); err != nil {
 		_ = AddFlash(c, "error", "Internal error. Please try again.")
 		return c.Redirect(http.StatusSeeOther, "/login")
 	}
 
-	// Redirect to the password setup form
 	return c.Redirect(http.StatusSeeOther, "/set-password")
 }
 
 // showSetPasswordForm renders the password setup page if the short-lived gate is valid.
-// Otherwise it redirects to /login with a neutral message.
 func (ctrl *controller) showSetPasswordForm(c echo.Context) error {
-	sess, err := session.Get("session", c)
+	sw, err := LoadSession(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err)
 	}
 
-	uidVal, okUID := sess.Values["pw_setup_uid"].(uint)
-	expVal, okExp := sess.Values["pw_setup_exp"].(int64)
+	const gateUIDKey = "pw_setup_uid"
+	const gateExpKey = "pw_setup_exp"
+
+	uidVal, okUID := sw.Values()[gateUIDKey].(uint)
+	expVal, okExp := sw.Values()[gateExpKey].(int64)
 	if !okUID || !okExp || time.Now().Unix() > expVal {
 		_ = AddFlash(c, "info", "Please start the verification process again.")
 		return c.Redirect(http.StatusSeeOther, "/login")
 	}
 
-	// Optional: ensure the user still exists
+	// Optional: ensure the user still exists.
 	if _, err := ctrl.model.GetUserByID(uidVal); err != nil {
 		_ = AddFlash(c, "info", "Please start the verification process again.")
 		return c.Redirect(http.StatusSeeOther, "/login")
@@ -424,7 +402,8 @@ func (ctrl *controller) showSetPasswordForm(c echo.Context) error {
 }
 
 // handleSetPasswordSubmit accepts the new password, saves it, clears the gate,
-// and logs the user in with a normal session.
+// and logs the user in with a normal session. If you want remember-me here,
+// add a checkbox to the form and set sw.Values()["persist"] accordingly.
 func (ctrl *controller) handleSetPasswordSubmit(c echo.Context) error {
 	pass := c.FormValue("password")
 	confirm := c.FormValue("confirmPassword")
@@ -434,19 +413,22 @@ func (ctrl *controller) handleSetPasswordSubmit(c echo.Context) error {
 		return c.Redirect(http.StatusSeeOther, "/set-password")
 	}
 
-	sess, err := session.Get("session", c)
+	sw, err := LoadSession(c)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err)
 	}
 
-	uidVal, okUID := sess.Values["pw_setup_uid"].(uint)
-	expVal, okExp := sess.Values["pw_setup_exp"].(int64)
+	const gateUIDKey = "pw_setup_uid"
+	const gateExpKey = "pw_setup_exp"
+
+	uidVal, okUID := sw.Values()[gateUIDKey].(uint)
+	expVal, okExp := sw.Values()[gateExpKey].(int64)
 	if !okUID || !okExp || time.Now().Unix() > expVal {
 		_ = AddFlash(c, "info", "Your session expired. Please verify again.")
 		return c.Redirect(http.StatusSeeOther, "/login")
 	}
 
-	// Load user and set password
+	// Load user and set password.
 	u, err := ctrl.model.GetUserByID(uidVal)
 	if err != nil || u == nil {
 		_ = AddFlash(c, "error", "Internal error. Please try again.")
@@ -458,7 +440,7 @@ func (ctrl *controller) handleSetPasswordSubmit(c echo.Context) error {
 		return c.Redirect(http.StatusSeeOther, "/set-password")
 	}
 
-	// Ensure the user is marked verified (idempotent)
+	// Ensure the user is marked verified (idempotent).
 	if !u.Verified {
 		u.Verified = true
 	}
@@ -467,22 +449,16 @@ func (ctrl *controller) handleSetPasswordSubmit(c echo.Context) error {
 		return c.Redirect(http.StatusSeeOther, "/set-password")
 	}
 
-	// Clear the gate keys
-	delete(sess.Values, "pw_setup_uid")
-	delete(sess.Values, "pw_setup_exp")
+	// Clear the gate keys.
+	delete(sw.Values(), gateUIDKey)
+	delete(sw.Values(), gateExpKey)
 
-	// Establish a normal signed-in session (no "remember me" here).
-	// If you want "remember me" from here, add a checkbox to the form and set MaxAge accordingly.
-	opts := cookieOptions(0, CookieCfg{
-		IsProd:       ctrl.model.Config.Mode == "production",
-		ShareSubdoms: false,
-		ParentDomain: "billingcat.de",
-	})
-	sess.Options = opts
-	sess.Values["uid"] = u.ID
-	sess.Values["ownerid"] = u.ID
+	// Establish a normal signed-in session. No remember-me here (unless you add a checkbox).
+	sw.Values()["uid"] = u.ID
+	sw.Values()["ownerid"] = u.ID
+	// NOTE: do not set "persist" here unless your form has a remember-me checkbox.
 
-	if err := sess.Save(c.Request(), c.Response()); err != nil {
+	if err := sw.Save(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err)
 	}
 
