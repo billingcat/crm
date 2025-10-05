@@ -1,0 +1,66 @@
+{{template "header.html" .}}
+<div class="p-6 max-w-3xl">
+  <h1 class="text-xl font-semibold mb-4">Neuer Briefbogen</h1>
+
+  {{template "_flash" .}}
+
+  {{ if .HasFiles }}
+  <form method="post" action="/letterhead/new" class="space-y-4">
+    <input type="hidden" name="csrf" value="{{ .CSRFToken }}">
+
+    <label class="block">
+      <span class="block text-sm font-medium text-gray-700 mb-1">Name</span>
+      <input type="text" name="name" class="w-full border rounded px-3 py-2"
+             placeholder="Standard-Briefbogen">
+      <p class="text-xs text-gray-500 mt-1">Leer lassen, um den Dateinamen zu verwenden.</p>
+    </label>
+
+    <div class="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+      <table class="min-w-full text-sm">
+        <thead class="bg-gray-50">
+          <tr class="text-left text-gray-600">
+            <th class="px-4 py-2 font-semibold w-10">Auswahl</th>
+            <th class="px-4 py-2 font-semibold">Datei</th>
+            <th class="px-4 py-2 font-semibold">Größe</th>
+            <th class="px-4 py-2 font-semibold">Geändert</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{ range .Files }}
+          <tr class="border-t border-gray-100 hover:bg-gray-50">
+            <td class="px-4 py-2 align-top">
+              <input type="radio" name="path" value="{{ .RelPath }}" class="mt-1" required>
+            </td>
+            <td class="px-4 py-2">
+              <div class="flex flex-col">
+                <span class="font-medium text-gray-900">{{ .Name }}</span>
+                <code class="text-xs text-gray-500">{{ .RelPath }}</code>
+              </div>
+            </td>
+            <td class="px-4 py-2 text-gray-600">{{ .SizeHuman }}</td>
+            <td class="px-4 py-2 text-gray-600">{{ .ModTime.Format "2006-01-02 15:04:05" }}</td>
+          </tr>
+          {{ end }}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <button class="rounded px-4 py-2 bg-primary text-white hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary">
+        Weiter: Regionen festlegen
+      </button>
+      <a href="{{ .FileManagerURL }}" class="text-sm text-gray-600 hover:underline">Dateimanager öffnen</a>
+    </div>
+  </form>
+  {{ else }}
+    <div class="rounded-lg border border-amber-200 bg-amber-50 text-amber-900 p-4">
+      <p class="font-medium">Keine PDF-Dateien gefunden.</p>
+      <p class="text-sm mt-1">Lege bitte zuerst deinen Briefbogen unter <code>assets/userassets/owner&lt;ownerid&gt;</code> ab
+        (oder nutze den Dateimanager), und rufe diese Seite erneut auf.</p>
+      <div class="mt-3">
+        <a href="{{ .FileManagerURL }}" class="inline-flex items-center rounded-md border border-gray-300 px-3 py-1.5 text-sm hover:bg-white">Zum Dateimanager</a>
+      </div>
+    </div>
+  {{ end }}
+</div>
+{{template "footer.html" .}}

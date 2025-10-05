@@ -44,9 +44,35 @@
                         <a href="/settings" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium
           {{if eq $.path " /settings"}}border-primary-light text-white{{else}}border-transparent text-gray-700
                             hover:border-hover hover:text-white{{end}}">Stammdaten</a>
-                        <a href="/filemanager" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium
-          {{if eq $.path " /filemanager"}}border-primary-light text-white{{else}}border-transparent text-gray-700
-                            hover:border-hover hover:text-white{{end}}">Dateien</a>
+                        <div class="relative inline-block text-left" x-data="{open:false}"
+                            @keydown.escape.window="open=false">
+                            <button type="button" @click="open = !open" :aria-expanded="open.toString()"
+                                aria-haspopup="true" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium
+          {{ if or (eq $.path " /filemanager") (eq $.path " /letterhead" ) }}border-primary-light text-white{{ else
+                                }}border-transparent text-gray-700 hover:border-hover hover:text-white{{ end }}">
+                                Ablage
+                                <svg class="ml-1 h-4 w-4" aria-hidden="true">
+                                    <use href="#updownsvg"></use>
+                                </svg>
+                            </button>
+
+                            <!-- Menü -->
+                            <div x-cloak x-show="open" @click.outside="open=false" x-transition
+                                class="absolute left-0 mt-2 w-56 origin-top-left rounded-md shadow-lg bg-white ring-1 ring-black/5 z-50">
+                                <div class="py-1" role="menu" aria-orientation="vertical" tabindex="-1">
+                                    <a href="/filemanager"
+                                        class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem"
+                                        tabindex="-1">
+                                        Dateien
+                                    </a>
+                                    <a href="/letterhead"
+                                        class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem"
+                                        tabindex="-1">
+                                        Briefbögen
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
                         <!-- Ansicht-Dropdown -->
                         <div class="relative inline-block text-left" x-data="{open:false}"
                             @keydown.escape.window="open=false">
@@ -63,12 +89,15 @@
                             <div x-cloak x-show="open" @click.outside="open=false" x-transition
                                 class="absolute right-0 mt-2 w-56 origin-top-right rounded-md shadow-lg bg-white ring-1 ring-black/5 z-50">
                                 <div class="py-1" role="menu" aria-orientation="vertical" tabindex="-1">
-                                    <a href="/invoices?status=open" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem" tabindex="-1">Offene Rechnungen</a>
-                                    <a href="/invoices" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem" tabindex="-1">Alle Rechnungen</a>
+                                    <a href="/invoices?status=open"
+                                        class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem"
+                                        tabindex="-1">Offene Rechnungen</a>
+                                    <a href="/invoices" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                        role="menuitem" tabindex="-1">Alle Rechnungen</a>
                                 </div>
                             </div>
                         </div>
-                        {{/*  when is_admin == true, show /admin/users button  */}}
+                        {{/* when is_admin == true, show /admin/users button */}}
                         {{ if .is_admin }}
                         <a href="/admin/users" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium
           {{if eq $.path " /admin/users"}}border-primary-light text-white{{else}}border-transparent text-gray-700
@@ -116,8 +145,12 @@
                     class="bg-blue-50 border-blue-500 text-blue-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">Home</a>
                 <a href="/settings"
                     class="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">Settings</a>
-                <a href="/invoices?status=open" class="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">Offene Rechnungen</a>
-                <a href="/invoices" class="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">Alle Rechnungen</a>
+                <a href="/invoices?status=open"
+                    class="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">Offene
+                    Rechnungen</a>
+                <a href="/invoices"
+                    class="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">Alle
+                    Rechnungen</a>
             </div>
             {{ end }}
         </div>

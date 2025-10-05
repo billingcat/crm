@@ -697,7 +697,7 @@ func NewController(crmdb *model.CRMDatenbank) error {
 	e.POST("/passwordreset", ctrl.handlePasswordResetRequest)
 
 	e.Static("/static", "static")
-
+	e.Static("/uploads", "uploads")
 	// Feature modules
 	ctrl.invoiceInit(e)
 	ctrl.companyInit(e)
@@ -707,6 +707,7 @@ func NewController(crmdb *model.CRMDatenbank) error {
 	ctrl.noteInit(e)
 	ctrl.adminInit(e)
 	ctrl.apiInit(e)
+	ctrl.letterheadInit(e)
 
 	if err := e.Start(fmt.Sprintf(":%d", crmdb.Config.Port)); err != nil {
 		return fmt.Errorf("cannot start application %w", err)

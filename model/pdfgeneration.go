@@ -33,17 +33,32 @@ func ensureDir(dirName string) error {
 // expected to exist at the given location and the PDF gets written to the
 // location given by the last argument.
 func (crmdb *CRMDatenbank) CreateZUGFeRDPDF(inv *Invoice, ownerID uint, xmlpath string, pdfpath string, logger *slog.Logger) error {
+	var err error
+	var settingsData []byte
+	if s := buildSettingsFromInvoice(inv); s != nil {
+		settingsPath := filepath.Join(filepath.Dir(xmlpath), fmt.Sprintf("%d-settings.xml", inv.ID))
+		if settingsData, err = WriteSettingsXML(settingsPath, *s); err != nil {
+			// Do not fail invoice PDF creation just because settings.xml failed.
+			logger.Error("write settings.xml failed", "err", err, "invoice_id", inv.ID)
+		}
+	}
+	useTemplate := inv.TemplateID != nil && inv.Template != nil
 	ep, err := api.NewEndpoint(crmdb.Config.PublishingServerUsername, crmdb.Config.PublishingServerAddress)
 	if err != nil {
 		return err
 	}
 	p := ep.NewPublishRequest()
-
+	if settingsData != nil {
+		p.Files = append(p.Files, api.PublishFile{
+			Filename: "settings.xml",
+			Contents: settingsData,
+		})
+	}
 	if err = attachFile(p, xmlpath, "data.xml"); err != nil {
 		return err
 	}
 
-	p.Version = "5.1.26"
+	p.Version = "5.1.28"
 
 	userAssetsDir := filepath.Join(crmdb.Config.Basedir, "assets", "userassets", fmt.Sprintf("owner%d", ownerID))
 
@@ -60,22 +75,26 @@ func (crmdb *CRMDatenbank) CreateZUGFeRDPDF(inv *Invoice, ownerID uint, xmlpath 
 		".DS_Store":     true,
 		"publisher.cfg": true,
 	}
+	if useTemplate {
+		reject["layout.xml"] = true // do not attach user layout if we have a custom template
+	}
 	for _, file := range files {
 		if file.IsDir() {
 			continue
 		}
 		dstFilename := file.Name()
-		if file.Name() == "layout.xml" {
-			hasLayout = true
-		}
 		if reject[file.Name()] {
 			continue
+		}
+		if file.Name() == "layout.xml" {
+			hasLayout = true
 		}
 		fullPath := filepath.Join(userAssetsDir, file.Name())
 		logger.Debug("attaching user asset", "file", fullPath)
 		attachFile(p, fullPath, dstFilename)
 	}
 
+	// if has layout or has custom letterhead, we do not attach the generic layout
 	if !hasLayout {
 		// attach default layout
 		genericLayout := filepath.Join(crmdb.Config.Basedir, "assets", "generic", "layout.xml")

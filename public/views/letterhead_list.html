@@ -1,0 +1,37 @@
+{{template "header.html" .}}
+<div class="p-6">
+  <div class="flex items-center justify-between mb-4">
+    <h1 class="text-xl font-semibold">Briefbögen</h1>
+    <a class="border rounded px-3 py-2" href="/letterhead/new">Neu</a>
+  </div>
+
+  <div class="grid gap-4 md:grid-cols-2">
+    {{ range .Templates }}
+      <div class="border rounded p-3 hover:bg-white">
+        <a href="/letterhead/{{ .ID }}/edit" class="block">
+          <div class="font-medium">{{ .Name }}</div>
+          <div class="text-sm text-slate-600">{{ printf "%.1f×%.1f cm" .PageWidthCm .PageHeightCm }}</div>
+          {{ if .PreviewPage1URL }}
+            <img src="{{ .PreviewPage1URL }}" class="mt-2 border rounded max-h-64 object-contain" alt="Vorschau Seite 1">
+          {{ end }}
+        </a>
+
+        <div class="mt-3 flex items-center gap-2">
+          <a href="/letterhead/{{ .ID }}/edit"
+             class="inline-flex items-center rounded border px-3 py-1.5 text-sm hover:bg-white">Bearbeiten</a>
+
+          <form method="post" action="/letterhead/{{ .ID }}/delete"
+                onsubmit="return confirm('Diesen Briefbogen wirklich löschen?')">
+            <input type="hidden" name="csrf" value="{{ $.CSRFToken }}">
+            <button class="inline-flex items-center rounded bg-rose-600 text-white px-3 py-1.5 text-sm hover:bg-rose-700">
+              Löschen
+            </button>
+          </form>
+        </div>
+      </div>
+    {{ else }}
+      <div class="text-slate-600">Noch keine Briefbögen angelegt.</div>
+    {{ end }}
+  </div>
+</div>
+{{template "footer.html" .}}

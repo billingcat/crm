@@ -1,0 +1,593 @@
+{{template "header.html" .}}
+
+<!-- interact.js (CDN) -->
+<script src="/static/js/interact.min.js"></script>
+
+<meta name="csrf-token" content="{{ .CSRFToken }}">
+<div x-data="letterheadEditor({
+    templateID: {{ .Template.ID }},
+    pageWidthCm: {{ .Template.PageWidthCm }},
+    pageHeightCm: {{ .Template.PageHeightCm }},
+    page1: '{{ .Template.PreviewPage1URL }}',
+    page2: '{{ .Template.PreviewPage2URL }}',
+    regions: {{ toJSON .Template.Regions }},
+    fonts: {
+       normal: {{ toJSON .Template.FontNormal }},
+       bold:   {{ toJSON .Template.FontBold }},
+       italic: {{ toJSON .Template.FontItalic }},
+     },
+      csrf: '{{ .CSRFToken }}',
+  })" x-init="init()" class="p-4 space-y-4">
+
+  <!-- Toolbar -->
+  <div class="flex items-center gap-3 flex-wrap">
+    <h1 class="text-xl font-semibold">Letterhead Layout</h1>
+
+    <div class="flex items-center gap-2">
+      <span class="text-sm">Page:</span>
+      <button @click="currentPage=1" :class="btnTab(1)" class="px-2 py-1 rounded">1</button>
+      <button @click="currentPage=2" :disabled="!hasPage2" :class="btnTab(2)" class="px-2 py-1 rounded">2</button>
+    </div>
+
+    <label class="text-sm inline-flex items-center gap-2">
+      Unit:
+      <select x-model="unit" class="border rounded px-2 py-1">
+        <option value="cm">cm</option>
+        <option value="in">inch</option>
+      </select>
+    </label>
+
+    <!-- Zoom / Fit controls -->
+    <div class="ml-auto flex items-center gap-2">
+      <label class="text-sm">Zoom:
+        <select x-model="zoomPreset" @change="applyZoomPreset()" class="border rounded px-2 py-1">
+          <option value="fit">Fit width</option>
+          <option value="0.75">75%</option>
+          <option value="1">100%</option>
+          <option value="1.25">125%</option>
+          <option value="1.5">150%</option>
+        </select>
+      </label>
+      <button class="border rounded px-2 py-1" @click="nudgeZoom(-0.1)">–</button>
+      <span class="text-sm w-12 text-center" x-text="Math.round(scale*100)+'%'"></span>
+      <button class="border rounded px-2 py-1" @click="nudgeZoom(0.1)">+</button>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <button @click="saveAll()"
+        class="inline-flex items-center rounded-lg border px-3 py-1.5 text-sm bg-black text-white">
+        Save
+      </button>
+    </div>
+  </div>
+
+  <!-- Wrapper keeps page responsive -->
+  <div class="w-full overflow-auto" x-ref="wrap">
+    <!-- Page canvas -->
+    <div class="relative inline-block border shadow" x-ref="page" :style="pageStyle()">
+
+      <!-- Grid overlay -->
+      <div class="absolute inset-0 pointer-events-none opacity-40" :style="gridStyle()"></div>
+
+      <!-- Fixed regions -->
+      <template x-if="currentPage===1 && regionsByKind.addressee">
+        <div class="region absolute group border-2 border-blue-500/70 bg-blue-500/10 select-none"
+          :style="boxStyle(regionsByKind.addressee, 'p1')" x-init="makeInteractable($el, regionsByKind.addressee, 'p1')"
+          @click.stop="selectKind('addressee')">
+          <div class="absolute -top-6 left-0 text-xs bg-blue-600 text-white px-1 rounded">Empfänger</div>
+        </div>
+      </template>
+
+      <template x-if="currentPage===1 && regionsByKind.invoice_info">
+        <div class="region absolute group border-2 border-blue-500/70 bg-blue-500/10 select-none"
+          :style="boxStyle(regionsByKind.invoice_info, 'p1')"
+          x-init="makeInteractable($el, regionsByKind.invoice_info, 'p1')" @click.stop="selectKind('invoice_info')">
+          <div class="absolute -top-6 left-0 text-xs bg-blue-600 text-white px-1 rounded">Rechnungsangaben</div>
+        </div>
+      </template>
+
+      <template x-if="currentPage===1 && regionsByKind.main_area">
+        <div class="region absolute group border-2 border-amber-500/70 bg-amber-500/10 select-none"
+          :style="boxStyle(regionsByKind.main_area, 'p1')" x-init="makeInteractable($el, regionsByKind.main_area, 'p1')"
+          @click.stop="selectKind('main_area')">
+          <div class="absolute -top-6 left-0 text-xs bg-amber-600 text-white px-1 rounded">Hauptbereich (Seite 1)</div>
+        </div>
+      </template>
+
+      <template x-if="currentPage===2 && regionsByKind.main_area && regionsByKind.main_area.hasPage2">
+        <div class="region absolute group border-2 border-amber-500/70 bg-amber-500/10 select-none"
+          :style="boxStyle(regionsByKind.main_area, 'p2')" x-init="makeInteractable($el, regionsByKind.main_area, 'p2')"
+          @click.stop="selectKind('main_area_p2')">
+          <div class="absolute -top-6 left-0 text-xs bg-amber-600 text-white px-1 rounded">Hauptbereich (Seite 2)</div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- Properties panel -->
+  <div class="p-3 border rounded grid grid-cols-1 md:grid-cols-2 gap-4">
+    <!-- addressee -->
+    <template x-if="selectedKind==='addressee' && regionsByKind.addressee">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="col-span-full font-medium">Empfänger</div>
+
+        <label class="text-sm">X (<span x-text="unit"></span>)
+          <input type="number" step="0.1" :value="toUnit(regionsByKind.addressee.xCm)"
+            @input="setVal('addressee','x', $event.target.value)" class="ml-2 w-24 border rounded px-2 py-1">
+        </label>
+        <label class="text-sm">Y (<span x-text="unit"></span>)
+          <input type="number" step="0.1" :value="toUnit(regionsByKind.addressee.yCm)"
+            @input="setVal('addressee','y', $event.target.value)" class="ml-2 w-24 border rounded px-2 py-1">
+        </label>
+        <label class="text-sm">Width (<span x-text="unit"></span>)
+          <input type="number" step="0.1" :value="toUnit(regionsByKind.addressee.widthCm)"
+            @input="setVal('addressee','w', $event.target.value)" class="ml-2 w-24 border rounded px-2 py-1">
+        </label>
+        <label class="text-sm">Height (<span x-text="unit"></span>)
+          <input type="number" step="0.1" :value="toUnit(regionsByKind.addressee.heightCm)"
+            @input="setVal('addressee','h', $event.target.value)" class="ml-2 w-24 border rounded px-2 py-1">
+        </label>
+
+        <label class="text-sm">Alignment
+          <select x-model="regionsByKind.addressee.hAlign" class="ml-2 border rounded px-2 py-1">
+            <option value="left">left</option>
+            <option value="right">right</option>
+          </select>
+        </label>
+        <label class="text-sm">Font (pt)
+          <input type="number" step="0.5" x-model.number="regionsByKind.addressee.fontSizePt"
+            class="ml-2 w-20 border rounded px-2 py-1">
+        </label>
+        <label class="text-sm">Line spacing (pt)
+          <input
+            type="number" step="0.1"
+            x-model.number="regionsByKind.addressee.lineSpacing"
+            class="ml-2 w-24 border rounded px-2 py-1">
+        </label>
+
+      </div>
+    </template>
+
+    <!-- Invoice info -->
+    <template x-if="selectedKind==='invoice_info' && regionsByKind.invoice_info">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="col-span-full font-medium">Rechnungsangaben</div>
+
+        <label class="text-sm">X (<span x-text="unit"></span>)
+          <input type="number" step="0.1" :value="toUnit(regionsByKind.invoice_info.xCm)"
+            @input="setVal('invoice_info','x', $event.target.value)" class="ml-2 w-24 border rounded px-2 py-1">
+        </label>
+        <label class="text-sm">Y (<span x-text="unit"></span>)
+          <input type="number" step="0.1" :value="toUnit(regionsByKind.invoice_info.yCm)"
+            @input="setVal('invoice_info','y', $event.target.value)" class="ml-2 w-24 border rounded px-2 py-1">
+        </label>
+        <label class="text-sm">Width (<span x-text="unit"></span>)
+          <input type="number" step="0.1" :value="toUnit(regionsByKind.invoice_info.widthCm)"
+            @input="setVal('invoice_info','w', $event.target.value)" class="ml-2 w-24 border rounded px-2 py-1">
+        </label>
+        <label class="text-sm">Height (<span x-text="unit"></span>)
+          <input type="number" step="0.1" :value="toUnit(regionsByKind.invoice_info.heightCm)"
+            @input="setVal('invoice_info','h', $event.target.value)" class="ml-2 w-24 border rounded px-2 py-1">
+        </label>
+
+        <label class="text-sm">Alignment
+          <select x-model="regionsByKind.invoice_info.hAlign" class="ml-2 border rounded px-2 py-1">
+            <option value="left">left</option>
+            <option value="right">right</option>
+          </select>
+        </label>
+        <label class="text-sm">Font (pt)
+          <input type="number" step="0.5" x-model.number="regionsByKind.invoice_info.fontSizePt"
+            class="ml-2 w-20 border rounded px-2 py-1">
+        </label>
+        <label class="text-sm">Line spacing (pt)
+          <input
+            type="number" step="0.1"
+            x-model.number="regionsByKind.invoice_info.lineSpacing"
+            class="ml-2 w-24 border rounded px-2 py-1">
+        </label>
+
+      </div>
+    </template>
+
+    <!-- main_area -->
+    <template x-if="selectedKind && selectedKind.startsWith('main_area') && regionsByKind.main_area">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="col-span-full font-medium">Hauptbereich</div>
+
+        <div class="col-span-full flex items-center gap-2">
+          <input id="hasp2" type="checkbox" x-model="regionsByKind.main_area.hasPage2" class="h-4 w-4 border rounded">
+          <label for="hasp2" class="text-sm">Enable region on page 2</label>
+        </div>
+
+        <!-- Alignment + Font for main_area (applies to table text) -->
+        <label class="text-sm">Alignment
+          <select x-model="regionsByKind.main_area.hAlign" class="ml-2 border rounded px-2 py-1">
+            <option value="left">left</option>
+            <option value="right">right</option>
+          </select>
+        </label>
+        <label class="text-sm">Font (pt)
+          <input type="number" step="0.5" x-model.number="regionsByKind.main_area.fontSizePt"
+            class="ml-2 w-20 border rounded px-2 py-1">
+        </label>
+        <label class="text-sm">Line spacing (pt)
+          <input
+            type="number" step="0.1"
+            x-model.number="regionsByKind.main_area.lineSpacing"
+            class="ml-2 w-24 border rounded px-2 py-1">
+        </label>
+
+        <div class="col-span-full text-sm font-medium mt-2">Page 1</div>
+        <label class="text-sm">X
+          <input type="number" step="0.1" :value="toUnit(regionsByKind.main_area.xCm)"
+            @input="setVal('main_area','x', $event.target.value)" class="ml-2 w-24 border rounded px-2 py-1">
+        </label>
+        <label class="text-sm">Y
+          <input type="number" step="0.1" :value="toUnit(regionsByKind.main_area.yCm)"
+            @input="setVal('main_area','y', $event.target.value)" class="ml-2 w-24 border rounded px-2 py-1">
+        </label>
+        <label class="text-sm">Width
+          <input type="number" step="0.1" :value="toUnit(regionsByKind.main_area.widthCm)"
+            @input="setVal('main_area','w', $event.target.value)" class="ml-2 w-24 border rounded px-2 py-1">
+        </label>
+        <label class="text-sm">Height
+          <input type="number" step="0.1" :value="toUnit(regionsByKind.main_area.heightCm)"
+            @input="setVal('main_area','h', $event.target.value)" class="ml-2 w-24 border rounded px-2 py-1">
+        </label>
+
+        <template x-if="regionsByKind.main_area.hasPage2">
+          <div class="contents">
+            <div class="col-span-full text-sm font-medium mt-2">Page 2</div>
+            <label class="text-sm">X2
+              <input type="number" step="0.1" :value="toUnit(regionsByKind.main_area.x2Cm)"
+                @input="setVal('main_area','x2', $event.target.value)" class="ml-2 w-24 border rounded px-2 py-1">
+            </label>
+            <label class="text-sm">Y2
+              <input type="number" step="0.1" :value="toUnit(regionsByKind.main_area.y2Cm)"
+                @input="setVal('main_area','y2', $event.target.value)" class="ml-2 w-24 border rounded px-2 py-1">
+            </label>
+            <label class="text-sm">W2
+              <input type="number" step="0.1" :value="toUnit(regionsByKind.main_area.width2Cm)"
+                @input="setVal('main_area','w2', $event.target.value)" class="ml-2 w-24 border rounded px-2 py-1">
+            </label>
+            <label class="text-sm">H2
+              <input type="number" step="0.1" :value="toUnit(regionsByKind.main_area.height2Cm)"
+                @input="setVal('main_area','h2', $event.target.value)" class="ml-2 w-24 border rounded px-2 py-1">
+            </label>
+          </div>
+        </template>
+      </div>
+    </template>
+
+    <!-- Fonts panel -->
+    <div class="p-3 border rounded grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div class="col-span-full font-medium">Fonts (template-wide)</div>
+
+      <label class="text-sm">Normal
+
+        <select x-ref="fontNormal" x-model.defer="templateFonts.normal" class="ml-2 border rounded px-2 py-1 w-full">
+          <option value="">— none —</option>
+          <template x-for="f in availableFonts" :key="f.filename">
+            <option :value="f.filename" x-text="f.filename"></option>
+          </template>
+        </select>
+
+      </label>
+
+      <label class="text-sm">Bold
+
+        <select x-ref="fontBold" x-model.defer="templateFonts.bold" class="ml-2 border rounded px-2 py-1 w-full">
+          <option value="">— none —</option>
+          <template x-for="f in availableFonts" :key="f.filename + '-b'">
+            <option :value="f.filename" x-text="f.filename"></option>
+          </template>
+        </select>
+      </label>
+
+      <label class="text-sm">Italic
+        <select x-ref="fontItalic" x-model.defer="templateFonts.italic" class="ml-2 border rounded px-2 py-1 w-full">
+          <option value="">— none —</option>
+          <template x-for="f in availableFonts" :key="f.filename + '-i'">
+            <option :value="f.filename" x-text="f.filename"></option>
+          </template>
+        </select>
+      </label>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  function letterheadEditor(cfg) {
+    return {
+      // ---- State ----
+      templateID: cfg.templateID,
+      pageWidthCm: cfg.pageWidthCm,
+      pageHeightCm: cfg.pageHeightCm,
+      page1: cfg.page1, page2: cfg.page2,
+      regions: Array.isArray(cfg.regions) ? cfg.regions : [],
+      csrf: cfg.csrf || '',
+      currentPage: 1,
+      unit: 'cm',
+      scale: 1, baseDpi: 150, zoomPreset: 'fit',
+      interactables: new Map(),
+      selectedKind: 'main_area',
+      availableFonts: [],
+      templateFonts: {
+        normal: (cfg.fonts?.normal || '').trim(),
+        bold: (cfg.fonts?.bold || '').trim(),
+        italic: (cfg.fonts?.italic || '').trim(),
+      },
+
+
+      // ---- Derived ----
+      get hasPage2() { return !!this.page2 && this.page2.length > 0 },
+      effectiveDpi() { return Math.round(this.baseDpi * this.scale) },
+      pxPerCm() { return this.effectiveDpi() / 2.54 },
+      cm2px(v) { return v * this.pxPerCm() },
+      px2cm(v) { return v / this.pxPerCm() },
+      pageWidthPxAtDpi(dpi) { return Math.round(this.pageWidthCm * dpi / 2.54) },
+      pageHeightPxAtDpi(dpi) { return Math.round(this.pageHeightCm * dpi / 2.54) },
+      unitFactor() { return this.unit === 'cm' ? 1 : (1 / 2.54) },
+      toUnit(cm) { return (cm * this.unitFactor()).toFixed(2) },
+
+      get regionsByKind() {
+        const map = { addressee: null, invoice_info: null, main_area: null };
+        for (const r of this.regions) {
+          if (r.kind === 'addressee') map.addressee = r;
+          if (r.kind === 'invoice_info') map.invoice_info = r;
+          if (r.kind === 'main_area') {
+            r.hasPage2 = !!r.hasPage2;
+            r.x2Cm = r.x2Cm || 0; r.y2Cm = r.y2Cm || 0; r.width2Cm = r.width2Cm || 0; r.height2Cm = r.height2Cm || 0;
+            if (!r.hAlign) r.hAlign = 'left';
+            if (!r.fontSizePt) r.fontSizePt = 10;
+            if (r.lineSpacing == null) {
+              r.lineSpacing = 12;
+            }
+            map.main_area = r;
+          }
+        }
+        // defaults for addressee/invoice_info too
+        if (map.addressee) {
+          if (!map.addressee.hAlign) map.addressee.hAlign = 'left';
+          if (!map.addressee.fontSizePt) map.addressee.fontSizePt = 10;
+          if (map.addressee.lineSpacing == null) {
+            map.addressee.lineSpacing = 12;
+          }
+        }
+        if (map.invoice_info) {
+          if (!map.invoice_info.hAlign) map.invoice_info.hAlign = 'right';
+          if (!map.invoice_info.fontSizePt) map.invoice_info.fontSizePt = 10;
+          // Default line spacing (pt)
+          if (map.invoice_info.lineSpacing == null) {
+            map.invoice_info.lineSpacing = 12;
+          }
+
+        }
+        return map;
+      },
+
+      // ---- Styles ----
+      btnTab(p) {
+        return (this.currentPage === p ? 'bg-black text-white' : 'border') + (p === 2 && !this.hasPage2 ? ' opacity-50 cursor-not-allowed' : '')
+      },
+      pageStyle() {
+        const bg = (this.currentPage === 1 ? this.page1 : this.page2) || this.page1;
+        const w = this.pageWidthPxAtDpi(this.effectiveDpi());
+        const h = this.pageHeightPxAtDpi(this.effectiveDpi());
+        return `width:${w}px;height:${h}px;background:url('${bg}') left top / 100% 100% no-repeat;position:relative;`;
+      },
+      gridStyle() {
+        const thin = this.cm2px(0.1), bold = this.cm2px(0.5);
+        return `background-image:
+        linear-gradient(to right, rgba(0,0,0,.05) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(0,0,0,.05) 1px, transparent 1px),
+        linear-gradient(to right, rgba(0,0,0,.15) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(0,0,0,.15) 1px, transparent 1px);
+      background-size:${thin}px ${thin}px, ${thin}px ${thin}px, ${bold}px ${bold}px, ${bold}px ${bold}px;`;
+      },
+      boxStyle(r, which) {
+        if (which === 'p2') {
+          return `left:${this.cm2px(r.x2Cm)}px;top:${this.cm2px(r.y2Cm)}px;width:${this.cm2px(r.width2Cm)}px;height:${this.cm2px(r.height2Cm)}px;`;
+        }
+        return `left:${this.cm2px(r.xCm)}px;top:${this.cm2px(r.yCm)}px;width:${this.cm2px(r.widthCm)}px;height:${this.cm2px(r.heightCm)}px;`;
+      },
+
+      // ---- Init / zoom ----
+      async init() {
+        this.fitToWidth();
+        try {
+          const res = await fetch(`/letterhead/${this.templateID}/fonts`, { credentials: 'same-origin' });
+          if (res.ok) {
+            this.availableFonts = await res.json();
+
+            // Falls gespeicherte Fonts nicht (mehr) existieren, in die Liste aufnehmen
+            const ensureListed = (val) => {
+              if (!val) return;
+              if (!this.availableFonts.some(f => f.filename === val)) {
+                this.availableFonts.unshift({ filename: val, missing: true });
+              }
+            };
+            ensureListed(this.templateFonts.normal);
+            ensureListed(this.templateFonts.bold);
+            ensureListed(this.templateFonts.italic);
+
+            // Nach dem Rendern sicherstellen, dass die Selects den Model-Wert anzeigen
+            this.$nextTick(() => {
+              if (this.$refs.fontNormal) this.$refs.fontNormal.value = this.templateFonts.normal || '';
+              if (this.$refs.fontBold) this.$refs.fontBold.value = this.templateFonts.bold || '';
+              if (this.$refs.fontItalic) this.$refs.fontItalic.value = this.templateFonts.italic || '';
+            });
+
+            // nach dem Rendern einmal „nachdrücken“, falls der Browser nicht auto-matched
+            this.$nextTick(() => {
+              const setSel = (q, v) => {
+                const el = this.$root.querySelector(q);
+                if (el && typeof v === 'string') el.value = v;
+              };
+              setSel('select[x-model="templateFonts.normal"]', this.templateFonts.normal);
+              setSel('select[x-model="templateFonts.bold"]', this.templateFonts.bold);
+              setSel('select[x-model="templateFonts.italic"]', this.templateFonts.italic);
+            });
+          }
+        } catch (e) { console.error('font list failed', e); }
+
+        let t = null;
+        window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(() => { if (this.zoomPreset === 'fit') this.fitToWidth() }, 150); });
+        this.$watch('scale', () => this.rebindAll());
+        this.$watch('currentPage', () => this.rebindAll());
+        this.selectedKind = 'main_area';
+      },
+      fitToWidth() {
+        const wrap = this.$refs.wrap;
+        if (!wrap) return;
+        const wrapW = Math.max(320, wrap.clientWidth - 24);
+        const targetW = this.pageWidthPxAtDpi(this.baseDpi);
+        const s = wrapW / targetW;
+        this.scale = Math.max(0.4, Math.min(2.0, s));
+      },
+      applyZoomPreset() {
+        if (this.zoomPreset === 'fit') { this.fitToWidth(); return; }
+        const num = parseFloat(this.zoomPreset) || 1;
+        this.scale = Math.max(0.4, Math.min(2.0, num));
+      },
+      nudgeZoom(step) {
+        this.zoomPreset = 'manual';
+        this.scale = Math.max(0.4, Math.min(2.0, this.scale + step));
+      },
+
+      // ---- Selection helpers ----
+      selectKind(k) { this.selectedKind = k },
+
+      // set value from properties panel
+      setVal(kind, prop, v) {
+        const val = parseFloat(v) || 0;
+        const r = this.regionsByKind[kind];
+        if (!r) return;
+        const toCm = (x) => x / this.unitFactor();
+        if (prop === 'x') r.xCm = toCm(val);
+        if (prop === 'y') r.yCm = toCm(val);
+        if (prop === 'w') r.widthCm = Math.max(0.5, toCm(val));
+        if (prop === 'h') r.heightCm = Math.max(0.5, toCm(val));
+        if (prop === 'x2') r.x2Cm = toCm(val);
+        if (prop === 'y2') r.y2Cm = toCm(val);
+        if (prop === 'w2') r.width2Cm = Math.max(0.5, toCm(val));
+        if (prop === 'h2') r.height2Cm = Math.max(0.5, toCm(val));
+        this.rebindAll();
+      },
+
+      // ---- interact.js binding ----
+      rebindAll() {
+        for (const [el, it] of this.interactables.entries()) { it.unset(); this.interactables.delete(el); }
+        this.$nextTick(() => {
+          // elements bind themselves via x-init
+        });
+      },
+      makeInteractable(el, region, which) {
+        if (!window.interact) return;
+        const grid = this.cm2px(0.1);
+        const restrict = { restriction: this.$refs.page, endOnly: true };
+        const get = (k) => (which === 'p2' ? region[k + '2Cm'] : region[k + 'Cm']);
+        const set = (k, val) => {
+          if (which === 'p2') { region[k + '2Cm'] = val; }
+          else { region[k + 'Cm'] = val; }
+        };
+
+        const it = interact(el)
+          .draggable({
+            listeners: {
+              move: (event) => {
+                const style = window.getComputedStyle(el);
+                const left = parseFloat(style.left) || 0;
+                const top = parseFloat(style.top) || 0;
+                let nx = left + event.dx;
+                let ny = top + event.dy;
+                const maxX = this.cm2px(this.pageWidthCm) - el.offsetWidth;
+                const maxY = this.cm2px(this.pageHeightCm) - el.offsetHeight;
+                nx = Math.max(0, Math.min(maxX, nx));
+                ny = Math.max(0, Math.min(maxY, ny));
+                el.style.left = nx + 'px';
+                el.style.top = ny + 'px';
+                set('x', this.px2cm(nx));
+                set('y', this.px2cm(ny));
+              }
+            },
+            modifiers: [
+              interact.modifiers.snap({ targets: [interact.snappers.grid({ x: grid, y: grid })], range: grid / 2 }),
+              interact.modifiers.restrictRect(restrict),
+            ],
+            inertia: false
+          })
+          .resizable({
+            edges: { left: true, right: true, bottom: true, top: true },
+            listeners: {
+              move: (event) => {
+                const x = (parseFloat(el.style.left) || 0) + event.deltaRect.left;
+                const y = (parseFloat(el.style.top) || 0) + event.deltaRect.top;
+                let w = event.rect.width;
+                let h = event.rect.height;
+                w = Math.max(this.cm2px(0.5), w);
+                h = Math.max(this.cm2px(0.5), h);
+                const maxX = this.cm2px(this.pageWidthCm);
+                const maxY = this.cm2px(this.pageHeightCm);
+                const nx = Math.max(0, Math.min(maxX - w, x));
+                const ny = Math.max(0, Math.min(maxY - h, y));
+                el.style.left = nx + 'px';
+                el.style.top = ny + 'px';
+                el.style.width = w + 'px';
+                el.style.height = h + 'px';
+                set('x', this.px2cm(nx));
+                set('y', this.px2cm(ny));
+                set('width', this.px2cm(w));
+                set('height', this.px2cm(h));
+              }
+            },
+            modifiers: [
+              interact.modifiers.snapSize({ targets: [interact.snappers.grid({ x: grid, y: grid })], range: grid / 2 }),
+              interact.modifiers.restrictEdges(restrict),
+              interact.modifiers.restrictSize({ min: { width: this.cm2px(0.5), height: this.cm2px(0.5) } })
+            ],
+            inertia: false
+          });
+
+        this.interactables.set(el, it);
+      },
+
+      // ---- Persist ----
+      async saveAll() {
+        const r = this.regionsByKind;
+        const payload = {
+          page_width_cm: this.pageWidthCm,
+          page_height_cm: this.pageHeightCm,
+          fonts: {
+            normal: this.templateFonts.normal || "",
+            bold: this.templateFonts.bold || "",
+            italic: this.templateFonts.italic || "",
+          },
+          regions: [r.addressee, r.invoice_info, r.main_area].filter(Boolean)
+        };
+
+        const res = await fetch(`/letterhead/${this.templateID}/regions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': '{{ .CSRFToken }}',
+          },
+          credentials: 'same-origin',
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+          const txt = await res.text().catch(() => '');
+          alert('Save failed: ' + (txt || res.status));
+          return;
+        }
+
+        window.location.replace('/letterhead'); // ← redirect zur Liste
+      }
+    }
+  }
+</script>
+
+{{template "footer.html" .}}

@@ -5,24 +5,81 @@
 	xmlns:rsm="urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100"
 	xmlns:ram="urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100"
 	xmlns:udt="urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100"
+	xmlns:bc="urn:billingcat.de/ns/billingcatsettings"
 >
 	<DefineColor name="green" model="cmyk" c="70" m="8" y="98" k="25" />
-	<AttachFile type="ZUGFeRD invoice" filename="data.xml" ></AttachFile>
+	<AttachFile type="ZUGFeRD invoice" filename="data.xml" />
 	<Options namespaces="strict" />
+
 	<Pageformat height="297mm" width="210mm" />
 	<SetGrid height="12pt" nx="10" />
-	<DefineFontfamily fontsize="10pt" leading="12pt" name="text">
-		<Regular fontface="serif" />
-		<Bold fontface="serif-bold" />
-		<Italic fontface="serif-italic" />
-		<BoldItalic fontface="serif-bolditalic" />
-	</DefineFontfamily>
-	<DefineFontfamily fontsize="8pt" leading="10pt" name="small">
-		<Regular fontface="serif" />
-		<Bold fontface="serif-bold" />
-		<Italic fontface="serif-italic" />
-		<BoldItalic fontface="serif-bolditalic" />
-	</DefineFontfamily>
+
+	<Record element="bc:BillingcatSettings">
+		<SetVariable variable="letterhead" select="bc:letterhead" />
+		<SetVariable variable="region_invoice_info" select="$letterhead/bc:regions/bc:region[@kind = 'invoice_info']" />
+		<SetVariable variable="region_main" select="$letterhead/bc:regions/bc:region[@kind = 'main_area']" />
+		<SetVariable variable="region_addressee" select="$letterhead/bc:regions/bc:region[@kind = 'addressee']"></SetVariable>
+
+		<SetVariable variable="page_wd" select="$letterhead/bc:pageWidthCm" />
+		<SetVariable variable="page_ht" select="$letterhead/bc:pageHeightCm" />
+		<Pageformat height="{$page_ht}cm" width="{$page_wd}cm" />
+
+		<SetVariable variable="pdfPath" select="$letterhead/bc:pdfPath" />
+		<LoadFontfile name="regular" filename="texgyreheros-regular.otf" />
+		<LoadFontfile name="bold" filename="texgyreheros-bold.otf" />
+		<LoadFontfile name="italic" filename="texgyreheros-italic.otf" />
+
+		<ProcessNode select="$letterhead/bc:fonts"/>
+
+		<DefineFontfamily fontsize="{$region_main/bc:fontSizePt}pt" leading="{$region_main/bc:fontSizePt * $region_main/bc:lineSpacing}pt" name="text">
+			<Regular fontface="regular" />
+			<Bold fontface="bold" />
+			<Italic fontface="italic" />
+		</DefineFontfamily>
+
+		<DefineFontfamily fontsize="{$region_main/bc:fontSizePt}pt" leading="{$region_main/bc:fontSizePt * $region_main/bc:lineSpacing}pt" name="main">
+			<Regular fontface="regular" />
+			<Bold fontface="bold" />
+			<Italic fontface="italic" />
+		</DefineFontfamily>
+
+		<DefineFontfamily fontsize="{$region_addressee/bc:fontSizePt}pt" leading="{$region_addressee/bc:fontSizePt * $region_addressee/bc:lineSpacing}pt" name="addressee">
+			<Regular fontface="regular" />
+			<Bold fontface="bold" />
+			<Italic fontface="italic" />
+		</DefineFontfamily>
+
+		<DefineFontfamily fontsize="{$region_invoice_info/bc:fontSizePt}pt" leading="{$region_invoice_info/bc:fontSizePt * $region_invoice_info/bc:lineSpacing}pt" name="invoice_info">
+			<Regular fontface="regular" />
+			<Bold fontface="bold" />
+			<Italic fontface="italic" />
+		</DefineFontfamily>
+
+		<Pagetype name="firstpage" test="true()">
+			<Margin top="{$region_main/bc:yCm}cm" bottom="{$page_ht - $region_main/bc:yCm - $region_main/bc:heightCm}cm" left="{$region_main/bc:xCm}cm" right="{$page_wd - $region_main/bc:xCm - $region_main/bc:widthCm}cm" />
+			<AtPageCreation>
+				<PlaceObject column="0mm" row="0mm">
+					<Image width="{$page_wd}cm" height="{$page_ht}cm" file="{$pdfPath}" />
+				</PlaceObject>
+			</AtPageCreation>
+		</Pagetype>
+	</Record>
+	<Record element="bc:fonts">
+		<ForAll select="*">
+			<Switch>
+				<Case test="local-name() = 'normal'">
+					<LoadFontfile name="regular" filename="{.}"></LoadFontfile>
+				</Case>
+				<Case test="local-name() = 'bold'">
+					<LoadFontfile name="bold" filename="{.}"></LoadFontfile>
+				</Case>
+				<Case test="local-name() = 'italic'">
+					<LoadFontfile name="italic" filename="{.}"></LoadFontfile>
+				</Case>
+			</Switch>
+		</ForAll>
+	</Record>
+
 
 	<Function name="sf:format-iban">
 		<Param name="iban" />
@@ -122,72 +179,6 @@
 		<Value select="format-number($amount, '#,##0.00')" />
 	</Function>
 
-	<Pagetype name="all pages" test="true()">
-		<Margin top="10mm" bottom="10mm" left="20mm" right="10mm" />
-		<AtPageCreation>
-			<Switch>
-				<Case test="sd:file-exists('logo.pdf')">
-					<PlaceObject column="200mm" hreference="right" row="10mm">
-						<Image file="logo.pdf" maxwidth="3.5cm" maxheight="3cm" stretch="yes"/>
-					</PlaceObject>
-				</Case>
-			</Switch>
-		</AtPageCreation>
-		<AtPageShipout>
-			<PlaceObject column="0mm" row="0mm">
-				<Box height="297mm" width="5mm" background-color="green" />
-			</PlaceObject>
-			<SetVariable variable="iban" select="$ApplicableHeaderTradeSettlement/ram:SpecifiedTradeSettlementPaymentMeans/ram:PayeePartyCreditorFinancialAccount/ram:IBANID" />
-			<PlaceObject row="280mm" column="20mm">
-				<Table stretch="max">
-					<Columns>
-						<Loop select="3">
-							<Column width="1*" />
-						</Loop>
-					</Columns>
-					<Tr valign="top">
-						<Td>
-							<Paragraph>
-								<Value select="$SellerTradeParty/ram:Name" />
-								<Br />
-								<Value select="$SellerTradeParty/ram:PostalTradeAddress/ram:LineOne" />
-								<Br />
-								<Switch>
-									<Case test="not(string($SellerTradeParty/ram:PostalTradeAddress/ram:LineTwo) = '')">
-										<Value select="$SellerTradeParty/ram:PostalTradeAddress/ram:LineTwo" />
-										<Br />
-									</Case>
-								</Switch>
-								<Value select="$SellerTradeParty/ram:PostalTradeAddress/ram:PostcodeCode" />
-								<Value>&#xa0;</Value>
-								<Value select="$SellerTradeParty/ram:PostalTradeAddress/ram:CityName" />
-							</Paragraph>
-						</Td>
-						<Switch>
-							<Case test="not(string($iban) = '')">
-								<Td>
-									<Paragraph>
-										<Value>Bankverbindung</Value>
-										<Br />
-										<Value select="$ApplicableHeaderTradeSettlement/ram:SpecifiedTradeSettlementPaymentMeans/ram:PayeePartyCreditorFinancialAccount/ram:AccountName" />
-										<Br />
-										<Value select="sf:format-iban($ApplicableHeaderTradeSettlement/ram:SpecifiedTradeSettlementPaymentMeans/ram:PayeePartyCreditorFinancialAccount/ram:IBANID)" />
-									</Paragraph>
-								</Td>
-							</Case>
-						</Switch>
-						<Td>
-							<Paragraph>
-								<Value>Umsatzsteuer-ID</Value>
-								<Br />
-								<Value select="$SellerTradeParty/ram:SpecifiedTaxRegistration/ram:ID[@schemeID = 'VA']" />
-							</Paragraph>
-						</Td>
-					</Tr>
-				</Table>
-			</PlaceObject>
-		</AtPageShipout>
-	</Pagetype>
 
 	<!-- Generic invoice layout -->
 	<Record element="rsm:CrossIndustryInvoice">
@@ -197,15 +188,115 @@
 		<SetVariable variable="PaymentTerms" select="rsm:SupplyChainTradeTransaction/ram:ApplicableHeaderTradeSettlement/ram:SpecifiedTradePaymentTerms" />
 		<SetVariable variable="currencyCode" select="sf:currency-code-to-text($ApplicableHeaderTradeSettlement/ram:InvoiceCurrencyCode)" />
 
-		<!-- address -->
+		<Switch>
+			<Case test="sd:file-exists('settings.xml')">
+				<SetVariable variable="hasLetterhead" select="true()" />
+				<ProcessNode select="doc('settings.xml')/bc:BillingcatSettings" />
+			</Case>
+			<Otherwise>
+				<!-- generic page type, no PDF letterhead-->
+				<SetVariable variable="hasLetterhead" select="false()" />
+				<DefineFontfamily fontsize="10pt" leading="12pt" name="main">
+					<Regular fontface="serif" />
+					<Bold fontface="serif-bold" />
+					<Italic fontface="serif-italic" />
+					<BoldItalic fontface="serif-bolditalic" />
+				</DefineFontfamily>
+				<DefineFontfamily fontsize="10pt" leading="12pt" name="text">
+					<Regular fontface="serif" />
+					<Bold fontface="serif-bold" />
+					<Italic fontface="serif-italic" />
+					<BoldItalic fontface="serif-bolditalic" />
+				</DefineFontfamily>
+				<DefineFontfamily fontsize="8pt" leading="10pt" name="small">
+					<Regular fontface="serif" />
+					<Bold fontface="serif-bold" />
+					<Italic fontface="serif-italic" />
+					<BoldItalic fontface="serif-bolditalic" />
+				</DefineFontfamily>
+				<DefineFontfamily fontsize="10pt" leading="12pt" name="addressee">
+					<Regular fontface="serif" />
+					<Bold fontface="serif-bold" />
+					<Italic fontface="serif-italic" />
+					<BoldItalic fontface="serif-bolditalic" />
+				</DefineFontfamily>
+				<DefineFontfamily fontsize="10pt" leading="12pt" name="invoice_info">
+					<Regular fontface="serif" />
+					<Bold fontface="serif-bold" />
+					<Italic fontface="serif-italic" />
+					<BoldItalic fontface="serif-bolditalic" />
+				</DefineFontfamily>
+
+				<Pagetype name="all pages" test="true()">
+					<Margin top="10mm" bottom="10mm" left="20mm" right="10mm" />
+					<AtPageShipout>
+						<PlaceObject column="0mm" row="0mm">
+							<Box height="297mm" width="5mm" background-color="green" />
+						</PlaceObject>
+						<SetVariable variable="iban" select="$ApplicableHeaderTradeSettlement/ram:SpecifiedTradeSettlementPaymentMeans/ram:PayeePartyCreditorFinancialAccount/ram:IBANID" />
+						<PlaceObject row="280mm" column="20mm">
+							<Table stretch="max">
+								<Columns>
+									<Loop select="3">
+										<Column width="1*" />
+									</Loop>
+								</Columns>
+								<Tr valign="top">
+									<Td>
+										<Paragraph>
+											<Value select="$SellerTradeParty/ram:Name" />
+											<Br />
+											<Value select="$SellerTradeParty/ram:PostalTradeAddress/ram:LineOne" />
+											<Br />
+											<Switch>
+												<Case test="not(string($SellerTradeParty/ram:PostalTradeAddress/ram:LineTwo) = '')">
+													<Value select="$SellerTradeParty/ram:PostalTradeAddress/ram:LineTwo" />
+													<Br />
+												</Case>
+											</Switch>
+											<Value select="$SellerTradeParty/ram:PostalTradeAddress/ram:PostcodeCode" />
+											<Value>&#xa0;</Value>
+											<Value select="$SellerTradeParty/ram:PostalTradeAddress/ram:CityName" />
+										</Paragraph>
+									</Td>
+									<Switch>
+										<Case test="not(string($iban) = '')">
+											<Td>
+												<Paragraph>
+													<Value>Bankverbindung</Value>
+													<Br />
+													<Value select="$ApplicableHeaderTradeSettlement/ram:SpecifiedTradeSettlementPaymentMeans/ram:PayeePartyCreditorFinancialAccount/ram:AccountName" />
+													<Br />
+													<Value select="sf:format-iban($ApplicableHeaderTradeSettlement/ram:SpecifiedTradeSettlementPaymentMeans/ram:PayeePartyCreditorFinancialAccount/ram:IBANID)" />
+												</Paragraph>
+											</Td>
+										</Case>
+									</Switch>
+									<Td>
+										<Paragraph>
+											<Value>Umsatzsteuer-ID</Value>
+											<Br />
+											<Value select="$SellerTradeParty/ram:SpecifiedTaxRegistration/ram:ID[@schemeID = 'VA']" />
+										</Paragraph>
+									</Td>
+								</Tr>
+							</Table>
+						</PlaceObject>
+					</AtPageShipout>
+				</Pagetype>
+			</Otherwise>
+		</Switch>
+
+		<!-- addressee -->
 		<ProcessNode select="$BuyerTradeParty" />
 		<!-- invoice number and date -->
 		<ProcessNode select="rsm:ExchangedDocument" />
 
 		<!-- opening -->
+		<SetVariable variable="row" select="if ($hasLetterhead) then sd:current-row() else  20" />
 		<Switch>
 			<Case test="sd:variable-exists('opening') and not(string($opening) = '')">
-				<PlaceObject column="1" row="20">
+				<PlaceObject column="1" row="{$row}">
 					<Textblock>
 						<Paragraph>
 							<Value select="$opening" />
@@ -215,7 +306,7 @@
 				<NextRow rows="2" />
 			</Case>
 			<Otherwise>
-				<PlaceObject column="1" row="20">
+				<PlaceObject column="1" row="{$row}">
 					<Box height="1" width="{sd:number-of-columns()}" background-color="-" />
 				</PlaceObject>
 			</Otherwise>
@@ -224,9 +315,9 @@
 
 		<SetVariable variable="ncolumns" select="if ($hasDifferentTax) then 6 else 5" />
 		<PlaceObject>
-			<Table stretch="max" columndistance="5pt" padding="2pt">
+			<Table stretch="max" columndistance="5pt" padding="2pt" fontfamily="main">
 				<Columns>
-					<Column width="1cm" />
+					<Column width="1.5cm" />
 					<Column width="2cm" />
 					<Column width="1*" />
 					<Switch>
@@ -234,8 +325,8 @@
 							<Column width="1cm" />
 						</Case>
 					</Switch>
-					<Column width="2cm" />
-					<Column width="2cm" />
+					<Column width="2.5cm" />
+					<Column width="2.5cm" />
 				</Columns>
 				<Tablehead>
 					<Tablerule />
@@ -465,76 +556,104 @@
 		</ForAll>
 
 		<!-- Invoice number and date -->
-		<PlaceObject column="200mm" row="45mm" hreference="right">
-			<Textblock>
-				<Paragraph textformat="right" html="off">
-					<Value>Datum: </Value>
-					<Value select="sf:format-date(ram:IssueDateTime/udt:DateTimeString)" />
-					<Br />
-					<Value>Rechnung </Value>
-					<Value select="ram:ID" />
-					<Switch>
-						<Case test="not(string($PaymentTerms/ram:DueDateDateTime/udt:DateTimeString) = '')">
+		<Group name="invoice_info">
+			<Contents>
+				<PlaceObject>
+					<Textblock width="180mm" fontfamily="invoice_info">
+						<Paragraph textformat="right" html="off">
+							<Value>Datum: </Value>
+							<Value select="sf:format-date(ram:IssueDateTime/udt:DateTimeString)" />
 							<Br />
-							<Value>Zahlungsziel: </Value>
-							<Value select="sf:format-date($PaymentTerms/ram:DueDateDateTime/udt:DateTimeString)" />
-						</Case>
-					</Switch>
-					<Switch>
-						<Case test="sd:variable-exists('noteREG')">
-							<Br />
-							<Br />
-							<Value select="$noteREG" />
-						</Case>
-					</Switch>
-				</Paragraph>
-			</Textblock>
-		</PlaceObject>
+							<Value>Rechnung </Value>
+							<Value select="ram:ID" />
+							<Switch>
+								<Case test="not(string($PaymentTerms/ram:DueDateDateTime/udt:DateTimeString) = '')">
+									<Br />
+									<Value>Zahlungsziel: </Value>
+									<Value select="sf:format-date($PaymentTerms/ram:DueDateDateTime/udt:DateTimeString)" />
+								</Case>
+							</Switch>
+							<Switch>
+								<Case test="sd:variable-exists('noteREG')">
+									<Br />
+									<Br />
+									<Value select="$noteREG" />
+								</Case>
+							</Switch>
+						</Paragraph>
+					</Textblock>
+				</PlaceObject>
+			</Contents>
+		</Group>
+		<Switch>
+			<Case test="$hasLetterhead">
+				<PlaceObject column="{$region_invoice_info/bc:xCm + $region_invoice_info/bc:widthCm}cm" row="{$region_invoice_info/bc:yCm}cm" hreference="right" groupname="invoice_info" />
+			</Case>
+			<Otherwise>
+				<PlaceObject column="200mm" row="45mm" hreference="right" groupname="invoice_info" />
+			</Otherwise>
+		</Switch>
 
 	</Record>
 
 	<Record element="ram:BuyerTradeParty">
 		<!-- From and recipient-->
-		<PlaceObject column="20mm" row="45mm">
-			<Textblock>
-				<Paragraph fontfamily="small">
-					<Value select="$SellerTradeParty/ram:Name" />
-					<Value> · </Value>
-					<Value select="$SellerTradeParty/ram:PostalTradeAddress/ram:LineOne" />
-					<Value> · </Value>
-					<Switch>
-						<Case test="not(string($SellerTradeParty/ram:PostalTradeAddress/ram:LineTwo) = '')">
-							<Value select="$SellerTradeParty/ram:PostalTradeAddress/ram:LineTwo" />
+		<Switch>
+			<Case test="not($hasLetterhead)">
+				<PlaceObject column="20mm" row="45mm">
+					<Textblock>
+						<Paragraph fontfamily="small">
+							<Value select="$SellerTradeParty/ram:Name" />
 							<Value> · </Value>
-						</Case>
-					</Switch>
-					<Value select="$SellerTradeParty/ram:PostalTradeAddress/ram:PostcodeCode" />
-					<Value>&#xa0;</Value>
-					<Value select="$SellerTradeParty/ram:PostalTradeAddress/ram:CityName" />
-				</Paragraph>
-			</Textblock>
-		</PlaceObject>
-
-		<PlaceObject column="20mm" row="63mm">
-			<Textblock>
-				<Paragraph>
-					<Value select="ram:Name" />
-					<Br />
-					<Value select="ram:DefinedTradeContact/ram:PersonName" />
-					<Br />
-					<Value select="ram:PostalTradeAddress/ram:LineOne" />
-					<Br />
-					<Switch>
-						<Case test="not(string(ram:PostalTradeAddress/ram:LineTwo) = '')">
-							<Value select="ram:PostalTradeAddress/ram:LineTwo" />
+							<Value select="$SellerTradeParty/ram:PostalTradeAddress/ram:LineOne" />
+							<Value> · </Value>
+							<Switch>
+								<Case test="not(string($SellerTradeParty/ram:PostalTradeAddress/ram:LineTwo) = '')">
+									<Value select="$SellerTradeParty/ram:PostalTradeAddress/ram:LineTwo" />
+									<Value> · </Value>
+								</Case>
+							</Switch>
+							<Value select="$SellerTradeParty/ram:PostalTradeAddress/ram:PostcodeCode" />
+							<Value>&#xa0;</Value>
+							<Value select="$SellerTradeParty/ram:PostalTradeAddress/ram:CityName" />
+						</Paragraph>
+					</Textblock>
+				</PlaceObject>
+			</Case>
+		</Switch>
+		<Group name="addressee">
+			<Contents>
+				<PlaceObject>
+					<Textblock width="80mm">
+						<Paragraph fontfamily="addressee">
+							<Value select="ram:Name" />
 							<Br />
-						</Case>
-					</Switch>
-					<Value select="ram:PostalTradeAddress/ram:PostcodeCode" />
-					<Value>&#xa0;</Value>
-					<Value select="ram:PostalTradeAddress/ram:CityName" />
-				</Paragraph>
-			</Textblock>
-		</PlaceObject>
+							<Value select="ram:DefinedTradeContact/ram:PersonName" />
+							<Br />
+							<Value select="ram:PostalTradeAddress/ram:LineOne" />
+							<Br />
+							<Switch>
+								<Case test="not(string(ram:PostalTradeAddress/ram:LineTwo) = '')">
+									<Value select="ram:PostalTradeAddress/ram:LineTwo" />
+									<Br />
+								</Case>
+							</Switch>
+							<Value select="ram:PostalTradeAddress/ram:PostcodeCode" />
+							<Value>&#xa0;</Value>
+							<Value select="ram:PostalTradeAddress/ram:CityName" />
+						</Paragraph>
+					</Textblock>
+				</PlaceObject>
+			</Contents>
+		</Group>
+		<Switch>
+			<Case test="$hasLetterhead">
+				<PlaceObject column="{$region_addressee/bc:xCm}cm" row="{$region_addressee/bc:yCm}cm" groupname="addressee" />
+			</Case>
+			<Otherwise>
+				<PlaceObject column="20mm" row="63mm" groupname="addressee"/>
+			</Otherwise>
+		</Switch>
+
 	</Record>
 </Layout>

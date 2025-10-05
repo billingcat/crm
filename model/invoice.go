@@ -55,6 +55,9 @@ type Invoice struct {
 	IssuedAt         *time.Time    // set when status -> issued
 	PaidAt           *time.Time    // set when status -> paid
 	VoidedAt         *time.Time    // set when status -> voided
+
+	TemplateID *uint
+	Template   *LetterheadTemplate `gorm:"constraint:OnUpdate:CASCADE,OnDelete:SET NULL;"`
 }
 
 // TaxAmount collects the amount for each rate
@@ -135,38 +138,62 @@ func (crmdb *CRMDatenbank) GetMaxCounter(companyID uint, useLocalCounter bool, o
 }
 
 // UpdateInvoice updates an invoice and fully replaces its positions (hard delete + recreate).
-func (crmdb *CRMDatenbank) UpdateInvoice(inv *Invoice, ownerid any) error {
+func (crmdb *CRMDatenbank) UpdateInvoice(inv *Invoice, ownerid uint) error {
 	return crmdb.db.Transaction(func(tx *gorm.DB) error {
 		if inv.ID == 0 {
 			return fmt.Errorf("update invoice: inv.ID is zero")
 		}
 
-		// In draft, totals are only transient
-		vals := *inv
-		if inv.Status == InvoiceStatusDraft {
-			vals.NetTotal = decimal.Zero
-			vals.GrossTotal = decimal.Zero
+		// Felder, die via Formular bearbeitet werden dürfen.
+		// Passe die Liste an dein Invoice-Model an.
+		data := map[string]interface{}{
+			"number":           inv.Number,
+			"date":             inv.Date,
+			"occurrence_date":  inv.OccurrenceDate,
+			"due_date":         inv.DueDate,
+			"tax_type":         inv.TaxType,
+			"currency":         inv.Currency,
+			"tax_number":       inv.TaxNumber,
+			"order_number":     inv.OrderNumber,
+			"supplier_number":  inv.SupplierNumber,
+			"counter":          inv.Counter,
+			"contact_invoice":  inv.ContactInvoice,
+			"opening":          inv.Opening,
+			"footer":           inv.Footer,
+			"exemption_reason": inv.ExemptionReason,
+			"template_id":      inv.TemplateID, // nil => wird zu NULL geschrieben
+			// "status":          inv.Status, // nur falls im Edit erlaubt
+			// KEIN owner_id, company_id etc. hier anfassen.
 		}
 
-		// 1) Update invoice fields (only if OwnerID matches)
+		// In Drafts sollen Totals nicht persistiert werden:
+		if inv.Status == InvoiceStatusDraft {
+			data["net_total"] = decimal.Zero
+			data["gross_total"] = decimal.Zero
+		} else {
+			data["net_total"] = inv.NetTotal
+			data["gross_total"] = inv.GrossTotal
+		}
+
+		// 1) Update invoice row (mit Owner-Gate)
 		if err := tx.Model(&Invoice{}).
 			Where("id = ? AND owner_id = ?", inv.ID, ownerid).
-			Updates(inv).Error; err != nil {
+			Updates(data).Error; err != nil {
 			return fmt.Errorf("update invoice: %w", err)
 		}
 
-		// 2) Delete old positions (only if OwnerID matches)
+		// 2) Delete old positions (Owner-Gate)
 		if err := tx.Where("invoice_id = ? AND owner_id = ?", inv.ID, ownerid).
 			Delete(&InvoicePosition{}).Error; err != nil {
 			return fmt.Errorf("delete positions: %w", err)
 		}
 
-		// 3) Create new positions
+		// 3) Recreate positions
 		if len(inv.InvoicePositions) > 0 {
 			for i := range inv.InvoicePositions {
 				inv.InvoicePositions[i].ID = 0
 				inv.InvoicePositions[i].InvoiceID = inv.ID
-				inv.InvoicePositions[i].OwnerID = ownerid.(uint) // if your model has the field
+				inv.InvoicePositions[i].OwnerID = ownerid
 			}
 			if err := tx.Omit("ID").Create(&inv.InvoicePositions).Error; err != nil {
 				return fmt.Errorf("recreate positions: %w", err)
@@ -196,6 +223,22 @@ func (crmdb *CRMDatenbank) LoadInvoice(id any, ownerid uint) (*Invoice, error) {
 	}
 
 	// Always recalculate in drafts
+	if inv.Status == InvoiceStatusDraft {
+		inv.RecomputeTotals()
+	}
+	return &inv, nil
+}
+
+func (crmdb *CRMDatenbank) LoadInvoiceWithTemplate(id any, ownerid uint) (*Invoice, error) {
+	var inv Invoice
+	q := crmdb.db.Where("owner_id = ?", ownerid).
+		Preload("InvoicePositions", "owner_id = ?", ownerid).
+		Preload("Template", "owner_id = ?", ownerid).
+		Preload("Template.Regions", "owner_id = ?", ownerid)
+
+	if err := q.First(&inv, id).Error; err != nil {
+		return nil, fmt.Errorf("load invoice %v: %w", id, err)
+	}
 	if inv.Status == InvoiceStatusDraft {
 		inv.RecomputeTotals()
 	}

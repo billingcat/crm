@@ -44,6 +44,29 @@
       <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
         id="counter" name="counter" value="{{$invoice.Counter}}">
     </div>
+
+    <div>
+      <label for="letterhead">Briefkopf</label>
+      <div class="relative">
+        <select id="letterhead" name="letterhead_template_id" class="selectbox">
+          {{- $sel := (index . "selectedTemplateID") -}}
+          <option value="" {{ if not $sel }}selected{{ end }}>Automatisch</option>
+          {{- range (index . "letterheads") }}
+          <option value="{{ .ID }}" {{ if and $sel (eq (printf "%d" .ID) $sel) }}selected{{ end }}>
+            {{ .Name }}
+          </option>
+          {{- end }}
+        </select>
+        <svg class="h-5 w-5 ml-1 absolute top-2.5 right-2.5 text-slate-700">
+          <use href="#updownsvg" />
+        </svg>
+      </div>
+      <p class="mt-1 text-xs text-slate-500">
+        „Automatisch“ nutzt <code>layout.xml</code> falls vorhanden, sonst die voreingestellte Layoutdatei.
+      </p>
+    </div>
+
+
     <div class="lg:col-span-6">
       <label for="contactinvoice">Rechnung Ansprechpartner</label>
       <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
@@ -530,13 +553,13 @@
 <script>
   // --- Utilities -------------------------------------------------------------
 
-   // Hilfsfunktion: CSRF aus hidden input holen
+  // Hilfsfunktion: CSRF aus hidden input holen
   function getCSRFToken() {
     const el = document.querySelector('input[name="csrf"]');
     return el?.value || '';
   }
 
-   // Server-API: CSV/XML an Server schicken -> JSON (unser Schema) zurück
+  // Server-API: CSV/XML an Server schicken -> JSON (unser Schema) zurück
   async function serverImportPositions(file) {
     const fd = new FormData();
     fd.append('file', file, file.name);
@@ -559,7 +582,7 @@
   }
 
 
-   function removeAllPositions() {
+  function removeAllPositions() {
     const container = document.getElementById('positions');
     container.querySelectorAll('fieldset.invoicepos').forEach(fs => fs.remove());
     // Nummerierung nach dem Leeren wieder konsistent (jetzt 0 Zeilen)
@@ -591,7 +614,7 @@
   function clearImportError() { showImportError(''); }
 
   // Eine neue leere Position hinzufügen (verwendet deinen Alpine-Button)
- function addEmptyPositionRow() {
+  function addEmptyPositionRow() {
     return new Promise((resolve) => {
       const container = document.getElementById('positions');
       const beforeCount = container.querySelectorAll('fieldset.invoicepos').length;
@@ -619,7 +642,7 @@
   }
 
   // Position befüllen
-  function fillPosition(pos, {unit, quantity, net_price, tax_rate, text}) {
+  function fillPosition(pos, { unit, quantity, net_price, tax_rate, text }) {
     // Fallbacks
     const defaultTax = Number(document.getElementById('defaultTaxRate')?.value || 0);
     const u = unit || 'C62';
@@ -668,7 +691,7 @@
 
 
 
- // Datei-Import End-to-end: JSON lokal, CSV/XML via Server -> JSON
+  // Datei-Import End-to-end: JSON lokal, CSV/XML via Server -> JSON
   async function handleImportFile(file) {
     clearImportError();
     if (!file) return;
@@ -711,7 +734,7 @@
   }
 
 
-// File-Input Listener
+  // File-Input Listener
   document.addEventListener('DOMContentLoaded', () => {
     const fileInput = document.getElementById('import-file');
     if (fileInput) {

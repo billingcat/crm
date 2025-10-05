@@ -146,6 +146,17 @@ func bindInvoice(c echo.Context) (*model.Invoice, error) {
 			mi.InvoicePositions = append(mi.InvoicePositions, mip)
 		}
 	}
+
+	var tmplIDPtr *uint
+	if v := strings.TrimSpace(c.FormValue("letterhead_template_id")); v != "" {
+		if id64, err := strconv.ParseUint(v, 10, 64); err == nil {
+			id := uint(id64)
+			tmplIDPtr = &id
+		} else {
+			return nil, fmt.Errorf("ungültige Briefkopf-ID: %q", v)
+		}
+	}
+	mi.TemplateID = tmplIDPtr
 	return mi, nil
 }
 
@@ -181,6 +192,7 @@ func formatInvoiceNumber(in string, customernumber string, counter int) string {
 func (ctrl *controller) invoiceNew(c echo.Context) error {
 	m := ctrl.defaultResponseMap(c, "Neue Rechnung anlegen")
 	ownerID := c.Get("ownerid").(uint)
+
 	switch c.Request().Method {
 	case http.MethodGet:
 		s, err := ctrl.model.LoadSettings(ownerID)
@@ -196,14 +208,14 @@ func (ctrl *controller) invoiceNew(c echo.Context) error {
 
 		counter, err := ctrl.model.GetMaxCounter(company.ID, s.UseLocalCounter, ownerID)
 		if err != nil {
-			return nil
+			return ErrInvalid(err, "Fehler beim Laden des Zählers")
 		}
 
 		inv := model.Invoice{
 			Counter:          counter + 1,
 			Date:             time.Now(),
 			OccurrenceDate:   time.Now(),
-			DueDate:          time.Now().Add(time.Hour * 24 * 14),
+			DueDate:          time.Now().Add(14 * 24 * time.Hour),
 			SupplierNumber:   company.SupplierNumber,
 			ContactInvoice:   company.ContactInvoice,
 			Opening:          company.InvoiceOpening,
@@ -212,17 +224,30 @@ func (ctrl *controller) invoiceNew(c echo.Context) error {
 			Number:           formatInvoiceNumber(s.InvoiceNumberTemplate, company.Kundennummer, int(counter+1)),
 			ExemptionReason:  company.InvoiceExemptionReason,
 		}
+
+		letterheads, err := ctrl.model.ListLetterheadTemplates(ownerID)
+		if err != nil {
+			return ErrInvalid(err, "Fehler beim Laden der Briefköpfe")
+		}
+
+		if len(letterheads) > 0 {
+			firstLetterhead := letterheads[0]
+			inv.TemplateID = &firstLetterhead.ID // default to first template if available
+			m["selectedTemplateID"] = fmt.Sprintf("%d", firstLetterhead.ID)
+		}
+
 		m["title"] = "Neue Rechnung anlegen"
 		m["invoice"] = inv
 		m["company"] = company
 		m["submit"] = "Rechnung erstellen"
 		m["action"] = "/invoice/new"
 		m["cancel"] = fmt.Sprintf("/company/%s", companyID)
+		m["letterheads"] = letterheads
 
 		return c.Render(http.StatusOK, "invoiceedit.html", m)
 
 	case http.MethodPost:
-		mi, err := bindInvoice(c)
+		mi, err := bindInvoice(c) // s.u. anpassen
 		if err != nil {
 			return ErrInvalid(err, "Fehler beim Verarbeiten der Eingabedaten")
 		}
@@ -232,7 +257,6 @@ func (ctrl *controller) invoiceNew(c echo.Context) error {
 		}
 		return c.Redirect(http.StatusSeeOther, fmt.Sprintf("/invoice/detail/%d", mi.ID))
 	}
-
 	return nil
 }
 
@@ -322,6 +346,36 @@ func (ctrl *controller) invoiceDetail(c echo.Context) error {
 	m["invoice"] = i
 	m["company"] = cpy
 
+	// --- Letterhead info for view ---
+	type letterheadVM struct {
+		Mode       string // "auto" | "selected"
+		Name       string // "Automatisch" oder Template-Name
+		Note       string // kurze Erklärung
+		PreviewURL string // optional
+	}
+
+	// Bestmögliche Anzeige ohne teure I/O – falls du exakt prüfen willst,
+	// ob layout.xml vorhanden ist, kannst du das hier nachrüsten.
+	lh := letterheadVM{
+		Mode: "auto",
+		Name: "Automatisch",
+		Note: `Verwendet "layout.xml", falls vorhanden, sonst die Standard-Layoutdatei.`,
+	}
+
+	if i.TemplateID != nil {
+		// Nur laden, wenn konkret gewählt
+		if tpl, err := ctrl.model.LoadLetterheadTemplate(*i.TemplateID, ownerID); err == nil {
+			lh.Mode = "selected"
+			lh.Name = tpl.Name
+			lh.PreviewURL = tpl.PreviewPage1URL
+			lh.Note = "Dieser Briefkopf wurde explizit für diese Rechnung gewählt."
+		} else {
+			// Fallback, falls gelöscht o.ä.
+			lh.Note = "Hinweis: Der gespeicherte Briefkopf konnte nicht geladen werden. Es wird automatisch gerendert."
+		}
+	}
+
+	m["letterhead"] = lh
 	// NEW: pick up problems from session (set by redirect handler)
 	if v, ok := popProblemsFromSession(c, i.ID); ok {
 		if arr, ok2 := v.([]model.InvoiceProblem); ok2 && len(arr) > 0 {
@@ -397,6 +451,16 @@ func (ctrl *controller) invoiceEdit(c echo.Context) error {
 		if cpy, err = ctrl.model.LoadCompany(i.CompanyID, ownerID); err != nil {
 			return ErrInvalid(err, "Kann Firma nicht laden")
 		}
+		letterheads, err := ctrl.model.ListLetterheadTemplates(ownerID)
+		if err != nil {
+			return ErrInvalid(err, "Fehler beim Laden der Briefköpfe")
+		}
+		var sel string
+		if i.TemplateID != nil {
+			sel = fmt.Sprintf("%d", *i.TemplateID)
+		}
+		m["selectedTemplateID"] = sel
+		m["letterheads"] = letterheads
 		m["title"] = "Rechnung " + i.Number
 		m["invoice"] = i
 		m["company"] = cpy
@@ -496,7 +560,7 @@ func (ctrl *controller) invoiceZUGFeRDPDF(c echo.Context) error {
 	ownerid := c.Get("ownerid").(uint)
 
 	// Load invoice WITHOUT validation – validation lives on /zugferd/validate
-	i, err := ctrl.model.LoadInvoice(c.Param("id"), ownerid)
+	i, err := ctrl.model.LoadInvoiceWithTemplate(c.Param("id"), ownerid)
 	if err != nil {
 		return ErrInvalid(err, "Kann Rechnung nicht laden")
 	}
@@ -586,7 +650,7 @@ func (ctrl *controller) invoiceStatusChange(c echo.Context) error {
 	}
 
 	// AJAX: 200 + JSON with relevant timestamps is handy for optimistic UI updates.
-	inv, loadErr := ctrl.model.LoadInvoice(invoiceID, ownerID)
+	inv, loadErr := ctrl.model.LoadInvoiceWithTemplate(invoiceID, ownerID)
 	if loadErr != nil {
 		return c.NoContent(http.StatusNoContent) // still ok – UI remains consistent
 	}
