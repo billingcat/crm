@@ -41,9 +41,34 @@
                         <a href="/" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium
           {{if eq $.path " /"}}border-primary-light text-white{{else}}border-transparent text-gray-700
                             hover:border-hover hover:text-white{{end}}">Start</a>
-                        <a href="/settings" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium
-          {{if eq $.path " /settings"}}border-primary-light text-white{{else}}border-transparent text-gray-700
-                            hover:border-hover hover:text-white{{end}}">Stammdaten</a>
+                        <div class="relative inline-block text-left" x-data="{open:false}"
+                            @keydown.escape.window="open=false">
+                            <button type="button" @click="open = !open" :aria-expanded="open.toString()"
+                                aria-haspopup="true" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium
+        {{ if or (eq $.path " /settings") (eq $.path " /settings/profile" ) }} border-primary-light text-white {{ else
+                                }} border-transparent text-gray-700 hover:border-hover hover:text-white {{ end }}">
+                                Einstellungen
+                                <svg class="ml-1 h-4 w-4" aria-hidden="true">
+                                    <use href="#updownsvg"></use>
+                                </svg>
+                            </button>
+
+                            <!-- Dropdown Menü -->
+                            <div x-cloak x-show="open" @click.outside="open=false" x-transition
+                                class="absolute left-0 mt-2 w-56 origin-top-left rounded-md shadow-lg bg-white ring-1 ring-black/5 z-50">
+                                <div class="py-1" role="menu" aria-orientation="vertical" tabindex="-1">
+                                    <a href="/settings/profile"
+                                        class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem"
+                                        tabindex="-1">
+                                        Profil
+                                    </a>
+                                    <a href="/settings" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                        role="menuitem" tabindex="-1">
+                                        Stammdaten
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
                         <div class="relative inline-block text-left" x-data="{open:false}"
                             @keydown.escape.window="open=false">
                             <button type="button" @click="open = !open" :aria-expanded="open.toString()"
@@ -160,12 +185,11 @@
     <div class="flex flex-col md:flex-row">
         <!-- Sidebar -->
         <div class="bg-background text-black w-full md:w-64  p-3">
-            <div class="flex-shrink-0 flex items-center">
-                <a href="/">
-                    <img src="/static/images/billingcat.png" alt="Logo" class="h-40 w-40 ">
+            <div class="flex justify-center items-center">
+                <a href="/" class="block">
+                    <img src="/static/images/billingcat.png" alt="Logo" class="h-40 w-40">
                 </a>
             </div>
-
             <div class="space-y-6">
                 {{ if .loggedin}}
                 <div class="flex items-center space-x-2">
