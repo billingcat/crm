@@ -2,6 +2,7 @@ package model
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -308,7 +309,7 @@ type InvoiceProblem struct {
 	Message string
 }
 
-func (crmdb *CRMDatenbank) LoadAndVerifyInvoice(id any, ownerID uint) (*Invoice, []InvoiceProblem, error) {
+func (crmdb *CRMDatenbank) LoadAndVerifyInvoice(id any, ownerID uint) (*Invoice, []einvoice.SemanticError, error) {
 	inv, err := crmdb.LoadInvoice(id, ownerID)
 	if err != nil {
 		return nil, nil, err
@@ -317,30 +318,27 @@ func (crmdb *CRMDatenbank) LoadAndVerifyInvoice(id any, ownerID uint) (*Invoice,
 	if err != nil {
 		return nil, nil, err
 	}
-	problems := crmdb.VerifyInvoice(inv, settings)
-	return inv, problems, nil
-}
-
-// CreateZUGFeRDXML writes the ZUGFeRD XML file to the hard drive. The file name
-// is the invoice id plus the extension ".xml".
-func (crmdb *CRMDatenbank) CreateZUGFeRDXML(inv *Invoice, ownerID any, path string) error {
-	settings, err := crmdb.LoadSettings(ownerID)
-	if err != nil {
-		return err
-	}
 	company, err := crmdb.LoadCompany(inv.CompanyID, ownerID)
 	if err != nil {
-		return err
+		return nil, nil, err
+	}
+	zi := createZUGFerdXML(inv, settings, company)
+
+	err = zi.Validate()
+	if err != nil {
+		var valErr *einvoice.ValidationError
+		if errors.As(err, &valErr) {
+			return inv, valErr.Violations(), nil
+		}
 	}
 
-	var sb strings.Builder
+	return inv, []einvoice.SemanticError{}, nil
+}
 
+func createZUGFerdXML(inv *Invoice, settings *Settings, company *Company) einvoice.Invoice {
 	// combine opening and footer, ignore empty lines
-	// use a dot as separator, this is later replaced by a line break in the PDF
-	// viewer
 	text := strings.TrimSpace(strings.Join(
 		filterEmpty(inv.Opening, inv.Footer), "·"))
-
 	zi := einvoice.Invoice{
 		InvoiceNumber:       inv.Number,
 		InvoiceTypeCode:     380,
@@ -348,7 +346,6 @@ func (crmdb *CRMDatenbank) CreateZUGFeRDXML(inv *Invoice, ownerID any, path stri
 		InvoiceDate:         inv.Date,
 		OccurrenceDateTime:  inv.OccurrenceDate,
 		InvoiceCurrencyCode: inv.Currency,
-		TaxCurrencyCode:     inv.Currency,
 		Notes: []einvoice.Note{{
 			Text: text,
 		}},
@@ -393,6 +390,19 @@ func (crmdb *CRMDatenbank) CreateZUGFeRDXML(inv *Invoice, ownerID any, path stri
 			DueDate: inv.DueDate,
 		}},
 	}
+	// BR-IC-12
+	if inv.TaxType == "K" {
+		zi.ShipTo = &einvoice.Party{
+			Name: company.Name,
+			PostalAddress: &einvoice.PostalAddress{
+				Line1:        company.Adresse1,
+				Line2:        company.Adresse2,
+				City:         company.Ort,
+				PostcodeCode: company.PLZ,
+				CountryID:    countryID(company.Land),
+			},
+		}
+	}
 
 	for _, pos := range inv.InvoicePositions {
 		li := einvoice.InvoiceLine{
@@ -404,13 +414,35 @@ func (crmdb *CRMDatenbank) CreateZUGFeRDXML(inv *Invoice, ownerID any, path stri
 			TaxRateApplicablePercent: pos.TaxRate,
 			Total:                    pos.LineTotal,
 			TaxTypeCode:              "VAT",
-			TaxCategoryCode:          company.InvoiceTaxType,
+			TaxCategoryCode:          inv.TaxType,
 		}
 		zi.InvoiceLines = append(zi.InvoiceLines, li)
 	}
 	zi.UpdateApplicableTradeTax(map[string]string{"AE": inv.ExemptionReason, "K": inv.ExemptionReason})
 	zi.UpdateTotals()
+	// BR-53
+	if !zi.TaxTotalVAT.IsZero() {
+		zi.TaxCurrencyCode = inv.Currency
+	}
 
+	return zi
+}
+
+// WriteZUGFeRDXML writes the ZUGFeRD XML file to the hard drive. The file name
+// is the invoice id plus the extension ".xml".
+func (crmdb *CRMDatenbank) WriteZUGFeRDXML(inv *Invoice, ownerID any, path string) error {
+	settings, err := crmdb.LoadSettings(ownerID)
+	if err != nil {
+		return err
+	}
+	company, err := crmdb.LoadCompany(inv.CompanyID, ownerID)
+	if err != nil {
+		return err
+	}
+
+	var sb strings.Builder
+
+	zi := createZUGFerdXML(inv, settings, company)
 	err = zi.Write(&sb)
 	if err != nil {
 		return err

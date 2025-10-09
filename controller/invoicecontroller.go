@@ -223,6 +223,7 @@ func (ctrl *controller) invoiceNew(c echo.Context) error {
 			InvoicePositions: []model.InvoicePosition{{Position: 1, TaxRate: company.DefaultTaxRate}},
 			Number:           formatInvoiceNumber(s.InvoiceNumberTemplate, company.Kundennummer, int(counter+1)),
 			ExemptionReason:  company.InvoiceExemptionReason,
+			TaxType:          company.InvoiceTaxType,
 		}
 
 		letterheads, err := ctrl.model.ListLetterheadTemplates(ownerID)
@@ -497,9 +498,17 @@ func (ctrl *controller) getPDFPathForInvoice(inv *model.Invoice) string {
 // This yields a clean URL while keeping the messages.
 func (ctrl *controller) invoiceZUGFeRDValidateRedirect(c echo.Context) error {
 	ownerID := c.Get("ownerid").(uint)
-	inv, problems, err := ctrl.model.LoadAndVerifyInvoice(c.Param("id"), ownerID)
+	inv, einvoiceProblems, err := ctrl.model.LoadAndVerifyInvoice(c.Param("id"), ownerID)
 	if err != nil {
 		return ErrInvalid(err, "Kann Rechnung nicht validieren")
+	}
+
+	var problems []model.InvoiceProblem
+	for _, v := range einvoiceProblems {
+		problems = append(problems, model.InvoiceProblem{
+			Level:   "error",
+			Message: v.Rule + ": " + v.Text,
+		})
 	}
 	if err := putProblemsInSession(c, inv.ID, problems); err != nil {
 		return ErrInvalid(err, "Fehler beim Speichern der Validierung")
@@ -537,7 +546,7 @@ func (ctrl *controller) invoiceZUGFeRDXML(c echo.Context) error {
 	}
 
 	// Generate XML even if there would be validation problems
-	if err = ctrl.model.CreateZUGFeRDXML(i, ownerID, outPath); err != nil {
+	if err = ctrl.model.WriteZUGFeRDXML(i, ownerID, outPath); err != nil {
 		return ErrInvalid(err, "Fehler beim Erstellen der ZUGFeRD XML")
 	}
 
@@ -582,7 +591,7 @@ func (ctrl *controller) invoiceZUGFeRDPDF(c echo.Context) error {
 	if err = ensureDir(filepath.Dir(xmlPath)); err != nil {
 		return ErrInvalid(err, "Fehler beim Erstellen des Verzeichnisses für die XML-Datei")
 	}
-	if err = ctrl.model.CreateZUGFeRDXML(i, ownerid, xmlPath); err != nil {
+	if err = ctrl.model.WriteZUGFeRDXML(i, ownerid, xmlPath); err != nil {
 		return ErrInvalid(err, "Fehler beim Erstellen der ZUGFeRD XML")
 	}
 
@@ -659,7 +668,7 @@ func (ctrl *controller) invoiceStatusChange(c echo.Context) error {
 	go func() {
 		logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 		xmlPath := ctrl.getXMLPathForInvoice(inv)
-		if err = ctrl.model.CreateZUGFeRDXML(inv, ownerID, xmlPath); err != nil {
+		if err = ctrl.model.WriteZUGFeRDXML(inv, ownerID, xmlPath); err != nil {
 			logger.Error("creating zugferd xml failed", "invoice_id", invoiceID, "err", err)
 			return
 		}

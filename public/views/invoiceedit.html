@@ -89,14 +89,14 @@
       <label for="taxtype">Steuer</label>
       <div class="relative">
         <select id="taxtype" name="taxtype" class="selectbox">
-          <option value="S" {{if eq $company.InvoiceTaxType "S" }}selected{{end}}>Umsatzsteuerpflichtige Umsätze
+          <option value="S" {{if eq $invoice.TaxType "S" }}selected{{end}}>Umsatzsteuerpflichtige Umsätze
           </option>
-          <option value="G" {{if eq $company.InvoiceTaxType "G" }}selected{{end}}>Ausfuhrlieferung (Außerhalb EU)
+          <option value="G" {{if eq $invoice.TaxType "G" }}selected{{end}}>Ausfuhrlieferung (Außerhalb EU)
           </option>
-          <option value="K" {{if eq $company.InvoiceTaxType "K" }}selected{{end}}>Innergemeinschaftliche Lieferungen
+          <option value="K" {{if eq $invoice.TaxType "K" }}selected{{end}}>Innergemeinschaftliche Lieferungen
             (Innerhalb EU)</option>
-          <option value="E" {{if eq $company.InvoiceTaxType "E" }}selected{{end}}>Steuerfreie Umsätze §4 UStG</option>
-          <option value="AE" {{if eq $company.InvoiceTaxType "AE" }}selected{{end}}>Reverse Charge</option>
+          <option value="E" {{if eq $invoice.TaxType "E" }}selected{{end}}>Steuerfreie Umsätze §4 UStG</option>
+          <option value="AE" {{if eq $invoice.TaxType "AE" }}selected{{end}}>Reverse Charge</option>
         </select>
         <svg class="h-5 w-5 ml-1 absolute top-2.5 right-2.5 text-slate-700">
           <use href="#updownsvg" />
