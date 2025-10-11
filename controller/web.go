@@ -663,7 +663,7 @@ func NewController(crmdb *model.CRMDatenbank) error {
 		Skipper: func(c echo.Context) bool {
 			// allow POSTs to these endpoints without CSRF (e.g., public forms)
 			if c.Request().Method == http.MethodPost {
-				if strings.HasPrefix(c.Path(), "/passwordreset") {
+				if strings.HasPrefix(c.Path(), "/password/reset") {
 					return true
 				}
 				if strings.HasPrefix(c.Path(), "/login") {
@@ -691,10 +691,10 @@ func NewController(crmdb *model.CRMDatenbank) error {
 	e.GET("/set-password", ctrl.showSetPasswordForm)
 	e.POST("/set-password", ctrl.handleSetPasswordSubmit)
 
-	e.GET("/passwordreset/:token", ctrl.showPasswordResetForm)
-	e.POST("/passwordreset/:token", ctrl.handlePasswordResetSubmit)
-	e.GET("/passwordreset", ctrl.showPasswordResetRequest)
-	e.POST("/passwordreset", ctrl.handlePasswordResetRequest)
+	e.GET("/password/reset/:token", ctrl.showPasswordResetForm)
+	e.POST("/password/reset/:token", ctrl.handlePasswordResetSubmit)
+	e.GET("/password/reset", ctrl.showPasswordResetRequest)
+	e.POST("/password/reset", ctrl.handlePasswordResetRequest)
 
 	e.Static("/static", "static")
 	e.Static("/uploads", "uploads")

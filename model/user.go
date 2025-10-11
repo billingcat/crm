@@ -140,11 +140,15 @@ func (crmdb *CRMDatenbank) UpdateUser(u *User) error {
 
 // ---- Password Reset (fixed & safer) ----
 
-// Store hash of the plaintext token + expiry
+// SetPasswordResetToken generates and stores a SHA-256 hash of the given token,
+// along with an expiry timestamp. The token itself is *not* stored in plain text.
+// This function works with PostgreSQL, SQLite, and MySQL/MariaDB.
 func (crmdb *CRMDatenbank) SetPasswordResetToken(u *User, token string, expiry time.Time) error {
 	sum := sha256.Sum256([]byte(token))
-	u.PasswordResetToken = sum[:]
+
+	u.PasswordResetToken = sum[:] // store the 32-byte hash
 	u.PasswordResetExpiry = expiry
+
 	return crmdb.db.Save(u).Error
 }
 
@@ -177,32 +181,73 @@ func (crmdb *CRMDatenbank) ClearPasswordResetToken(u *User) error {
 	return crmdb.db.Save(u).Error
 }
 
-// Portable prefix lookup: we store the full hash and compare constant-time.
-// DB query uses a LIKE on the hex representation of the prefix.
-// For performance, consider storing a hex shadow column with an index.
+// GetUserByResetTokenHashPrefix looks up a user by a prefix of the SHA-256 hash
+// of the reset token. This allows short links (using only part of the hash),
+// while still verifying the full hash afterward for security.
+//
+// Supported databases:
+//   - PostgreSQL: uses encode(bytea, 'hex')
+//   - MySQL/MariaDB: uses HEX() and LOWER()
+//   - SQLite: uses hex() and lower()
+//
+// It performs a prefix match in the database, then verifies the full hash
+// in constant time to avoid timing side-channel attacks.
 func (crmdb *CRMDatenbank) GetUserByResetTokenHashPrefix(fullHash []byte, prefixLen int) (*User, error) {
 	if prefixLen <= 0 || prefixLen > len(fullHash) {
 		return nil, fmt.Errorf("invalid prefix length")
 	}
+
 	prefix := fullHash[:prefixLen]
-	hexPrefix := fmt.Sprintf("%x", prefix)
+	hexPrefix := fmt.Sprintf("%x", prefix) // lower-case hex
+	hexChars := prefixLen * 2              // 1 byte = 2 hex chars
+
+	// Detect current SQL dialect (postgres, sqlite, mysql, mariadb, etc.)
+	dialect := crmdb.db.Dialector.Name()
+
+	var where string
+	var args []any
+
+	switch dialect {
+	case "postgres":
+		// PostgreSQL: encode(bytea, 'hex') returns lower-case hex
+		where = "LEFT(encode(password_reset_token, 'hex'), ?) = ?"
+		args = []any{hexChars, hexPrefix}
+
+	case "mysql", "mariadb":
+		// MySQL/MariaDB: HEX(blob) returns UPPERCASE, so wrap with LOWER()
+		where = "LEFT(LOWER(HEX(password_reset_token)), ?) = ?"
+		args = []any{hexChars, hexPrefix}
+
+	case "sqlite", "sqlite3":
+		// SQLite: hex(blob) returns UPPERCASE; use lower()
+		// SQLite does not have LEFT(), so use substr()
+		where = "substr(lower(hex(password_reset_token)), 1, ?) = ?"
+		args = []any{hexChars, hexPrefix}
+
+	default:
+		// Fallback for unknown dialects: less efficient but portable
+		where = "substr(lower(hex(password_reset_token)), 1, ?) = ?"
+		args = []any{hexChars, hexPrefix}
+	}
 
 	var u User
-	if err := crmdb.db.
-		Where("HEX(password_reset_token) LIKE ?", hexPrefix+"%").
-		First(&u).Error; err != nil {
+	if err := crmdb.db.Where(where, args...).First(&u).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}
 		return nil, err
 	}
 
+	// Constant-time verification of the full hash to prevent timing attacks
 	if !hmac.Equal(u.PasswordResetToken, fullHash) {
 		return nil, nil
 	}
+
+	// Check if token has expired
 	if time.Now().After(u.PasswordResetExpiry) {
 		return nil, ErrTokenExpired
 	}
+
 	return &u, nil
 }
 
