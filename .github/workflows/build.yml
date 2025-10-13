@@ -1,0 +1,19 @@
+name: Build (Go)
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'   # oder z.B. '1.23.x'
+          cache: true
+      - name: Build
+        run: go build ./...
