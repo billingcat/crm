@@ -31,7 +31,7 @@ func (n *Note) BeforeSave(tx *gorm.DB) error {
 }
 
 // -----------------------
-// Hilfsfunktionen
+// Helper functions
 // -----------------------
 
 func normalizeParentType(s string) (string, error) {
@@ -68,7 +68,7 @@ func JoinTags(a []string) string {
 }
 
 // -----------------------
-// CRMDatenbank Methoden
+// database methods
 // -----------------------
 
 func (crmdb *CRMDatenbank) AutoMigrateNotes() error {

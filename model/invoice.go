@@ -145,8 +145,6 @@ func (crmdb *CRMDatenbank) UpdateInvoice(inv *Invoice, ownerid uint) error {
 			return fmt.Errorf("update invoice: inv.ID is zero")
 		}
 
-		// Felder, die via Formular bearbeitet werden dürfen.
-		// Passe die Liste an dein Invoice-Model an.
 		data := map[string]interface{}{
 			"number":           inv.Number,
 			"date":             inv.Date,
@@ -162,9 +160,7 @@ func (crmdb *CRMDatenbank) UpdateInvoice(inv *Invoice, ownerid uint) error {
 			"opening":          inv.Opening,
 			"footer":           inv.Footer,
 			"exemption_reason": inv.ExemptionReason,
-			"template_id":      inv.TemplateID, // nil => wird zu NULL geschrieben
-			// "status":          inv.Status, // nur falls im Edit erlaubt
-			// KEIN owner_id, company_id etc. hier anfassen.
+			"template_id":      inv.TemplateID,
 		}
 
 		// In Drafts sollen Totals nicht persistiert werden:
@@ -389,6 +385,10 @@ func createZUGFerdXML(inv *Invoice, settings *Settings, company *Company) einvoi
 		SpecifiedTradePaymentTerms: []einvoice.SpecifiedTradePaymentTerms{{
 			DueDate: inv.DueDate,
 		}},
+	}
+	zi.BuyerOrderReferencedDocument = inv.OrderNumber
+	if inv.SupplierNumber != "" {
+		zi.Seller.ID = append(zi.Seller.ID, inv.SupplierNumber)
 	}
 	// BR-IC-12
 	if inv.TaxType == "K" {
