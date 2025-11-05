@@ -1,0 +1,178 @@
+{{template "header.html" .}}
+<div id="realcontent" class="realcontent">
+    <h1 class="text-xl font-semibold mb-4">Kunden</h1>
+
+    <!-- Tag-Filter + search -->
+    <div x-data="customerFilter({
+        initialSelected: {{ toJSON $.selectedTags }},
+        allTags: {{ toJSON $.tagCounts }},
+        q: '{{ htmlEscape $.q }}',
+        modeAND: {{ if $.modeAND }}true{{ else }}false{{ end }},
+        base: '/company/list',
+        pageSize: {{ $.pagesize }}
+      })" class="bg-white shadow rounded-xl p-4 mb-4 space-y-3">
+
+        <!-- Tag chips -->
+        <div class="flex flex-wrap gap-2">
+            <template x-for="t in allTags" :key="t.name">
+                <button type="button" @click="toggle(t.name)"
+                    :class="selected.has(t.name) ? 'bg-amber-600 text-white border-amber-700' : 'bg-amber-50 text-amber-900 border-amber-200'"
+                    class="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm">
+                    <span x-text="t.name"></span>
+                    <span class="text-xs opacity-70" x-text="t.count"></span>
+                </button>
+            </template>
+
+            <template x-if="allTags.length === 0">
+                <span class="text-sm text-gray-400 italic">Keine Tags vorhanden</span>
+            </template>
+
+            <div class="ml-auto flex items-center gap-2">
+                <!-- AND/OR toggle -->
+                <label class="inline-flex items-center gap-2 text-sm">
+                    <input type="checkbox" x-model="modeAND" class="rounded border-gray-300">
+                    <span>AND-Modus</span>
+                </label>
+                <!-- Clear -->
+                <button type="button" @click="clear()"
+                    class="text-xs px-2 py-1 border rounded-md bg-white hover:bg-gray-50">
+                    Zurücksetzen
+                </button>
+            </div>
+        </div>
+
+        <!-- Search + Apply -->
+        <div class="flex gap-2">
+            <input type="text" x-model="q" @keydown.enter.prevent="apply(1)" placeholder="Suchen …"
+                class="flex-1 border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400">
+            <button type="button" @click="apply(1)"
+                class="px-4 py-2 bg-primary text-text rounded-button font-bold hover:bg-hover hover:text-white transition-colors">
+                Anwenden
+            </button>
+        </div>
+    </div>
+
+    <!-- Tabelle -->
+    <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Firma
+                    </th>
+                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Land</th>
+                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tags</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200">
+                {{ range $.companies }}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-2">
+                        <a href="/company/{{ .ID }}" class="text-amber-700 hover:underline font-medium">{{ .Name }}</a>
+                    </td>
+                    <td class="px-4 py-2">{{ .Country }}</td>
+                    <td class="px-4 py-2">
+                        {{ $cid := .ID }}
+                        {{ $tags := (tagsForParent $.ownerid "company" $cid) }}
+                        <div class="flex flex-wrap gap-1">
+                            {{ range $tags }}
+                            <span class="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded">{{ .Name }}</span>
+                            {{ end }}
+                        </div>
+                    </td>
+                </tr>
+                {{ else }}
+                <tr>
+                    <td colspan="3" class="px-4 py-6 text-center text-sm text-gray-500">Keine Einträge gefunden.</td>
+                </tr>
+                {{ end }}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    {{ $total := $.total }} {{ $ps := $.pagesize }} {{ $page := $.page }}
+    {{ if gt $total 0 }}
+    <div class="flex items-center justify-between mt-3 text-sm text-gray-600"
+        x-data='customerPager({ total: {{ $.total }}, page: {{ $.page }}, pagesize: {{ $.pagesize }} })'>
+
+        <div class="flex items-center gap-2">
+            <!-- Export Dropdown -->
+<div x-data="{open:false}" class="relative">
+  <button @click="open=!open"
+          class="px-3 py-1 border rounded-md bg-white hover:bg-gray-50">
+    Export
+  </button>
+
+  <!-- Dropdown öffnet NACH OBEN -->
+  <div x-show="open" @click.away="open=false" x-cloak
+       class="absolute bottom-full mb-1 w-36 bg-white border border-gray-200 rounded-md shadow">
+    <a :href="exportUrl('csv')"   class="block px-3 py-2 hover:bg-gray-50">CSV</a>
+    <a :href="exportUrl('excel')" class="block px-3 py-2 hover:bg-gray-50">Excel</a>
+  </div>
+</div>
+            <!-- Info -->
+            <span>Seite {{ $.page }} von {{ ceilDiv $.total $.pagesize }} • {{ $.total }} Einträge</span>
+        </div>
+
+        <div class="flex gap-2">
+            <button class="px-3 py-1 border rounded-md bg-white hover:bg-gray-50" :disabled="page <= 1"
+                @click="goto(page-1)">Zurück</button>
+            <button class="px-3 py-1 border rounded-md bg-white hover:bg-gray-50" :disabled="page >= totalPages"
+                @click="goto(page+1)">Weiter</button>
+        </div>
+    </div>
+
+    {{ end }}
+</div>
+
+<script>
+    function customerFilter({ initialSelected, allTags, q, modeAND, base, pageSize }) {
+        return {
+            allTags: allTags || [],
+            selected: new Set(initialSelected || []),
+            q: q || "",
+            modeAND: !!modeAND,
+            apply(page) {
+                const params = new URLSearchParams();
+                if (this.q.trim()) params.set('q', this.q.trim());
+                [...this.selected].forEach(t => params.append('tags', t));
+                if (this.modeAND) params.set('mode', 'and');
+                if (page && page > 1) params.set('p', String(page));
+                if (pageSize && pageSize !== 25) params.set('ps', String(pageSize));
+                window.location.assign(base + (params.toString() ? '?' + params.toString() : ''));
+            },
+            toggle(name) {
+                if (this.selected.has(name)) this.selected.delete(name); else this.selected.add(name);
+                this.apply(1);
+            },
+            clear() {
+                this.selected.clear();
+                this.q = "";
+                this.modeAND = false;
+                this.apply(1);
+            }
+        }
+    }
+
+    function customerPager({ total, page, pagesize }) {
+        return {
+            total: total, page: page, pagesize: pagesize,
+            get totalPages() { return Math.max(1, Math.ceil(this.total / this.pagesize)); },
+            goto(p) {
+                const url = new URL(window.location.href);
+                url.searchParams.set('p', String(p));
+                window.location.assign(url.toString());
+            },
+            exportUrl(fmt) {
+                const url = new URL(window.location.origin + '/company/list/export');
+                const cur = new URL(window.location.href);
+                // carry over current filters
+                ['q', 'mode', 'p', 'ps'].forEach(k => { const v = cur.searchParams.get(k); if (v) url.searchParams.set(k, v); });
+                cur.searchParams.getAll('tags').forEach(t => url.searchParams.append('tags', t));
+                url.searchParams.set('format', fmt);
+                return url.toString();
+            }
+        }
+    }
+</script>
+{{template "footer.html" .}}

@@ -119,14 +119,17 @@
                                         tabindex="-1">Offene Rechnungen</a>
                                     <a href="/invoices" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                                         role="menuitem" tabindex="-1">Alle Rechnungen</a>
+                                    <a href="/company/list"
+                                        class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem"
+                                        tabindex="-1">Kunden</a>
                                 </div>
                             </div>
                         </div>
                         {{/* when is_admin == true, show /admin/users button */}}
                         {{ if .is_admin }}
-                        <a href="/admin/users" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium
-          {{if eq $.path " /admin/users"}}border-primary-light text-white{{else}}border-transparent text-gray-700
-                            hover:border-hover hover:text-white{{end}}">Benutzer</a>
+                        <a href="/admin/users" class='inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium
+          {{- if eq $.path "/admin/users"}} border-primary-light text-white{{else}} border-transparent text-gray-700
+                            hover:border-hover hover:text-white{{end}}'>Benutzer</a>
                         {{ end }}
                     </div>
                 </div>
@@ -141,7 +144,7 @@
                                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                     <i class="fas fa-search text-gray-400"></i>
                                 </div>
-                                <input onkeyup="searchhandler(event);" id="search" name="search"
+                                <input onkeyup="searchhandler(event);" id="search" name="search" autofocus
                                     class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                     placeholder="Suche" type="search">
                             </div>
@@ -176,6 +179,12 @@
                 <a href="/invoices"
                     class="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">Alle
                     Rechnungen</a>
+                <a href="/company/list"
+                    class="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">Kunden</a>
+                {{ if .is_admin }}
+                <a href="/admin/users"
+                    class="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">Benutzer</a>
+                {{ end }}
             </div>
             {{ end }}
         </div>

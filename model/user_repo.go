@@ -7,7 +7,7 @@ import (
 
 // ListUsers returns a page of users filtered by query `q` (matches email or full name, case-insensitive).
 // It also returns the total count for pagination.
-func (crmdb *CRMDatenbank) ListUsers(q string, offset, limit int) ([]User, int64, error) {
+func (crmdb *CRMDatabase) ListUsers(q string, offset, limit int) ([]User, int64, error) {
 	var (
 		users []User
 		total int64

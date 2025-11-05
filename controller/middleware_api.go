@@ -40,7 +40,7 @@ func (ctrl *controller) APIKeyAuthMiddleware() echo.MiddlewareFunc {
 	}
 }
 
-// kleine Getter
+// small getters
 func apiOwnerID(c echo.Context) uint {
 	if v, ok := c.Get(string(ctxOwnerID)).(uint); ok {
 		return v

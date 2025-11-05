@@ -103,12 +103,12 @@ type Template struct {
 }
 
 // Render satisfies Echo's renderer interface.
-func (t *Template) Render(w io.Writer, name string, data interface{}, _ echo.Context) error {
+func (t *Template) Render(w io.Writer, name string, data any, _ echo.Context) error {
 	return t.templates.ExecuteTemplate(w, name, data)
 }
 
 type controller struct {
-	model *model.CRMDatenbank
+	model *model.CRMDatabase
 }
 
 // defaultResponseMap builds a base map used by most views (title, flashes, auth info, etc.).
@@ -386,7 +386,7 @@ func (ctrl *controller) search(c echo.Context) error {
 }
 
 // NewController wires routes, middleware, renderer, and starts the server.
-func NewController(crmdb *model.CRMDatenbank) error {
+func NewController(crmdb *model.CRMDatabase) error {
 	// Environment-driven logger: Dev=Text+Debug, Prod=JSON+Info
 	var logger *slog.Logger
 	if crmdb.Config.Mode == "development" {
@@ -397,6 +397,7 @@ func NewController(crmdb *model.CRMDatenbank) error {
 
 	// Register types used in gorilla/sessions (e.g., Flash) to avoid gob errors.
 	gob.Register(Flash{})
+	ctrl := controller{model: crmdb}
 
 	// Template functions available in views.
 	var templateFunc = template.FuncMap{
@@ -455,6 +456,16 @@ func NewController(crmdb *model.CRMDatenbank) error {
 			esc := html.EscapeString(s)
 			return template.HTML(strings.ReplaceAll(esc, "\n", "<br>"))
 		},
+		"htmlEscape": func(s string) string {
+			return html.EscapeString(s)
+		},
+		"ceilDiv": func(a, b int64) int64 {
+			if b <= 0 {
+				return a
+			}
+			return (a + b - 1) / b
+		},
+		"tagsForParent": ctrl.tagsForParent,
 		"splitCSV": func(s string) []string {
 			parts := strings.Split(s, ",")
 			out := make([]string, 0, len(parts))
@@ -612,7 +623,6 @@ func NewController(crmdb *model.CRMDatenbank) error {
 	}
 
 	// Inject cookie config (used by SessionWriter to apply cookie options on save).
-	ctrl := controller{model: crmdb}
 	e.Use(ctrl.CookieCfgMiddleware)
 
 	// Flash loader must run after session middleware and before handlers.
@@ -702,6 +712,7 @@ func NewController(crmdb *model.CRMDatenbank) error {
 	ctrl.invoiceInit(e)
 	ctrl.companyInit(e)
 	ctrl.personInit(e)
+	ctrl.tagsInit(e)
 	ctrl.settingsInit(e)
 	ctrl.fileManagerInit(e)
 	ctrl.noteInit(e)

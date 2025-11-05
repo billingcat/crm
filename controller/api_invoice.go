@@ -79,7 +79,7 @@ func (ctrl *controller) apiInvoiceGet(c echo.Context) error {
 		DueDate:    inv.DueDate,
 		CompanyID:  inv.CompanyID,
 	}
-	// optional: ETag für Caching
+	// optional: ETag for caching
 	c.Response().Header().Set("ETag",
 		`W/"inv-`+strconv.FormatUint(uint64(inv.ID), 10)+
 			`-`+strconv.FormatInt(inv.UpdatedAt.Unix(), 10)+`"`)

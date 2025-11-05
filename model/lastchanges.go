@@ -4,19 +4,29 @@ import (
 	"time"
 )
 
-// ---- Unified Feed Kopfzeilen (UNION über SQLite) ----
+// ---- Unified activity feed headers (via SQL UNION, optimized for SQLite) ----
 
+// ActivityHead represents a normalized, cross-entity activity item.
+// It unifies companies, invoices, and notes into a single chronological feed.
 type ActivityHead struct {
 	ItemType   string    `gorm:"column:item_type"` // "company" | "invoice" | "note"
 	ItemID     uint      `gorm:"column:item_id"`
 	CreatedAt  time.Time `gorm:"column:created_at"`
-	CompanyID  *uint     `gorm:"column:company_id"`  // nur für invoices
-	ParentType *string   `gorm:"column:parent_type"` // nur für notes
-	ParentID   *uint     `gorm:"column:parent_id"`   // nur für notes
+	CompanyID  *uint     `gorm:"column:company_id"`  // Only for invoices
+	ParentType *string   `gorm:"column:parent_type"` // Only for notes
+	ParentID   *uint     `gorm:"column:parent_id"`   // Only for notes
 }
 
-// Global neueste Items über alle Typen.
-func (crmdb *CRMDatenbank) GetActivityHeads(userID any, limit int) ([]ActivityHead, error) {
+// GetActivityHeads returns the most recent items across all major entity types
+// (companies, invoices, notes) for a given owner/user, ordered by creation time descending.
+//
+// Internally this uses a SQL UNION to merge multiple tables into a unified feed.
+// This avoids complex ORM joins and is efficient for SQLite (and other simple dialects).
+//
+// Parameters:
+//   - userID: owner/tenant identifier (scopes the query)
+//   - limit:  max number of feed items to return (defaults to 20 if <= 0)
+func (crmdb *CRMDatabase) GetActivityHeads(userID any, limit int) ([]ActivityHead, error) {
 	if limit <= 0 {
 		limit = 20
 	}
@@ -55,16 +65,21 @@ FROM notes
 WHERE owner_id = ?
 
 ORDER BY created_at DESC
-LIMIT ?;	`
+LIMIT ?;`
+
 	if err := crmdb.db.Raw(raw, userID, userID, userID, limit).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
 	return rows, nil
 }
 
-// ---- Batch-Loader (verhindern N+1) ----
+// ---- Batch loaders (prevent N+1 query patterns) ----
+//
+// Each of the following methods loads all entities of a given type for a
+// specific owner, given a slice of IDs. This allows hydrating multiple items
+// efficiently when building composite views or feeds.
 
-func (crmdb *CRMDatenbank) CompaniesByIDs(ownerID any, ids []uint) (map[uint]Company, error) {
+func (crmdb *CRMDatabase) CompaniesByIDs(ownerID any, ids []uint) (map[uint]Company, error) {
 	out := make(map[uint]Company)
 	if len(ids) == 0 {
 		return out, nil
@@ -81,7 +96,7 @@ func (crmdb *CRMDatenbank) CompaniesByIDs(ownerID any, ids []uint) (map[uint]Com
 	return out, nil
 }
 
-func (crmdb *CRMDatenbank) PeopleByIDs(ownerID any, ids []uint) (map[uint]Person, error) {
+func (crmdb *CRMDatabase) PeopleByIDs(ownerID any, ids []uint) (map[uint]Person, error) {
 	out := make(map[uint]Person)
 	if len(ids) == 0 {
 		return out, nil
@@ -98,7 +113,7 @@ func (crmdb *CRMDatenbank) PeopleByIDs(ownerID any, ids []uint) (map[uint]Person
 	return out, nil
 }
 
-func (crmdb *CRMDatenbank) InvoicesByIDs(ownerID any, ids []uint) (map[uint]Invoice, error) {
+func (crmdb *CRMDatabase) InvoicesByIDs(ownerID any, ids []uint) (map[uint]Invoice, error) {
 	out := make(map[uint]Invoice)
 	if len(ids) == 0 {
 		return out, nil
@@ -115,7 +130,7 @@ func (crmdb *CRMDatenbank) InvoicesByIDs(ownerID any, ids []uint) (map[uint]Invo
 	return out, nil
 }
 
-func (crmdb *CRMDatenbank) NotesByIDs(ownerID any, ids []uint) (map[uint]Note, error) {
+func (crmdb *CRMDatabase) NotesByIDs(ownerID any, ids []uint) (map[uint]Note, error) {
 	out := make(map[uint]Note)
 	if len(ids) == 0 {
 		return out, nil
@@ -132,8 +147,10 @@ func (crmdb *CRMDatenbank) NotesByIDs(ownerID any, ids []uint) (map[uint]Note, e
 	return out, nil
 }
 
-// ---- Komfort: alles in einem Rutsch laden ----
+// ---- Convenience: hydrate all related data in one pass ----
 
+// ActivityHydration aggregates feed headers with preloaded entity data.
+// This allows building a unified, fully-hydrated activity stream without N+1 queries.
 type ActivityHydration struct {
 	Heads     []ActivityHead
 	Companies map[uint]Company
@@ -142,13 +159,18 @@ type ActivityHydration struct {
 	Notes     map[uint]Note
 }
 
-func (crmdb *CRMDatenbank) LoadActivity(ownerID any, limit int) (*ActivityHydration, error) {
+// LoadActivity loads the latest unified feed (activity heads) and preloads
+// all referenced entities (companies, people, invoices, notes) in batch.
+//
+// This method effectively produces a complete in-memory view of recent activity
+// without issuing a separate SQL query per item.
+func (crmdb *CRMDatabase) LoadActivity(ownerID any, limit int) (*ActivityHydration, error) {
 	heads, err := crmdb.GetActivityHeads(ownerID, limit)
 	if err != nil {
 		return nil, err
 	}
 
-	// IDs einsammeln
+	// Collect referenced IDs by entity type
 	companySet := make(map[uint]struct{})
 	personSet := make(map[uint]struct{})
 	invoiceSet := make(map[uint]struct{})
@@ -184,7 +206,7 @@ func (crmdb *CRMDatenbank) LoadActivity(ownerID any, limit int) (*ActivityHydrat
 		return out
 	}
 
-	// Batch-Ladevorgänge
+	// Batch load all entity types in parallel-friendly sequence
 	cmap, err := crmdb.CompaniesByIDs(ownerID, toSlice(companySet))
 	if err != nil {
 		return nil, err

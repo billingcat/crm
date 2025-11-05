@@ -75,10 +75,10 @@ type TemplateFonts struct {
 	Italic string
 }
 
-// -------------------- Data access on CRMDatenbank (no DB usage in controllers) --------------------
+// -------------------- Data access on CRMDatabase (no DB usage in controllers) --------------------
 
 // SaveLetterheadTemplate creates or updates a letterhead template. Ownership is enforced.
-func (db *CRMDatenbank) SaveLetterheadTemplate(t *LetterheadTemplate, ownerID uint) error {
+func (db *CRMDatabase) SaveLetterheadTemplate(t *LetterheadTemplate, ownerID uint) error {
 	if t.OwnerID != ownerID {
 		return errors.New("save letterhead: ownerid mismatch")
 	}
@@ -88,7 +88,7 @@ func (db *CRMDatenbank) SaveLetterheadTemplate(t *LetterheadTemplate, ownerID ui
 }
 
 // LoadLetterheadTemplate loads a template (including its regions) for a given owner.
-func (db *CRMDatenbank) LoadLetterheadTemplate(id, ownerID uint) (*LetterheadTemplate, error) {
+func (db *CRMDatabase) LoadLetterheadTemplate(id, ownerID uint) (*LetterheadTemplate, error) {
 	var t LetterheadTemplate
 	if err := db.db.Preload("Regions").
 		Where("id = ? AND owner_id = ?", id, ownerID).
@@ -99,7 +99,7 @@ func (db *CRMDatenbank) LoadLetterheadTemplate(id, ownerID uint) (*LetterheadTem
 }
 
 // ListLetterheadTemplates returns all templates for a given owner.
-func (db *CRMDatenbank) ListLetterheadTemplates(ownerID uint) ([]LetterheadTemplate, error) {
+func (db *CRMDatabase) ListLetterheadTemplates(ownerID uint) ([]LetterheadTemplate, error) {
 	var list []LetterheadTemplate
 	if err := db.db.Where("owner_id = ?", ownerID).
 		Order("updated_at DESC").
@@ -109,7 +109,7 @@ func (db *CRMDatenbank) ListLetterheadTemplates(ownerID uint) ([]LetterheadTempl
 	return list, nil
 }
 
-func (db *CRMDatenbank) LoadLetterheadTemplateAnyOwner(id uint) (*LetterheadTemplate, error) {
+func (db *CRMDatabase) LoadLetterheadTemplateAnyOwner(id uint) (*LetterheadTemplate, error) {
 	var t LetterheadTemplate
 	if err := db.db.Preload("Regions").
 		Where("id = ?", id).
@@ -120,7 +120,7 @@ func (db *CRMDatenbank) LoadLetterheadTemplateAnyOwner(id uint) (*LetterheadTemp
 }
 
 // Optional Convenience: kapselt die Zugriffspolitik
-func (db *CRMDatenbank) LoadLetterheadTemplateForAccess(id, ownerID uint, isAdmin bool) (*LetterheadTemplate, error) {
+func (db *CRMDatabase) LoadLetterheadTemplateForAccess(id, ownerID uint, isAdmin bool) (*LetterheadTemplate, error) {
 	if isAdmin {
 		return db.LoadLetterheadTemplateAnyOwner(id)
 	}
@@ -128,7 +128,7 @@ func (db *CRMDatenbank) LoadLetterheadTemplateForAccess(id, ownerID uint, isAdmi
 }
 
 // UpdateLetterheadPageSize updates page size (in cm) of a template.
-func (db *CRMDatenbank) UpdateLetterheadPageSize(id, ownerID uint, wcm, hcm float64) error {
+func (db *CRMDatabase) UpdateLetterheadPageSize(id, ownerID uint, wcm, hcm float64) error {
 	return db.db.Model(&LetterheadTemplate{}).
 		Where("id = ? AND owner_id = ?", id, ownerID).
 		Updates(map[string]any{
@@ -138,7 +138,7 @@ func (db *CRMDatenbank) UpdateLetterheadPageSize(id, ownerID uint, wcm, hcm floa
 }
 
 // UpdateLetterheadPreviewURLs updates preview image URLs.
-func (db *CRMDatenbank) UpdateLetterheadPreviewURLs(id, ownerID uint, page1URL, page2URL string) error {
+func (db *CRMDatabase) UpdateLetterheadPreviewURLs(id, ownerID uint, page1URL, page2URL string) error {
 	return db.db.Model(&LetterheadTemplate{}).
 		Where("id = ? AND owner_id = ?", id, ownerID).
 		Updates(map[string]any{
@@ -149,7 +149,7 @@ func (db *CRMDatenbank) UpdateLetterheadPreviewURLs(id, ownerID uint, page1URL, 
 
 // EnsureDefaultLetterheadRegions makes sure the three fixed regions exist for the template.
 // It creates missing ones with sane defaults, but does not delete anything.
-func (db *CRMDatenbank) EnsureDefaultLetterheadRegions(templateID, ownerID uint, pageWidthCm, pageHeightCm float64) error {
+func (db *CRMDatabase) EnsureDefaultLetterheadRegions(templateID, ownerID uint, pageWidthCm, pageHeightCm float64) error {
 	return db.db.Transaction(func(tx *gorm.DB) error {
 		var existing []PlacedRegion
 		if err := tx.Where("template_id = ? AND owner_id = ?", templateID, ownerID).
@@ -194,7 +194,7 @@ func (db *CRMDatenbank) EnsureDefaultLetterheadRegions(templateID, ownerID uint,
 
 // UpdateLetterheadRegionsAndFonts speichert Regions und zusätzlich
 // Template-Meta (Fonts + Page-Size) atomar in einer Transaktion.
-func (db *CRMDatenbank) UpdateLetterheadRegionsAndFonts(
+func (db *CRMDatabase) UpdateLetterheadRegionsAndFonts(
 	templateID, ownerID uint,
 	regions []PlacedRegion,
 	fonts *TemplateFonts,
@@ -205,7 +205,6 @@ func (db *CRMDatenbank) UpdateLetterheadRegionsAndFonts(
 	}
 
 	return db.db.Transaction(func(tx *gorm.DB) error {
-		// 1) Template-Owner prüfen / sichern
 		var tpl LetterheadTemplate
 		if err := tx.Select("id, owner_id").
 			Where("id = ? AND owner_id = ?", templateID, ownerID).
@@ -213,8 +212,7 @@ func (db *CRMDatenbank) UpdateLetterheadRegionsAndFonts(
 			return err
 		}
 
-		// 2) Template-Meta updaten (Fonts + Page-Size) – gezielt über Updates-Map
-		meta := map[string]interface{}{}
+		meta := map[string]any{}
 		if pageW > 0 {
 			meta["page_width_cm"] = pageW
 		}
@@ -222,7 +220,6 @@ func (db *CRMDatenbank) UpdateLetterheadRegionsAndFonts(
 			meta["page_height_cm"] = pageH
 		}
 		if fonts != nil {
-			// Strings können leer sein, wenn der User "— none —" wählt → bewusst setzen
 			meta["font_normal"] = fonts.Normal
 			meta["font_bold"] = fonts.Bold
 			meta["font_italic"] = fonts.Italic
@@ -235,7 +232,6 @@ func (db *CRMDatenbank) UpdateLetterheadRegionsAndFonts(
 			}
 		}
 
-		// 3) Regions wie in deiner bisherigen Implementierung
 		var current []PlacedRegion
 		if err := tx.Where("template_id = ? AND owner_id = ?", templateID, ownerID).
 			Find(&current).Error; err != nil {
@@ -294,7 +290,7 @@ func (db *CRMDatenbank) UpdateLetterheadRegionsAndFonts(
 }
 
 // DeleteLetterheadTemplate deletes a template (regions auto-delete via CASCADE).
-func (db *CRMDatenbank) DeleteLetterheadTemplate(id, ownerID uint) error {
+func (db *CRMDatabase) DeleteLetterheadTemplate(id, ownerID uint) error {
 	return db.db.Where("id = ? AND owner_id = ?", id, ownerID).
 		Delete(&LetterheadTemplate{}).Error
 }

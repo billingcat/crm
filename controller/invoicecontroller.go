@@ -88,7 +88,7 @@ func bindInvoice(c echo.Context) (*model.Invoice, error) {
 	ownerID := c.Get("ownerid").(uint)
 	i := invoice{}
 	dec := form.NewDecoder()
-	dec.RegisterCustomTypeFunc(func(vals []string) (interface{}, error) {
+	dec.RegisterCustomTypeFunc(func(vals []string) (any, error) {
 		return time.Parse("2006-01-02", vals[0])
 	}, time.Time{})
 	err := c.Request().ParseForm()
@@ -221,7 +221,7 @@ func (ctrl *controller) invoiceNew(c echo.Context) error {
 			Opening:          company.InvoiceOpening,
 			Footer:           company.InvoiceFooter,
 			InvoicePositions: []model.InvoicePosition{{Position: 1, TaxRate: company.DefaultTaxRate}},
-			Number:           formatInvoiceNumber(s.InvoiceNumberTemplate, company.Kundennummer, int(counter+1)),
+			Number:           formatInvoiceNumber(s.InvoiceNumberTemplate, company.CustomerNumber, int(counter+1)),
 			ExemptionReason:  company.InvoiceExemptionReason,
 			TaxType:          company.InvoiceTaxType,
 		}
@@ -420,7 +420,7 @@ func (ctrl *controller) invoiceDuplicate(c echo.Context) error {
 	if err != nil {
 		return ErrInvalid(err, "Kann Firma nicht laden")
 	}
-	i.Number = formatInvoiceNumber(s.InvoiceNumberTemplate, company.Kundennummer, int(i.Counter))
+	i.Number = formatInvoiceNumber(s.InvoiceNumberTemplate, company.CustomerNumber, int(i.Counter))
 	// update all invoice positions: set ID to 0
 	for idx := range i.InvoicePositions {
 		i.InvoicePositions[idx].ID = 0
@@ -1009,7 +1009,7 @@ func (ctrl *controller) invoiceList(c echo.Context) error {
 		}
 
 		// Header row (row 1)
-		header := []interface{}{"No.", "Company", "Date", "Due", "Status", "Net", "Gross"}
+		header := []any{"No.", "Company", "Date", "Due", "Status", "Net", "Gross"}
 		if err := sw.SetRow("A1", header); err != nil {
 			return err
 		}
@@ -1024,7 +1024,7 @@ func (ctrl *controller) invoiceList(c echo.Context) error {
 			netF64 := r.NetTotal.Round(2).InexactFloat64()
 			grossF64 := r.GrossTotal.Round(2).InexactFloat64()
 
-			row := []interface{}{
+			row := []any{
 				r.Number,                  // A
 				company,                   // B
 				r.Date,                    // C (as time.Time, will be styled as date)

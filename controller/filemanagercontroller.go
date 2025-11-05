@@ -33,7 +33,7 @@ type FileRow struct {
 	IsDir     bool
 }
 
-// calcDirSize summiert rekursiv die Dateigröße
+// calcDirSize sums the file sizes recursively
 func calcDirSize(path string) (int64, error) {
 	var size int64
 	err := filepath.WalkDir(path, func(_ string, d fs.DirEntry, err error) error {
@@ -66,12 +66,12 @@ func humanSize(bytes int64) string {
 		float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
-// safeJoin stellt sicher, dass path IM baseDir liegt (kein Path Traversal).
+// safeJoin ensures that path is INSIDE baseDir (prevents path traversal).
 func safeJoin(base, name string) (string, error) {
-	clean := filepath.Clean("/" + name) // führt z.B. "../" neutralisiert
+	clean := filepath.Clean("/" + name) // neutralizes sequences like "../"
 	rel := strings.TrimPrefix(clean, "/")
 	full := filepath.Join(base, rel)
-	// Absicherung, dass full unter base liegt:
+	// Ensure that full is under base:
 	baseAbs, _ := filepath.Abs(base)
 	fullAbs, _ := filepath.Abs(full)
 	if !strings.HasPrefix(fullAbs, baseAbs+string(os.PathSeparator)) && fullAbs != baseAbs {
@@ -87,7 +87,7 @@ func (ctrl *controller) filemanagerList(c echo.Context) error {
 	ownerID := c.Get("ownerid")
 
 	dirPath := filepath.Join(ctrl.model.Config.Basedir, "assets", "userassets", fmt.Sprintf("owner%d", ownerID))
-	// Sicherstellen, dass der Ordner existiert
+	// Ensure the folder exists
 	if err := os.MkdirAll(dirPath, 0755); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
@@ -118,10 +118,10 @@ func (ctrl *controller) filemanagerList(c echo.Context) error {
 }
 
 func (ctrl *controller) filemanagerUploadHandler(c echo.Context) error {
-	// Optional: Subdir
+	// Optional: subdirectory
 	baseDir := filepath.Join(ctrl.model.Config.Basedir, "assets", "userassets", fmt.Sprintf("owner%d", c.Get("ownerid")))
 
-	// aktuelle Größe berechnen
+	// calculate current size
 	used, err := calcDirSize(baseDir)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -133,7 +133,7 @@ func (ctrl *controller) filemanagerUploadHandler(c echo.Context) error {
 	}
 	files := form.File["files"]
 
-	// Größe der Uploads addieren
+	// Add up sizes of the uploads
 	var newSize int64
 	for _, fh := range files {
 		newSize += fh.Size
@@ -146,7 +146,7 @@ func (ctrl *controller) filemanagerUploadHandler(c echo.Context) error {
 	}
 
 	for _, fh := range files {
-		// Dateiname härten
+		// Harden filename
 		filename := filepath.Base(fh.Filename)
 
 		dstPath, err := safeJoin(baseDir, filename)
@@ -160,7 +160,7 @@ func (ctrl *controller) filemanagerUploadHandler(c echo.Context) error {
 		}
 		defer src.Close()
 
-		// Datei erstellen (fehlschlagen, wenn existiert – optional)
+		// Create file (fail if exists – optional)
 		dst, err := os.OpenFile(dstPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -177,7 +177,7 @@ func (ctrl *controller) filemanagerUploadHandler(c echo.Context) error {
 }
 
 func (ctrl *controller) filemanagerDeleteHandler(c echo.Context) error {
-	path := c.FormValue("path") // relativer Pfad vom UI
+	path := c.FormValue("path") // relative path from UI
 	baseDir := filepath.Join(ctrl.model.Config.Basedir, "assets", "userassets", fmt.Sprintf("owner%d", c.Get("ownerid")))
 
 	full, err := safeJoin(baseDir, path)
@@ -189,7 +189,7 @@ func (ctrl *controller) filemanagerDeleteHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "not found")
 	}
 	if info.IsDir() {
-		// Optional: ganze Ordner löschen erlauben?
+		// Optional: allow deleting entire directories?
 		return echo.NewHTTPError(http.StatusBadRequest, "refusing to delete directories")
 	}
 	if err := os.Remove(full); err != nil {

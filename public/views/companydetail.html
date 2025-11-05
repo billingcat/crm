@@ -1,7 +1,150 @@
 {{template "header.html" .}}
 {{with .companydetail}}
+
 <div class="mb-8" id="main-content">
   <h2 class="text-xl font-semibold text-gray-800 mb-4">{{.Name}}</h2>
+
+  <div x-data="tagPicker({
+    initial: {{ toJSON $.ExistingTags }},
+    saveUrl: '/company/{{ .ID }}/tags',
+    suggestUrl: '/tags',
+    csrf: '{{ $.CSRFToken }}'
+  })" class="space-y-2">
+    <!-- Head row: chips + toggle -->
+    <div class="flex flex-wrap items-center gap-2 mb-2">
+      <!-- Chips / Empty state -->
+      <template x-if="tags.length === 0">
+        <span class="inline-flex items-center rounded-full bg-gray-100 text-gray-500 px-3 py-1 text-sm">
+          Keine Tags vergeben
+        </span>
+      </template>
+
+      <template x-for="(t,i) in tags" :key="t">
+        <span class="inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-medium
+             bg-amber-50 text-amber-900 border border-amber-200
+             transition hover:bg-amber-100">
+          <span x-text="t"></span>
+          <button type="button" @click="remove(i)" class="ml-1 text-amber-700 hover:text-red-600 focus:outline-none"
+            title="Tag entfernen">
+            &times;
+          </button>
+        </span>
+      </template>
+
+      <!-- Toggle Button -->
+      <button type="button" @click="toggleInput()" class="ml-auto inline-flex items-center gap-1.5 rounded-full border border-amber-300
+         bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800
+         shadow-sm hover:bg-amber-100 hover:border-amber-400
+         focus:outline-none focus:ring-2 focus:ring-amber-300/40 transition">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        </svg> Tags bearbeiten
+      </button>
+    </div>
+
+    <!-- Collapsible input / combobox -->
+    <div class="relative" x-show="showInput" x-transition x-cloak>
+      <input x-ref="tagInput" x-model="query" @input.debounce.200ms="search()" @keydown.down.prevent="move(1)"
+        @keydown.up.prevent="move(-1)" @keydown.enter.prevent="choose()" @keydown.escape="showInput=false; open=false"
+        type="text" placeholder="Tag hinzufügen…" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm
+             focus:ring-2 focus:ring-amber-400 focus:border-amber-400" role="combobox" :aria-expanded="open" />
+
+      <!-- Dropdown -->
+      <div x-show="open" x-transition.opacity x-cloak
+        class="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg" role="listbox">
+        <template x-for="(name,idx) in results" :key="name">
+          <button type="button" @click="add(name)"
+            :class="['block w-full text-left px-3 py-2 text-sm', idx===active ? 'bg-amber-50' : 'hover:bg-gray-50']">
+            <span x-text="name"></span>
+          </button>
+        </template>
+        <button type="button" x-show="query && !exists(query)" @click="add(query)"
+          class="block w-full text-left px-3 py-2 text-sm text-amber-700 hover:bg-amber-50">
+          „<span x-text="query"></span>“ erstellen
+        </button>
+      </div>
+    </div>
+
+    <!-- Subtle message -->
+    <p x-show="message" x-transition.opacity class="text-xs text-green-700" x-text="message"></p>
+  </div>
+
+  <script>
+    document.addEventListener('alpine:init', () => {
+      Alpine.data('tagPicker', ({ initial = [], saveUrl, suggestUrl, csrf }) => ({
+        // state
+        tags: [...new Set(initial)],
+        query: '',
+        results: [],
+        open: false,
+        active: -1,
+        message: '',
+        saving: false,
+        popular: [], // optionally prefill from server
+        showInput: false,
+
+        // computed
+        get activeId() { return this.active >= 0 ? `tag-opt-${this.active}` : null },
+
+        // helpers
+        exists(v) {
+          const n = v.trim().toLowerCase()
+          return this.tags.some(t => t.trim().toLowerCase() === n)
+        },
+        toggleInput() {
+          this.showInput = !this.showInput
+          if (this.showInput) this.$nextTick(() => this.$refs.tagInput?.focus())
+        },
+
+        // search / nav
+        async search() {
+          const q = this.query.trim()
+          if (!q) { this.results = []; this.open = false; return }
+          try {
+            const r = await fetch(`${suggestUrl}?q=${encodeURIComponent(q)}&limit=10`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            const names = r.ok ? await r.json() : []
+            this.results = names.filter(n => !this.exists(n))
+            this.open = this.results.length > 0 || (!!q && !this.exists(q))
+            this.active = this.results.length ? 0 : -1
+          } catch {
+            this.results = []; this.open = false
+          }
+        },
+        move(d) { if (!this.open || this.results.length === 0) return; this.active = (this.active + d + this.results.length) % this.results.length },
+        choose() { if (!this.open) { if (this.query) this.add(this.query); return }; if (this.active >= 0) this.add(this.results[this.active]) },
+
+        // mutate
+        add(name) {
+          name = name.trim()
+          if (!name || this.exists(name)) { this.query = ''; this.open = false; return }
+          this.tags.push(name)
+          this.query = ''; this.open = false; this.results = []
+          this.save()
+        },
+        remove(i) { this.tags.splice(i, 1); this.save() },
+
+        // persist
+        async save() {
+          const form = new FormData()
+          this.tags.forEach(t => form.append('tags', t))
+          this.saving = true
+          try {
+            const r = await fetch(saveUrl, {
+              method: 'POST', body: form,
+              headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': csrf }
+            })
+            if (!r.ok) throw new Error()
+            this.message = 'Gespeichert'
+          } catch {
+            this.message = 'Speichern fehlgeschlagen'
+          } finally {
+            setTimeout(() => this.message = '', 1200)
+            this.saving = false
+          }
+        }
+      }))
+    })
+  </script>
 
   {{ with .Background}}
   <div class="bg-gray-50 rounded-lg p-4 mb-2">
@@ -10,21 +153,26 @@
   {{end}}
 
   <div class="bg-gray-50 rounded-lg p-4">
-    <p>{{.Adresse1}}{{with .Adresse2}}<br>{{.}}{{end}}
-      <br>{{.PLZ}} {{.Ort}}<br>
-      {{.Land}}
+    <p>{{.Address1}}{{with .Address2}}<br>{{.}}{{end}}
+      <br>{{.Zip}} {{.City}}<br>
+      {{.Country}}
     </p>
   </div>
 
   <div class="bg-gray-50 rounded-lg p-4 mt-4">
-    <p>E-Mail für Rechnungen: <a href="mailto:{{.RechnungEmail}}">{{.RechnungEmail}}</a><br>
+    <p>E-Mail für Rechnungen: <a href="mailto:{{.InvoiceEmail}}">{{.InvoiceEmail}}</a><br>
       USt-IdNr: {{.VATID}}</p>
 
     <div class="mt-4">
       <i>Kontaktdaten:</i>
-      {{ range .ContactInfos}}
-      <p>{{.Label}}: {{ .Value}}</p>
-      {{end}}
+      {{ range .ContactInfos }}
+      <p>
+        {{ .Label }}:
+        <a href="{{ .SafeHref }}" {{ if .OpensInNewTab }}target="_blank" rel="noopener noreferrer" {{ end }}>
+          {{ .Value }}
+        </a>
+      </p>
+      {{ end }}
     </div>
 
     <div class="mt-4">
@@ -34,213 +182,205 @@
       {{end}}
     </div>
   </div>
-</div>
 
-<!-- Toolbar + Formular teilen sich denselben Alpine-Scope -->
-<div x-data="{
+  <!-- Toolbar + Formular teilen sich denselben Alpine-Scope -->
+  <div x-data="{
        openInvoices: false,
        noteOpen: new URLSearchParams(window.location.search).get('addNote') === '1'
      }">
 
-  <!-- Button-Leiste -->
-  <div class="flex flex-wrap items-center gap-2 mb-4">
-    <!-- Bearbeiten -->
-    <a href="/company/edit/{{.ID}}"
-       class="inline-block bg-primary text-text px-6 py-3 rounded-button font-bold hover:bg-hover hover:text-white transition-colors">
-      <i class="fas fa-edit"></i> Bearbeiten
-    </a>
-
-    <!-- Rechnungen (Dropdown) -->
-    {{ with $.companydetail.Invoices}}
-    <div class="relative inline-block text-left">
-      <button @click="openInvoices = !openInvoices"
-              class="px-4 py-2 bg-white border rounded-button shadow hover:bg-gray-50">
-        Rechnungen
-      </button>
-      <div x-show="openInvoices" x-cloak @click.away="openInvoices = false"
-           class="absolute z-10 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 overflow-hidden">
-        {{ range . }}
-   <a href="/invoice/detail/{{.ID}}" class="flex items-center justify-between px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-  <span>{{ .Number }}</span>
-  <span class="ml-2 px-2 py-0.5 rounded-full text-xs font-medium
-    {{ if eq .Status "draft"  }} bg-yellow-100 text-yellow-800 {{ end }}
-    {{ if eq .Status "issued" }} bg-blue-100   text-blue-800   {{ end }}
-    {{ if eq .Status "paid"   }} bg-green-100  text-green-800  {{ end }}
-    {{ if eq .Status "voided" }} bg-red-100    text-red-800    {{ end }}">
-    {{ .Status | invoiceStatus }}
-  </span>
-</a>
-        {{ end }}
-      </div>
-    </div>
-    {{ end }}
-
-    <!-- Neue Rechnung -->
-    <a href="/invoice/new/{{.ID}}"
-       class="inline-block px-4 py-2 bg-white border rounded-button shadow hover:bg-gray-50">
-      <i class="fas fa-plus-circle"></i> Neue Rechnung
-    </a>
-
-    <!-- Neuer Kontakt -->
-    <a href="/person/new/{{.ID}}"
-       class="inline-block px-4 py-2 bg-white border rounded-button shadow hover:bg-gray-50">
-      <i class="fas fa-plus-circle"></i> Neuer Kontakt
-    </a>
-
-    <!-- Neue Notiz -->
-    <button
-      @click.prevent="noteOpen = !noteOpen; if(noteOpen) $nextTick(() => $refs.noteTitle?.focus())"
-      class="inline-block px-4 py-2 bg-white border rounded-button shadow hover:bg-gray-50">
-      <i class="fas fa-sticky-note"></i> Neue Notiz
-    </button>
-
-    <!-- Fallback ohne JS -->
-    <noscript>
-      <a href="/note/new/{{.ID}}" class="inline-block px-4 py-2 bg-white border rounded-button shadow">
-        Neue Notiz
+    <!-- Button-Leiste -->
+    <div class="flex flex-wrap items-center gap-2 mb-4 mt-4">
+      <!-- Bearbeiten -->
+      <a href="/company/edit/{{.ID}}"
+        class="inline-block bg-primary text-text px-6 py-3 rounded-button font-bold hover:bg-hover hover:text-white transition-colors">
+        <i class="fas fa-edit"></i> Bearbeiten
       </a>
-    </noscript>
-  </div>
 
-  <!-- Ausklapp-Formular: Neue Notiz -->
-  <div x-show="noteOpen" x-transition x-cloak
-       class="bg-gray-50 rounded-lg p-4 mb-6 border border-gray-200">
-    {{ with $.flash_note_error }}
-      <div class="mb-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md p-2">{{.}}</div>
-    {{ end }}
-
-    <form method="POST" action="/notes/create" class="space-y-3">
-      {{ with $.CSRFToken }}<input type="hidden" name="csrf" value="{{.}}">{{ end }}
-      <input type="hidden" name="parent_id" value="{{.ID}}">
-      <input type="hidden" name="parent_type" value="companies">
-
-      <div>
-        <label for="note_title" class="block text-sm font-medium text-gray-700">Titel</label>
-        <input x-ref="noteTitle" id="note_title" name="title" type="text"
-               class="mt-1 block w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary">
-      </div>
-
-      <div>
-        <label for="note_body" class="block text-sm font-medium text-gray-700">Notiz</label>
-        <textarea id="note_body" name="body" rows="4" required
-                  class="mt-1 block w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"></textarea>
-      </div>
-
-      <div class="flex items-center gap-4">
-        <input type="text" name="tags" placeholder="Tags, komma-getrennt"
-               class="flex-1 border rounded-md px-3 py-2">
-      </div>
-
-      <div class="flex gap-2">
-        <button type="submit"
-                class="bg-primary text-text px-5 py-2 rounded-button font-bold hover:bg-hover hover:text-white transition-colors">
-          Speichern
+      <!-- Rechnungen (Dropdown) -->
+      {{ with $.companydetail.Invoices}}
+      <div class="relative inline-block text-left">
+        <button @click="openInvoices = !openInvoices"
+          class="px-4 py-2 bg-white border rounded-button shadow hover:bg-gray-50">
+          Rechnungen
         </button>
-        <button type="button" @click="noteOpen=false"
-                class="px-4 py-2 bg-white border rounded-button shadow hover:bg-gray-50">
-          Abbrechen
-        </button>
+        <div x-show="openInvoices" x-cloak @click.away="openInvoices = false"
+          class="absolute z-10 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 overflow-hidden">
+          {{ range . }}
+          <a href="/invoice/detail/{{.ID}}"
+            class="flex items-center justify-between px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+            <span>{{ .Number }}</span>
+            <span class="ml-2 px-2 py-0.5 rounded-full text-xs font-medium
+    {{ if eq .Status " draft" }} bg-yellow-100 text-yellow-800 {{ end }} {{ if eq .Status "issued" }} bg-blue-100
+              text-blue-800 {{ end }} {{ if eq .Status "paid" }} bg-green-100 text-green-800 {{ end }} {{ if eq
+              .Status "voided" }} bg-red-100 text-red-800 {{ end }}">
+              {{ .Status | invoiceStatus }}
+            </span>
+          </a>
+          {{ end }}
+        </div>
       </div>
-    </form>
-  </div>
-</div>
-
-<!-- Notizen-Liste -->
-{{ with $.notes }}
-<div class="bg-white border border-gray-200 rounded-lg divide-y">
-  {{ range . }}
-  <div class="p-4 relative group" x-data="{ edit: false }">
-    {{ $isAuthor := eq $.uid .AuthorID }}
-
-    <!-- Edit-Button nur für Autor -->
-    {{ if $isAuthor }}
-      <!-- Desktop: auf Hover einblenden -->
-      <button
-        x-show="!edit"
-        @click="edit = true"
-        class="hidden sm:inline-flex items-center gap-1 absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-xs px-2 py-1 border rounded-md bg-white hover:bg-gray-50 shadow">
-        <i class="fas fa-pen"></i> Bearbeiten
-      </button>
-      <!-- Mobile: immer sichtbar -->
-      <button
-        x-show="!edit"
-        @click="edit = true"
-        class="sm:hidden absolute top-2 right-2 text-xs px-2 py-1 border rounded-md bg-white shadow">
-        ✎
-      </button>
-    {{ end }}
-
-    <!-- Anzeige-Modus -->
-    <div x-show="!edit">
-      {{ if .Title }}
-        <h3 class="font-semibold mb-1">{{ .Title }}</h3>
-      {{ else }}
-        <h3 class="font-semibold text-gray-700 mb-1">Notiz</h3>
       {{ end }}
 
-      <p class="text-xs text-gray-500 mb-2">
-        {{- $t := .EditedAt -}}
-        {{- if $t.IsZero -}}
-          Aktualisiert: {{ fmtTime .UpdatedAt }}
-        {{- else -}}
-          Bearbeitet: {{ fmtTime .EditedAt }}
-        {{- end -}}
-      </p>
+      <!-- Neue Rechnung -->
+      <a href="/invoice/new/{{.ID}}"
+        class="inline-block px-4 py-2 bg-white border rounded-button shadow hover:bg-gray-50">
+        <i class="fas fa-plus-circle"></i> Neue Rechnung
+      </a>
 
-      <div class="text-sm text-gray-800">
-        {{ nl2br .Body }}
-      </div>
+      <!-- Neuer Kontakt -->
+      <a href="/person/new/{{.ID}}"
+        class="inline-block px-4 py-2 bg-white border rounded-button shadow hover:bg-gray-50">
+        <i class="fas fa-plus-circle"></i> Neuer Kontakt
+      </a>
 
-      {{ if .Tags }}
-      <div class="mt-3 flex flex-wrap gap-2">
-        {{ range (splitCSV .Tags) }}
-          <span class="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded">{{ . }}</span>
-        {{ end }}
-      </div>
-      {{ end }}
+      <!-- Neue Notiz -->
+      <button @click.prevent="noteOpen = !noteOpen; if(noteOpen) $nextTick(() => $refs.noteTitle?.focus())"
+        class="inline-block px-4 py-2 bg-white border rounded-button shadow hover:bg-gray-50">
+        <i class="fas fa-sticky-note"></i> Neue Notiz
+      </button>
+
+      <!-- Fallback ohne JS -->
+      <noscript>
+        <a href="/note/new/{{.ID}}" class="inline-block px-4 py-2 bg-white border rounded-button shadow">
+          Neue Notiz
+        </a>
+      </noscript>
     </div>
 
-    <!-- Edit-Modus (Inline-Formular) -->
-    {{ if $isAuthor }}
-    <div x-show="edit" x-cloak class="mt-2">
-      <form method="POST" action="/notes/update/{{ .ID }}" class="space-y-2 bg-gray-50 border rounded-lg p-3">
+    <!-- Ausklapp-Formular: Neue Notiz -->
+    <div x-show="noteOpen" x-transition x-cloak class="bg-gray-50 rounded-lg p-4 mb-6 border border-gray-200">
+      {{ with $.flash_note_error }}
+      <div class="mb-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md p-2">{{.}}</div>
+      {{ end }}
+
+      <form method="POST" action="/notes/create" class="space-y-3">
         {{ with $.CSRFToken }}<input type="hidden" name="csrf" value="{{.}}">{{ end }}
+        <input type="hidden" name="parent_id" value="{{.ID}}">
+        <input type="hidden" name="parent_type" value="companies">
 
         <div>
-          <label class="block text-xs font-medium text-gray-700" for="title_{{ .ID }}">Titel</label>
-          <input id="title_{{ .ID }}" name="title" type="text" value="{{ .Title }}"
-                 class="mt-1 block w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary">
+          <label for="note_title" class="block text-sm font-medium text-gray-700">Titel</label>
+          <input x-ref="noteTitle" id="note_title" name="title" type="text"
+            class="mt-1 block w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary">
         </div>
 
         <div>
-          <label class="block text-xs font-medium text-gray-700" for="body_{{ .ID }}">Notiz</label>
-          <textarea id="body_{{ .ID }}" name="body" rows="4"
-                    class="mt-1 block w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary">{{ .Body }}</textarea>
+          <label for="note_body" class="block text-sm font-medium text-gray-700">Notiz</label>
+          <textarea id="note_body" name="body" rows="4" required
+            class="mt-1 block w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"></textarea>
         </div>
 
-        <div>
-          <label class="block text-xs font-medium text-gray-700" for="tags_{{ .ID }}">Tags</label>
-          <input id="tags_{{ .ID }}" name="tags" type="text" value="{{ .Tags }}"
-                 class="mt-1 block w-full border rounded-md px-3 py-2">
+        <div class="flex items-center gap-4">
+          <input type="text" name="tags" placeholder="Tags, komma-getrennt" class="flex-1 border rounded-md px-3 py-2">
         </div>
 
         <div class="flex gap-2">
           <button type="submit"
-                  class="bg-primary text-text px-4 py-2 rounded-button font-bold hover:bg-hover hover:text-white transition-colors text-sm">
+            class="bg-primary text-text px-5 py-2 rounded-button font-bold hover:bg-hover hover:text-white transition-colors">
             Speichern
           </button>
-          <button type="button" @click="edit=false"
-                  class="px-4 py-2 bg-white border rounded-button shadow hover:bg-gray-50 text-sm">
+          <button type="button" @click="noteOpen=false"
+            class="px-4 py-2 bg-white border rounded-button shadow hover:bg-gray-50">
             Abbrechen
           </button>
         </div>
       </form>
     </div>
+  </div>
+
+  <!-- Notizen-Liste -->
+  {{ with $.notes }}
+  <div class="bg-white border border-gray-200 rounded-lg divide-y">
+    {{ range . }}
+    <div class="p-4 relative group" x-data="{ edit: false }">
+      {{ $isAuthor := eq $.uid .AuthorID }}
+
+      <!-- Edit-Button nur für Autor -->
+      {{ if $isAuthor }}
+      <!-- Desktop: auf Hover einblenden -->
+      <button x-show="!edit" @click="edit = true"
+        class="hidden sm:inline-flex items-center gap-1 absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-xs px-2 py-1 border rounded-md bg-white hover:bg-gray-50 shadow">
+        <i class="fas fa-pen"></i> Bearbeiten
+      </button>
+      <!-- Mobile: immer sichtbar -->
+      <button x-show="!edit" @click="edit = true"
+        class="sm:hidden absolute top-2 right-2 text-xs px-2 py-1 border rounded-md bg-white shadow">
+        ✎
+      </button>
+      {{ end }}
+
+      <!-- Anzeige-Modus -->
+      <div x-show="!edit">
+        {{ if .Title }}
+        <h3 class="font-semibold mb-1">{{ .Title }}</h3>
+        {{ else }}
+        <h3 class="font-semibold text-gray-700 mb-1">Notiz</h3>
+        {{ end }}
+
+        <p class="text-xs text-gray-500 mb-2">
+          {{- $t := .EditedAt -}}
+          {{- if $t.IsZero -}}
+          Aktualisiert: {{ fmtTime .UpdatedAt }}
+          {{- else -}}
+          Bearbeitet: {{ fmtTime .EditedAt }}
+          {{- end -}}
+        </p>
+
+        <div class="text-sm text-gray-800">
+          {{ nl2br .Body }}
+        </div>
+
+        {{ if .Tags }}
+        <div class="mt-3 flex flex-wrap gap-2">
+          {{ range (splitCSV .Tags) }}
+          <span class="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded">{{ . }}</span>
+          {{ end }}
+        </div>
+        {{ end }}
+      </div>
+
+      <!-- Edit-Modus (Inline-Formular) -->
+      {{ if $isAuthor }}
+      <div x-show="edit" x-cloak class="mt-2">
+        <form method="POST" action="/notes/update/{{ .ID }}" class="space-y-2 bg-gray-50 border rounded-lg p-3">
+          {{ with $.CSRFToken }}<input type="hidden" name="csrf" value="{{.}}">{{ end }}
+
+          <div>
+            <label class="block text-xs font-medium text-gray-700" for="title_{{ .ID }}">Titel</label>
+            <input id="title_{{ .ID }}" name="title" type="text" value="{{ .Title }}"
+              class="mt-1 block w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary">
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-gray-700" for="body_{{ .ID }}">Notiz</label>
+            <textarea id="body_{{ .ID }}" name="body" rows="4"
+              class="mt-1 block w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary">{{ .Body }}</textarea>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-gray-700" for="tags_{{ .ID }}">Tags</label>
+            <input id="tags_{{ .ID }}" name="tags" type="text" value="{{ .Tags }}"
+              class="mt-1 block w-full border rounded-md px-3 py-2">
+          </div>
+
+          <div class="flex gap-2">
+            <button type="submit"
+              class="bg-primary text-text px-4 py-2 rounded-button font-bold hover:bg-hover hover:text-white transition-colors text-sm">
+              Speichern
+            </button>
+            <button type="button" @click="edit=false"
+              class="px-4 py-2 bg-white border rounded-button shadow hover:bg-gray-50 text-sm">
+              Abbrechen
+            </button>
+          </div>
+        </form>
+      </div>
+      {{ end }}
+    </div>
     {{ end }}
   </div>
   {{ end }}
-</div>
-{{ end }}
 
-{{ end }}
-{{template "footer.html" .}}
+  {{ end }}
+  {{template "footer.html" .}}

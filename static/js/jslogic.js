@@ -183,3 +183,51 @@ function invoiceStatusPanel({ id, status, csrf }) {
     }
   };
 }
+
+
+// === Focus search field when page/tab becomes active ===
+(function () {
+  const isDesktopPointer = matchMedia('(pointer: fine)').matches;
+  let done = false;
+
+  function tryFocus() {
+    if (done) return;
+    if (!isDesktopPointer) return; // avoid auto keyboard on touch devices
+    if (!document.hasFocus() || document.visibilityState !== 'visible') return;
+
+    const el = document.getElementById('search');
+    if (!el) return;
+
+    try { el.focus({ preventScroll: true }); } catch {}
+    if (document.activeElement === el) {
+      // optional: move caret to end
+      try {
+        const len = el.value?.length ?? 0;
+        el.setSelectionRange(len, len);
+      } catch {}
+      cleanup();
+      done = true;
+    }
+  }
+
+  function cleanup() {
+    window.removeEventListener('focus', tryFocus, true);
+    document.removeEventListener('visibilitychange', tryFocus, true);
+    window.removeEventListener('pointerdown', tryFocusOnce, true);
+    window.removeEventListener('keydown', tryFocusOnce, true);
+  }
+
+  function tryFocusOnce() { tryFocus(); }
+
+  // run when DOM and page are ready
+  document.addEventListener('DOMContentLoaded', () => setTimeout(tryFocus, 0));
+  window.addEventListener('load', tryFocus, { once: true });
+
+  // when tab/window becomes active
+  window.addEventListener('focus', tryFocus, true);
+  document.addEventListener('visibilitychange', tryFocus, true);
+
+  // fallback: first user action gives us permission to focus
+  window.addEventListener('pointerdown', tryFocusOnce, true);
+  window.addEventListener('keydown', tryFocusOnce, true);
+})();

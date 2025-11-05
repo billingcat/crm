@@ -28,13 +28,13 @@ func LoadSession(c echo.Context) (*SessionWriter, error) {
 // Values gives access to the session data map. Use it to set or read keys:
 //
 //	sw.Values()["uid"] = user.ID
-func (sw *SessionWriter) Values() map[interface{}]interface{} {
+func (sw *SessionWriter) Values() map[any]any {
 	return sw.sess.Values
 }
 
 // AddFlash appends a flash message to the session. It does not save automatically;
 // call sw.Save() afterwards.
-func (sw *SessionWriter) AddFlash(v interface{}) {
+func (sw *SessionWriter) AddFlash(v any) {
 	sw.sess.AddFlash(v)
 }
 

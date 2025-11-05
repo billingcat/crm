@@ -20,8 +20,8 @@ import (
 // Response payload returned to the browser.
 // Matches the client-side JSON schema used by your in-page importer.
 type importResponse struct {
-	Version   int                      `json:"version"`
-	Positions []map[string]interface{} `json:"positions"`
+	Version   int              `json:"version"`
+	Positions []map[string]any `json:"positions"`
 }
 
 // Public DTO used by all parsers
@@ -310,10 +310,10 @@ func (ctrl *controller) importPositionsAPI(c echo.Context) error {
 	// Transform into the uniform JSON expected by your client
 	resp := importResponse{
 		Version:   1,
-		Positions: make([]map[string]interface{}, 0, len(imports)),
+		Positions: make([]map[string]any, 0, len(imports)),
 	}
 	for _, p := range imports {
-		row := map[string]interface{}{
+		row := map[string]any{
 			"text":      p.Text,
 			"quantity":  p.Quantity, // float64
 			"net_price": p.NetPrice, // float64

@@ -333,8 +333,9 @@ func (ctrl *controller) register(c echo.Context) error {
 	return neutral()
 }
 
-// verifyEmail consumes the email verification token and opens a short-lived gate to /set-password.
-// The short-lived gate is stored in the session; Save() applies cookie options automatically.
+// verifyEmail consumes the email verification token and opens a short-lived
+// gate to /set-password. The short-lived gate is stored in the session; Save()
+// applies cookie options automatically.
 func (ctrl *controller) verifyEmail(c echo.Context) error {
 	token := c.QueryParam("token")
 	if token == "" {

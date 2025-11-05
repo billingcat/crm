@@ -18,27 +18,27 @@
     <div class="col-span-4">
       <label for="address">Adresse</label>
       <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
-        name="adresse1" id="address" placeholder="Hauptstraße 12" value="{{$company.Adresse1}}">
+        name="address1" id="address" placeholder="Hauptstraße 12" value="{{$company.Address1}}">
     </div>
     <div class="col-span-4">
       <label for="address2">Zusatz <span class="text-muted">(Optional)</span></label>
       <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
-        name="adresse2" id="address2" placeholder="3. Hinterhof" value="{{$company.Adresse2}}">
+        name="address2" id="address2" placeholder="3. Hinterhof" value="{{$company.Address2}}">
     </div>
     <div class="mb-2">
-      <label for="plz">PLZ</label>
+      <label for="zip">PLZ</label>
       <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
-        id="plz" name="plz" placeholder="12345" value="{{$company.PLZ}}">
+        id="zip" name="zip" placeholder="12345" value="{{$company.Zip}}">
     </div>
     <div class="mb-2 col-span-2">
-      <label for="ort">Ort</label>
+      <label for="city">Ort</label>
       <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
-        id="ort" name="ort" placeholder="Berlin" value="{{$company.Ort}}">
+        id="city" name="city" placeholder="Berlin" value="{{$company.City}}">
     </div>
     <div class="col-span-1">
       <label for="country">Land</label>
       <input class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
-        list="countryOptions" id="country" name="land" placeholder="Tippen für Suche..." value="{{$company.Land}}"
+        list="countryOptions" id="country" name="country" placeholder="Tippen für Suche..." value="{{$company.Country}}"
         autocomplete="off">
       <datalist id="countryOptions">
         <option value="Deutschland">
@@ -56,7 +56,7 @@
     <div class="sm:col-span-4">
       <label for="emailinvoice">Email für Rechnungen</label>
       <input type="email" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
-        name="rechnungemail" id="emailinvoice" placeholder="info@example.com" value="{{$company.RechnungEmail}}">
+        name="emailinvoice" id="emailinvoice" placeholder="info@example.com" value="{{$company.InvoiceEmail}}">
     </div>
     <div class="sm:col-span-4">
       <label for="contactinvoice">Ansprechpartner für Rechnungen</label>
@@ -65,9 +65,9 @@
     </div>
 
     <div>
-      <label for="kundennummer">Kundennummer</label>
+      <label for="customernumber">Kundennummer</label>
       <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
-        id="kundennummer" name="kundennummer" placeholder="12345" value="{{$company.Kundennummer}}">
+        id="customernumber" name="customernumber" placeholder="12345" value="{{$company.CustomerNumber}}">
     </div>
     <div>
       <label for="lieferantennummer">Lieferantennummer</label>

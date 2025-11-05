@@ -24,7 +24,7 @@ type RecentView struct {
 // Composite unique key
 func (RecentView) TableName() string { return "recent_views" }
 
-func (crmdb *CRMDatenbank) TouchRecentView(userID uint, et EntityType, entityID uint) error {
+func (crmdb *CRMDatabase) TouchRecentView(userID uint, et EntityType, entityID uint) error {
 	db := crmdb.db
 	rv := RecentView{
 		UserID: userID, EntityType: et, EntityID: entityID, ViewedAt: time.Now(),
@@ -42,11 +42,10 @@ type RecentItem struct {
 	Name       string // Firmenname oder Personenname
 }
 
-func (crmdb *CRMDatenbank) GetRecentItems(userID uint, limit int) ([]RecentItem, error) {
+func (crmdb *CRMDatabase) GetRecentItems(userID uint, limit int) ([]RecentItem, error) {
 	db := crmdb.db
 	items := []RecentItem{}
 
-	// Firmen
 	var companies []RecentItem
 	if err := db.Raw(`
         SELECT r.entity_type, r.entity_id, r.viewed_at, c.name
@@ -58,7 +57,6 @@ func (crmdb *CRMDatenbank) GetRecentItems(userID uint, limit int) ([]RecentItem,
 		return nil, err
 	}
 
-	// Personen
 	var people []RecentItem
 	if err := db.Raw(`
         SELECT r.entity_type, r.entity_id, r.viewed_at,
@@ -71,7 +69,7 @@ func (crmdb *CRMDatenbank) GetRecentItems(userID uint, limit int) ([]RecentItem,
 		return nil, err
 	}
 
-	// Zusammenführen und global sortieren, dann auf N kürzen
+	// merge and sort by ViewedAt descending
 	items = append(companies, people...)
 	sort.Slice(items, func(i, j int) bool { return items[i].ViewedAt.After(items[j].ViewedAt) })
 	if len(items) > limit {

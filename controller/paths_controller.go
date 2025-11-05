@@ -8,13 +8,14 @@ import (
 	"strings"
 )
 
-// Basisverzeichnis für öffentliche Uploads (Echo: e.Static("/uploads", "uploads")).
-// Hier gehen wir davon aus, dass ctrl.cfg.BaseDir der Projekt-Root ist, in dem auch der Ordner "uploads" liegt.
+// base directory for public uploads (Echo: e.Static("/uploads", "uploads")).
+// We assume ctrl.cfg.BaseDir is the project root where the "uploads" folder is located.
 func (ctrl *controller) uploadsDir() string {
 	return filepath.Join(ctrl.model.Config.Basedir, "uploads")
 }
 
-// Wandelt einen absoluten Pfad (unter uploadsDir) in eine öffentliche URL /uploads/<rel> um.
+// uploadsAbsToURL changes an absolute path (under uploadsDir) into a public URL
+// /uploads/<rel>.
 func (ctrl *controller) uploadsAbsToURL(abs string) (string, error) {
 	root := ctrl.uploadsDir()
 	rootAbs, _ := filepath.Abs(root)

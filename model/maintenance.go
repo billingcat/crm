@@ -12,7 +12,7 @@ import (
 
 // RunMaintenance executes housekeeping tasks.
 // Make sure tasks are idempotent and safe to run multiple times.
-func RunMaintenance(ctx context.Context, crmdb *CRMDatenbank) error {
+func RunMaintenance(ctx context.Context, crmdb *CRMDatabase) error {
 	start := time.Now()
 	log.Println("maintenance: start")
 
@@ -56,7 +56,7 @@ func RunMaintenance(ctx context.Context, crmdb *CRMDatenbank) error {
 // DB locking (only relevant for Postgres, safe no-op for SQLite)
 // --------------------------------------------------------------------
 
-func tryAcquireLock(ctx context.Context, crmdb *CRMDatenbank) (func(), error) {
+func tryAcquireLock(ctx context.Context, crmdb *CRMDatabase) (func(), error) {
 	sqlDB, err := crmdb.db.DB()
 	if err != nil {
 		return nil, err
@@ -87,7 +87,7 @@ func tryAcquireLock(ctx context.Context, crmdb *CRMDatenbank) (func(), error) {
 
 // deleteInvalidAPITokens removes tokens that are explicitly disabled
 // or past their expiration date.
-func deleteInvalidAPITokens(ctx context.Context, crmdb *CRMDatenbank) error {
+func deleteInvalidAPITokens(ctx context.Context, crmdb *CRMDatabase) error {
 	return crmdb.db.WithContext(ctx).
 		Exec(`DELETE FROM api_tokens WHERE disabled = TRUE OR (expires_at IS NOT NULL AND expires_at < NOW())`).
 		Error
@@ -95,14 +95,14 @@ func deleteInvalidAPITokens(ctx context.Context, crmdb *CRMDatenbank) error {
 
 // deleteExpiredSignupTokens removes signup tokens that are already expired
 // or have been consumed.
-func deleteExpiredSignupTokens(ctx context.Context, crmdb *CRMDatenbank) error {
+func deleteExpiredSignupTokens(ctx context.Context, crmdb *CRMDatabase) error {
 	return crmdb.db.WithContext(ctx).
 		Exec(`DELETE FROM signup_tokens WHERE expires_at < NOW() OR consumed_at IS NOT NULL`).
 		Error
 }
 
 // pruneOldRecentViews removes entries older than given duration.
-func pruneOldRecentViews(ctx context.Context, crmdb *CRMDatenbank, olderThan time.Duration) error {
+func pruneOldRecentViews(ctx context.Context, crmdb *CRMDatabase, olderThan time.Duration) error {
 	cutoff := time.Now().Add(-olderThan)
 	return crmdb.db.WithContext(ctx).
 		Exec(`DELETE FROM recent_views WHERE viewed_at < ?`, cutoff).
@@ -110,7 +110,7 @@ func pruneOldRecentViews(ctx context.Context, crmdb *CRMDatenbank, olderThan tim
 }
 
 // vacuumAnalyze runs database cleanup commands depending on DB engine.
-func vacuumAnalyze(ctx context.Context, crmdb *CRMDatenbank) error {
+func vacuumAnalyze(ctx context.Context, crmdb *CRMDatabase) error {
 	sqlDB, err := crmdb.db.DB()
 	if err != nil {
 		return err

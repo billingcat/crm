@@ -22,7 +22,7 @@ func parseUintParam(c echo.Context, name string) (uint, error) {
 
 func renderPDFToPNGs(pdfPath, outDir string, dpi, maxPages int) (sizes [][2]float64, pngPaths []string, err error) {
 	if dpi <= 0 {
-		dpi = 200 // sinnvolles Fallback
+		dpi = 200 // default DPI
 	}
 
 	doc, err := fitz.New(pdfPath)
@@ -40,7 +40,7 @@ func renderPDFToPNGs(pdfPath, outDir string, dpi, maxPages int) (sizes [][2]floa
 	}
 
 	for i := 0; i < num; i++ {
-		// Wichtig: mit der gewünschten DPI rendern!
+		// important: use ImageDPI to get correct size
 		img, err := doc.ImageDPI(i, float64(dpi))
 		if err != nil {
 			return nil, nil, err
@@ -54,7 +54,7 @@ func renderPDFToPNGs(pdfPath, outDir string, dpi, maxPages int) (sizes [][2]floa
 		b := img.Bounds()
 		wpx, hpx := b.Dx(), b.Dy()
 
-		// Pixel → cm mit derselben DPI
+		// pixel and cm with the given DPI
 		wcm := float64(wpx) * 2.54 / float64(dpi)
 		hcm := float64(hpx) * 2.54 / float64(dpi)
 

@@ -8,32 +8,33 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// Settings contains user data such as address.
-// We keep gorm.Model (ID, timestamps) and make OwnerID UNIQUE.
-// -> genau eine Settings-Zeile pro Owner.
+// Settings holds tenant-scoped account data such as address, invoicing details,
+// and bank information. We keep the embedded gorm.Model (ID + timestamps) but
+// enforce a UNIQUE owner_id so there is at most one settings row per owner.
 type Settings struct {
 	gorm.Model
-	OwnerID               uint   `gorm:"uniqueIndex;column:owner_id"`
+	OwnerID               uint   `gorm:"uniqueIndex;column:owner_id"` // One row per owner/tenant
 	CompanyName           string `gorm:"column:company_name"`
 	InvoiceContact        string `gorm:"column:invoice_contact"`
-	InvoiceEMail          string `gorm:"column:invoice_email"` // statt invoice_e_mail
+	InvoiceEMail          string `gorm:"column:invoice_email"` // stored as invoice_email (not invoice_e_mail)
 	ZIP                   string `gorm:"column:zip"`
 	Address1              string `gorm:"column:address1"`
 	Address2              string `gorm:"column:address2"`
 	City                  string `gorm:"column:city"`
-	CountryCode           string `gorm:"column:country_code"`
+	CountryCode           string `gorm:"column:country_code"` // ISO 3166-1 alpha-2 recommended
 	VATID                 string `gorm:"column:vat_id"`
 	TAXNumber             string `gorm:"column:tax_number"`
-	InvoiceNumberTemplate string `gorm:"column:invoice_number_template"`
-	UseLocalCounter       bool   `gorm:"column:use_local_counter"`
+	InvoiceNumberTemplate string `gorm:"column:invoice_number_template"` // e.g. "INV-{YYYY}-{NNNN}"
+	UseLocalCounter       bool   `gorm:"column:use_local_counter"`       // if true, number increments per owner locally
 	BankIBAN              string `gorm:"column:bank_iban"`
 	BankName              string `gorm:"column:bank_name"`
 	BankBIC               string `gorm:"column:bank_bic"`
 }
 
-// LoadSettings loads the settings for a given owner.
-// Nutzt owner_id statt Primärschlüssel-ID.
-func (crmdb *CRMDatenbank) LoadSettings(ownerID any) (*Settings, error) {
+// LoadSettings loads the settings row for a given owner.
+// Accepts ownerID as uint or int and returns an initialized (but unsaved)
+// Settings record if none exists yet (via FirstOrInit).
+func (crmdb *CRMDatabase) LoadSettings(ownerID any) (*Settings, error) {
 	var oid uint
 	switch v := ownerID.(type) {
 	case uint:
@@ -45,7 +46,8 @@ func (crmdb *CRMDatenbank) LoadSettings(ownerID any) (*Settings, error) {
 	}
 
 	s := &Settings{}
-	// FirstOrInit: falls nicht vorhanden, mit OwnerID vorinitialisieren (noch nicht speichern)
+	// FirstOrInit: if no row exists, return a struct prefilled with OwnerID
+	// without hitting INSERT (use Save/SaveSettings later to persist).
 	if err := crmdb.db.
 		Where("owner_id = ?", oid).
 		FirstOrInit(s, &Settings{OwnerID: oid}).Error; err != nil {
@@ -54,9 +56,13 @@ func (crmdb *CRMDatenbank) LoadSettings(ownerID any) (*Settings, error) {
 	return s, nil
 }
 
-// UpdateSettings updates fields for an existing row (identified by OwnerID).
-// Nutzt WHERE owner_id, damit nicht versehentlich per primärem ID-Feld upgedatet wird.
-func (crmdb *CRMDatenbank) UpdateSettings(s *Settings) error {
+// UpdateSettings updates fields for the existing row identified by owner_id.
+// Uses an explicit WHERE owner_id filter to avoid accidentally updating by the
+// primary key (ID) if the struct carries a different ID value.
+//
+// Note: updated_at uses NOW() which is DB-specific; for SQLite you may prefer
+// CURRENT_TIMESTAMP or let GORM manage timestamps automatically.
+func (crmdb *CRMDatabase) UpdateSettings(s *Settings) error {
 	if s.OwnerID == 0 {
 		return errors.New("UpdateSettings: OwnerID required")
 	}
@@ -83,13 +89,18 @@ func (crmdb *CRMDatenbank) UpdateSettings(s *Settings) error {
 		}).Error
 }
 
-// SaveSettings upserts by owner_id (ON CONFLICT DO UPDATE).
-func (crmdb *CRMDatenbank) SaveSettings(s *Settings) error {
+// SaveSettings performs an upsert keyed by owner_id (ON CONFLICT DO UPDATE).
+// If a row for owner_id exists, the listed columns are updated; otherwise, a new
+// row is inserted.
+//
+// Caveat: GORM translates ON CONFLICT per dialect. Ensure a unique index exists
+// on owner_id (declared on the struct) and that the target DB supports the clause.
+func (crmdb *CRMDatabase) SaveSettings(s *Settings) error {
 	if s.OwnerID == 0 {
 		return errors.New("SaveSettings: OwnerID required")
 	}
 	return crmdb.db.Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "owner_id"}}, // Konfliktziel
+		Columns: []clause.Column{{Name: "owner_id"}}, // conflict target
 		DoUpdates: clause.AssignmentColumns([]string{
 			"company_name", "invoice_contact", "invoice_email",
 			"zip", "address1", "address2", "city", "country_code",

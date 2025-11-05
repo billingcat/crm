@@ -90,7 +90,7 @@ var one = decimal.NewFromInt(1)
 
 // SaveInvoice saves an invoice and all invoice positions
 // SaveInvoice: robust against duplicates
-func (crmdb *CRMDatenbank) SaveInvoice(inv *Invoice, ownerid uint) error {
+func (crmdb *CRMDatabase) SaveInvoice(inv *Invoice, ownerid uint) error {
 	return crmdb.db.Transaction(func(tx *gorm.DB) error {
 		if inv.OwnerID != ownerid {
 			return fmt.Errorf("save invoice: ownerid mismatch")
@@ -124,7 +124,7 @@ func (crmdb *CRMDatenbank) SaveInvoice(inv *Invoice, ownerid uint) error {
 }
 
 // GetMaxCounter returns the maximum counter for the given company
-func (crmdb *CRMDatenbank) GetMaxCounter(companyID uint, useLocalCounter bool, ownerID uint) (uint, error) {
+func (crmdb *CRMDatabase) GetMaxCounter(companyID uint, useLocalCounter bool, ownerID uint) (uint, error) {
 	var max sql.NullInt64
 	q := crmdb.db.Model(&Invoice{})
 	if useLocalCounter {
@@ -139,13 +139,13 @@ func (crmdb *CRMDatenbank) GetMaxCounter(companyID uint, useLocalCounter bool, o
 }
 
 // UpdateInvoice updates an invoice and fully replaces its positions (hard delete + recreate).
-func (crmdb *CRMDatenbank) UpdateInvoice(inv *Invoice, ownerid uint) error {
+func (crmdb *CRMDatabase) UpdateInvoice(inv *Invoice, ownerid uint) error {
 	return crmdb.db.Transaction(func(tx *gorm.DB) error {
 		if inv.ID == 0 {
 			return fmt.Errorf("update invoice: inv.ID is zero")
 		}
 
-		data := map[string]interface{}{
+		data := map[string]any{
 			"number":           inv.Number,
 			"date":             inv.Date,
 			"occurrence_date":  inv.OccurrenceDate,
@@ -203,14 +203,14 @@ func (crmdb *CRMDatenbank) UpdateInvoice(inv *Invoice, ownerid uint) error {
 
 // DeleteInvoice removes an invoice and all referenced invoice positions from
 // the database.
-func (crmdb *CRMDatenbank) DeleteInvoice(inv *Invoice, ownerid any) error {
+func (crmdb *CRMDatabase) DeleteInvoice(inv *Invoice, ownerid any) error {
 	// Ensure we only delete invoices owned by the given owner
 	result := crmdb.db.Where("owner_id = ?", ownerid).Select("InvoicePositions").Delete(inv)
 	return result.Error
 }
 
 // LoadInvoice loads an invoice
-func (crmdb *CRMDatenbank) LoadInvoice(id any, ownerid uint) (*Invoice, error) {
+func (crmdb *CRMDatabase) LoadInvoice(id any, ownerid uint) (*Invoice, error) {
 	var inv Invoice
 	err := crmdb.db.Where("owner_id = ?", ownerid).
 		Preload("InvoicePositions", "owner_id = ?", ownerid).
@@ -226,7 +226,7 @@ func (crmdb *CRMDatenbank) LoadInvoice(id any, ownerid uint) (*Invoice, error) {
 	return &inv, nil
 }
 
-func (crmdb *CRMDatenbank) LoadInvoiceWithTemplate(id any, ownerid uint) (*Invoice, error) {
+func (crmdb *CRMDatabase) LoadInvoiceWithTemplate(id any, ownerid uint) (*Invoice, error) {
 	var inv Invoice
 	q := crmdb.db.Where("owner_id = ?", ownerid).
 		Preload("InvoicePositions", "owner_id = ?", ownerid).
@@ -305,7 +305,7 @@ type InvoiceProblem struct {
 	Message string
 }
 
-func (crmdb *CRMDatenbank) LoadAndVerifyInvoice(id any, ownerID uint) (*Invoice, []einvoice.SemanticError, error) {
+func (crmdb *CRMDatabase) LoadAndVerifyInvoice(id any, ownerID uint) (*Invoice, []einvoice.SemanticError, error) {
 	inv, err := crmdb.LoadInvoice(id, ownerID)
 	if err != nil {
 		return nil, nil, err
@@ -363,11 +363,11 @@ func createZUGFerdXML(inv *Invoice, settings *Settings, company *Company) einvoi
 		Buyer: einvoice.Party{
 			Name: company.Name,
 			PostalAddress: &einvoice.PostalAddress{
-				Line1:        company.Adresse1,
-				Line2:        company.Adresse2,
-				City:         company.Ort,
-				PostcodeCode: company.PLZ,
-				CountryID:    countryID(company.Land),
+				Line1:        company.Address1,
+				Line2:        company.Address2,
+				City:         company.City,
+				PostcodeCode: company.Zip,
+				CountryID:    countryID(company.Country),
 			},
 			DefinedTradeContact: []einvoice.DefinedTradeContact{{
 				PersonName: inv.ContactInvoice,
@@ -395,11 +395,11 @@ func createZUGFerdXML(inv *Invoice, settings *Settings, company *Company) einvoi
 		zi.ShipTo = &einvoice.Party{
 			Name: company.Name,
 			PostalAddress: &einvoice.PostalAddress{
-				Line1:        company.Adresse1,
-				Line2:        company.Adresse2,
-				City:         company.Ort,
-				PostcodeCode: company.PLZ,
-				CountryID:    countryID(company.Land),
+				Line1:        company.Address1,
+				Line2:        company.Address2,
+				City:         company.City,
+				PostcodeCode: company.Zip,
+				CountryID:    countryID(company.Country),
 			},
 		}
 	}
@@ -430,7 +430,7 @@ func createZUGFerdXML(inv *Invoice, settings *Settings, company *Company) einvoi
 
 // WriteZUGFeRDXML writes the ZUGFeRD XML file to the hard drive. The file name
 // is the invoice id plus the extension ".xml".
-func (crmdb *CRMDatenbank) WriteZUGFeRDXML(inv *Invoice, ownerID any, path string) error {
+func (crmdb *CRMDatabase) WriteZUGFeRDXML(inv *Invoice, ownerID any, path string) error {
 	settings, err := crmdb.LoadSettings(ownerID)
 	if err != nil {
 		return err
@@ -460,7 +460,7 @@ func (crmdb *CRMDatenbank) WriteZUGFeRDXML(inv *Invoice, ownerID any, path strin
 //   paid   -> (final, no further changes)
 //   voided -> (final, no further changes)
 
-func (crmdb *CRMDatenbank) changeInvoiceStatus(
+func (crmdb *CRMDatabase) changeInvoiceStatus(
 	id uint, ownerID uint,
 	to InvoiceStatus, t time.Time,
 ) error {
@@ -532,7 +532,7 @@ func (crmdb *CRMDatenbank) changeInvoiceStatus(
 
 // MarkInvoiceDraft rolls back an issued invoice to draft.
 // Business rules: clears IssuedAt (and optionally Number/Counter).
-func (crmdb *CRMDatenbank) MarkInvoiceDraft(id uint, ownerID uint, t time.Time) error {
+func (crmdb *CRMDatabase) MarkInvoiceDraft(id uint, ownerID uint, t time.Time) error {
 	return crmdb.db.Transaction(func(tx *gorm.DB) error {
 		var inv Invoice
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
@@ -569,21 +569,21 @@ func (crmdb *CRMDatenbank) MarkInvoiceDraft(id uint, ownerID uint, t time.Time) 
 }
 
 // Convenience: draft -> issued
-func (crmdb *CRMDatenbank) MarkInvoiceIssued(id uint, ownerID uint, t time.Time) error {
+func (crmdb *CRMDatabase) MarkInvoiceIssued(id uint, ownerID uint, t time.Time) error {
 	return crmdb.changeInvoiceStatus(id, ownerID, InvoiceStatusIssued, t)
 }
 
 // Convenience: (draft|issued) -> paid
-func (crmdb *CRMDatenbank) MarkInvoicePaid(id uint, ownerID uint, t time.Time) error {
+func (crmdb *CRMDatabase) MarkInvoicePaid(id uint, ownerID uint, t time.Time) error {
 	return crmdb.changeInvoiceStatus(id, ownerID, InvoiceStatusPaid, t)
 }
 
 // Convenience: (draft|issued) -> voided
-func (crmdb *CRMDatenbank) VoidInvoice(id uint, ownerID uint, t time.Time) error {
+func (crmdb *CRMDatabase) VoidInvoice(id uint, ownerID uint, t time.Time) error {
 	return crmdb.changeInvoiceStatus(id, ownerID, InvoiceStatusVoided, t)
 }
 
-func (crmdb *CRMDatenbank) FindInvoices(ownerID uint, statuses []InvoiceStatus, companyID *uint, field string, from, to *time.Time, limit, offset int, order string) (rows []Invoice, total int64, err error) {
+func (crmdb *CRMDatabase) FindInvoices(ownerID uint, statuses []InvoiceStatus, companyID *uint, field string, from, to *time.Time, limit, offset int, order string) (rows []Invoice, total int64, err error) {
 	q := crmdb.db.Model(&Invoice{}).Preload("Company").Where("owner_id = ?", ownerID)
 	if companyID != nil {
 		q = q.Where("company_id = ?", *companyID)

@@ -1,5 +1,3 @@
-// controller/letterhead_fonts.go
-
 package controller
 
 import (
@@ -15,12 +13,15 @@ import (
 	"gorm.io/gorm"
 )
 
+// FontFile represents a single available font file within a user's asset directory.
 type FontFile struct {
-	Filename string `json:"filename"` // basename only
+	Filename string `json:"filename"` // basename only, e.g. "Roboto-Regular.ttf"
 }
 
 const ctxTemplateKey = "letterhead_template"
 
+// listTemplateFonts returns all available .ttf and .otf font files for the current owner.
+// Fonts are read from the user's asset directory and sorted alphabetically.
 func (ctrl *controller) listTemplateFonts(c echo.Context) error {
 	ownerID := c.Get("ownerid").(uint)
 	dir := ctrl.userAssetsDir(ownerID)
@@ -45,6 +46,15 @@ func (ctrl *controller) listTemplateFonts(c echo.Context) error {
 	return c.JSON(http.StatusOK, out)
 }
 
+// mustBeOwnerOfTemplate is a middleware ensuring that the current user is either:
+//   - the owner of the requested letterhead template, or
+//   - an administrator.
+//
+// The middleware:
+//  1. Extracts the template ID from the route parameter.
+//  2. Loads the template via the model layer (no direct DB calls).
+//  3. Validates ownership unless the user has admin privileges.
+//  4. Stores the loaded template in the Echo context for downstream handlers.
 func (ctrl *controller) mustBeOwnerOfTemplate(paramName string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
@@ -61,17 +71,16 @@ func (ctrl *controller) mustBeOwnerOfTemplate(paramName string) echo.MiddlewareF
 			}
 			tplID := uint(idU64)
 
-			// Nur Model-Funktionen aufrufen – keine DB-Queries hier.
+			// Call model-layer access function (no raw DB calls in controller).
 			var tpl *model.LetterheadTemplate
 			if tpl, err = ctrl.model.LoadLetterheadTemplateForAccess(tplID, ownerID, isAdmin); err != nil {
-				// 404 bei nicht gefunden, sonst 500
 				if err == gorm.ErrRecordNotFound {
 					return echo.NewHTTPError(http.StatusNotFound, "template not found")
 				}
 				return echo.NewHTTPError(http.StatusInternalServerError, "db error: "+err.Error())
 			}
 
-			// Sicherheitsgurt: Wenn kein Admin, aber fremder Owner → 403
+			// Extra guard: if not admin but owner mismatch → deny access
 			if !isAdmin && tpl.OwnerID != ownerID {
 				return echo.NewHTTPError(http.StatusForbidden, "forbidden")
 			}
@@ -82,7 +91,8 @@ func (ctrl *controller) mustBeOwnerOfTemplate(paramName string) echo.MiddlewareF
 	}
 }
 
-// Helper, um das Template im Handler wieder zu bekommen
+// TemplateFromContext retrieves the loaded LetterheadTemplate (if available)
+// from the Echo context. This is set by the mustBeOwnerOfTemplate middleware.
 func TemplateFromContext(c echo.Context) *model.LetterheadTemplate {
 	if v := c.Get(ctxTemplateKey); v != nil {
 		if tpl, ok := v.(*model.LetterheadTemplate); ok {

@@ -12,7 +12,7 @@ import (
 )
 
 func (ctrl *controller) userAssetAbsToURL(ownerID uint, abs string) (string, error) {
-	// Annahme: /userassets ist als Static-Route für <basedir>/assets/userassets gemountet.
+	// Assumption: /userassets is mounted as a static route for <basedir>/assets/userassets.
 	root := ctrl.userAssetsDir(ownerID)
 	absRoot, _ := filepath.Abs(root)
 	absFile, _ := filepath.Abs(abs)
@@ -27,7 +27,7 @@ func (ctrl *controller) userAssetAbsToURL(ownerID uint, abs string) (string, err
 	return "/userassets/" + fmt.Sprintf("owner%d/", ownerID) + filepath.ToSlash(rel), nil
 }
 
-// ensureLetterheadPreviews rendert bis zu 2 PNGs und liefert Maß + öffentliche URLs.
+// ensureLetterheadPreviews renders up to 2 PNGs and returns dimensions + public URLs.
 func (ctrl *controller) ensureLetterheadPreviews(ownerID uint, tpl *model.LetterheadTemplate) (wcm, hcm float64, page1URL, page2URL string, err error) {
 	userRoot := ctrl.userAssetsDir(ownerID)
 	pdfAbs, err := safeJoin(userRoot, tpl.PDFPath)
@@ -35,7 +35,7 @@ func (ctrl *controller) ensureLetterheadPreviews(ownerID uint, tpl *model.Letter
 		return 0, 0, "", "", err
 	}
 
-	// Previews werden in /uploads/letterhead/owner<ownerID>/<templateID>/... gespeichert (öffentlich erreichbar via /uploads/...).
+	// Previews are generated into the uploads directory.
 	outDir := filepath.Join(
 		ctrl.uploadsDir(),
 		"letterhead",

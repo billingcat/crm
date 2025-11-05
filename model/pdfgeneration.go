@@ -32,7 +32,7 @@ func ensureDir(dirName string) error {
 // CreateZUGFeRDPDF creates a ZUGFeRD PDF file for the invoice. The XML is
 // expected to exist at the given location and the PDF gets written to the
 // location given by the last argument.
-func (crmdb *CRMDatenbank) CreateZUGFeRDPDF(inv *Invoice, ownerID uint, xmlpath string, pdfpath string, logger *slog.Logger) error {
+func (crmdb *CRMDatabase) CreateZUGFeRDPDF(inv *Invoice, ownerID uint, xmlpath string, pdfpath string, logger *slog.Logger) error {
 	var err error
 	var settingsData []byte
 	if s := buildSettingsFromInvoice(inv); s != nil {

@@ -52,7 +52,7 @@ func (u *User) BeforeSave(tx *gorm.DB) error {
 	return nil
 }
 
-func (crmdb *CRMDatenbank) TouchLastLogin(u *User) error {
+func (crmdb *CRMDatabase) TouchLastLogin(u *User) error {
 	now := time.Now().UTC()
 	u.LastLoginAt = &now
 	return crmdb.db.Model(u).Update("last_login_at", now).Error
@@ -84,7 +84,7 @@ func (t *SignupToken) BeforeSave(tx *gorm.DB) error {
 
 // ---- User Authentication / Password ----
 
-func (crmdb *CRMDatenbank) AuthenticateUser(email, password string) (*User, error) {
+func (crmdb *CRMDatabase) AuthenticateUser(email, password string) (*User, error) {
 	email = NormalizeEmail(email)
 	user, err := crmdb.GetUserByEMail(email)
 	if err != nil {
@@ -96,7 +96,7 @@ func (crmdb *CRMDatenbank) AuthenticateUser(email, password string) (*User, erro
 	return user, nil
 }
 
-func (crmdb *CRMDatenbank) GetUserByID(id any) (*User, error) {
+func (crmdb *CRMDatabase) GetUserByID(id any) (*User, error) {
 	var user User
 	if id == nil {
 		return nil, fmt.Errorf("user ID cannot be nil")
@@ -107,7 +107,7 @@ func (crmdb *CRMDatenbank) GetUserByID(id any) (*User, error) {
 	return &user, nil
 }
 
-func (crmdb *CRMDatenbank) SetPassword(u *User, password string) error {
+func (crmdb *CRMDatabase) SetPassword(u *User, password string) error {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return err
@@ -116,11 +116,11 @@ func (crmdb *CRMDatenbank) SetPassword(u *User, password string) error {
 	return nil
 }
 
-func (crmdb *CRMDatenbank) CheckPassword(u *User, password string) bool {
+func (crmdb *CRMDatabase) CheckPassword(u *User, password string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(password)) == nil
 }
 
-func (crmdb *CRMDatenbank) GetUserByEMail(email string) (*User, error) {
+func (crmdb *CRMDatabase) GetUserByEMail(email string) (*User, error) {
 	email = NormalizeEmail(email)
 	var user User
 	if err := crmdb.db.Where("email = ?", email).First(&user).Error; err != nil {
@@ -129,12 +129,12 @@ func (crmdb *CRMDatenbank) GetUserByEMail(email string) (*User, error) {
 	return &user, nil
 }
 
-func (crmdb *CRMDatenbank) CreateUser(u *User) error {
+func (crmdb *CRMDatabase) CreateUser(u *User) error {
 	// Email normalized by hook
 	return crmdb.db.Create(u).Error
 }
 
-func (crmdb *CRMDatenbank) UpdateUser(u *User) error {
+func (crmdb *CRMDatabase) UpdateUser(u *User) error {
 	return crmdb.db.Save(u).Error
 }
 
@@ -143,7 +143,7 @@ func (crmdb *CRMDatenbank) UpdateUser(u *User) error {
 // SetPasswordResetToken generates and stores a SHA-256 hash of the given token,
 // along with an expiry timestamp. The token itself is *not* stored in plain text.
 // This function works with PostgreSQL, SQLite, and MySQL/MariaDB.
-func (crmdb *CRMDatenbank) SetPasswordResetToken(u *User, token string, expiry time.Time) error {
+func (crmdb *CRMDatabase) SetPasswordResetToken(u *User, token string, expiry time.Time) error {
 	sum := sha256.Sum256([]byte(token))
 
 	u.PasswordResetToken = sum[:] // store the 32-byte hash
@@ -153,7 +153,7 @@ func (crmdb *CRMDatenbank) SetPasswordResetToken(u *User, token string, expiry t
 }
 
 // Find user by plaintext token – validates expiry + constant-time compare
-func (crmdb *CRMDatenbank) GetUserByResetToken(token string) (*User, error) {
+func (crmdb *CRMDatabase) GetUserByResetToken(token string) (*User, error) {
 	sum := sha256.Sum256([]byte(token))
 	var u User
 
@@ -175,7 +175,7 @@ func (crmdb *CRMDatenbank) GetUserByResetToken(token string) (*User, error) {
 	return &u, nil
 }
 
-func (crmdb *CRMDatenbank) ClearPasswordResetToken(u *User) error {
+func (crmdb *CRMDatabase) ClearPasswordResetToken(u *User) error {
 	u.PasswordResetToken = nil
 	u.PasswordResetExpiry = time.Time{}
 	return crmdb.db.Save(u).Error
@@ -192,7 +192,7 @@ func (crmdb *CRMDatenbank) ClearPasswordResetToken(u *User) error {
 //
 // It performs a prefix match in the database, then verifies the full hash
 // in constant time to avoid timing side-channel attacks.
-func (crmdb *CRMDatenbank) GetUserByResetTokenHashPrefix(fullHash []byte, prefixLen int) (*User, error) {
+func (crmdb *CRMDatabase) GetUserByResetTokenHashPrefix(fullHash []byte, prefixLen int) (*User, error) {
 	if prefixLen <= 0 || prefixLen > len(fullHash) {
 		return nil, fmt.Errorf("invalid prefix length")
 	}
@@ -254,7 +254,7 @@ func (crmdb *CRMDatenbank) GetUserByResetTokenHashPrefix(fullHash []byte, prefix
 // ---- Signup (email verification) ----
 
 // CreateSignupToken: stores pending signup with token hash and optional password hash
-func (crmdb *CRMDatenbank) CreateSignupToken(email, password string, ttl time.Duration, tokenPlain string) (*SignupToken, error) {
+func (crmdb *CRMDatabase) CreateSignupToken(email, password string, ttl time.Duration, tokenPlain string) (*SignupToken, error) {
 	email = NormalizeEmail(email)
 	if email == "" {
 		return nil, fmt.Errorf("email empty")
@@ -281,7 +281,7 @@ func (crmdb *CRMDatenbank) CreateSignupToken(email, password string, ttl time.Du
 }
 
 // ConsumeSignupToken: validates the token and creates the user afterwards (if not existing)
-func (crmdb *CRMDatenbank) ConsumeSignupToken(tokenPlain string) (*User, error) {
+func (crmdb *CRMDatabase) ConsumeSignupToken(tokenPlain string) (*User, error) {
 	sum := sha256.Sum256([]byte(tokenPlain))
 
 	var st SignupToken
