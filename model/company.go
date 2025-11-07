@@ -29,7 +29,7 @@ type Company struct {
 	Name                   string          `gorm:"column:name"`
 	City                   string          `gorm:"column:city"`
 	OwnerID                uint            `gorm:"column:owner_id"` // Tenant/account scope
-	ContactInfos           []ContactInfo   `gorm:"polymorphic:Parent;polymorphicValue:companies"`
+	ContactInfos           []ContactInfo   `gorm:"polymorphic:Parent;polymorphicValue:company"`
 	Contacts               []*Person       `gorm:"-"` // Computed/loaded separately; ignored by GORM
 	Zip                    string          `gorm:"column:zip"`
 	InvoiceEmail           string          `gorm:"column:invoice_email"`

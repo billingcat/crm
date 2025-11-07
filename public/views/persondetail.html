@@ -151,9 +151,18 @@
     <p>{{.Position}}</p>
     <p><a href="mailto:{{.EMail}}">{{.EMail}}</a></p>
     <p><a href="/company/{{.Company.ID}}">Firma: {{.Company.Name}}</a></p>
-    {{ range .ContactInfos}}
-    <p>{{.Label}}: {{ .Value}}</p>
-    {{end}}
+    <div class="mt-4">
+      <i>Kontaktdaten:</i>
+      {{ range .ContactInfos }}
+      <p>
+        {{ .Label }}:
+        <a href="{{ .SafeHref }}" {{ if .OpensInNewTab }}target="_blank" rel="noopener noreferrer" {{ end }}>
+          {{ .Value }}
+        </a>
+      </p>
+      {{ end }}
+    </div>
+
   </div>
 
   <!-- Toolbar: Bearbeiten + Neue Notiz (mit Alpine-Scope) -->
@@ -190,7 +199,7 @@
       <form method="POST" action="/notes/create" class="space-y-3">
         {{ with $.CSRFToken }}<input type="hidden" name="csrf" value="{{.}}">{{ end }}
         <input type="hidden" name="parent_id" value="{{.ID}}">
-        <input type="hidden" name="parent_type" value="people">
+        <input type="hidden" name="parent_type" value="{{ $.noteparenttype }}">
 
         <div>
           <label for="note_title" class="block text-sm font-medium text-gray-700">Titel</label>

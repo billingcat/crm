@@ -16,7 +16,7 @@ type Person struct {
 	CompanyID int    `gorm:"column:company_id"`
 	Company   Company
 	// Polymorphic association: ContactInfos belong to various parent types (here: Person).
-	ContactInfos []ContactInfo `gorm:"polymorphic:Parent;polymorphicValue:people"`
+	ContactInfos []ContactInfo `gorm:"polymorphic:Parent;polymorphicValue:person"`
 	// Notes are polymorphic and cascade on delete; removing a Person deletes its Notes.
 	Notes []Note `gorm:"polymorphic:Parent;constraint:OnDelete:CASCADE;"`
 }

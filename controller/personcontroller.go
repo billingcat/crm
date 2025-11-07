@@ -161,7 +161,7 @@ func (ctrl *controller) persondetail(c echo.Context) error {
 		}
 		return ErrInvalid(err, "Error loading contact")
 	}
-	notes, err := ctrl.model.LoadAllNotesForParent(ownerID, "people", personDB.ID)
+	notes, err := ctrl.model.LoadAllNotesForParent(ownerID, model.ParentTypePerson, personDB.ID)
 	if err != nil {
 		return ErrInvalid(err, "Could not load notes")
 	}
@@ -181,6 +181,7 @@ func (ctrl *controller) persondetail(c echo.Context) error {
 	m["persondetail"] = personDB
 	m["title"] = personDB.Name
 	m["ExistingTags"] = tagNames
+	m["noteparenttype"] = model.ParentTypePerson
 
 	ctrl.model.TouchRecentView(ownerID, model.EntityPerson, personDB.ID)
 	return c.Render(http.StatusOK, "persondetail.html", m)

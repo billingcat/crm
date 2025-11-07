@@ -252,7 +252,7 @@ func (ctrl *controller) root(c echo.Context) error {
 			bodyEsc := escape(body)
 
 			switch n.ParentType {
-			case "companies":
+			case model.ParentTypeCompany:
 				if c0, ok := hydr.Companies[n.ParentID]; ok {
 					target := safeLink(
 						fmt.Sprintf("/company/%d/%s", c0.ID, url.PathEscape(c0.Name)),
@@ -278,7 +278,7 @@ func (ctrl *controller) root(c echo.Context) error {
 					})
 				}
 
-			case "people":
+			case model.ParentTypePerson:
 				if p, ok := hydr.People[n.ParentID]; ok {
 					target := safeLink(
 						fmt.Sprintf("/person/%d/%s", p.ID, url.PathEscape(p.Name)),

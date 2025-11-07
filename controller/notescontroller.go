@@ -25,7 +25,7 @@ func (ctrl *controller) CreateNote(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Ungültige Eingaben")
 	}
 
-	// Pflichtfelder setzen
+	// Set mandatory fields
 	ownerID := c.Get("ownerid").(uint)
 	userid := c.Get("uid").(uint)
 	n.OwnerID = ownerID
@@ -36,11 +36,11 @@ func (ctrl *controller) CreateNote(c echo.Context) error {
 		return ErrInvalid(err, "Note konnte nicht gespeichert werden")
 	}
 
-	// Redirect zurück zur Detailseite
-	if n.ParentType == "companies" {
+	// Redirect back to parent entity
+	if n.ParentType == model.ParentTypeCompany {
 		return c.Redirect(http.StatusSeeOther, fmt.Sprintf("/company/%d", n.ParentID))
 	}
-	if n.ParentType == "people" {
+	if n.ParentType == model.ParentTypePerson {
 		return c.Redirect(http.StatusSeeOther, fmt.Sprintf("/person/%d", n.ParentID))
 	}
 	return c.NoContent(http.StatusOK)
@@ -71,9 +71,9 @@ func (ctrl *controller) UpdateNote(c echo.Context) error {
 	}
 
 	switch n.ParentType {
-	case "companies":
+	case model.ParentTypeCompany:
 		return c.Redirect(http.StatusSeeOther, fmt.Sprintf("/company/%d", n.ParentID))
-	case "people":
+	case model.ParentTypePerson:
 		return c.Redirect(http.StatusSeeOther, fmt.Sprintf("/person/%d", n.ParentID))
 	default:
 		return c.NoContent(http.StatusOK)

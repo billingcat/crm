@@ -21,7 +21,7 @@ type Note struct {
 	OwnerID    uint      `json:"owner_id"    form:"owner_id"`                 // Set server-side: tenant/owner scope
 	AuthorID   uint      `json:"author_id"   form:"-"           gorm:"index"` // Set server-side: creating user
 	ParentID   uint      `json:"parent_id"   form:"parent_id"`                // ID of the parent record
-	ParentType string    `json:"parent_type" form:"parent_type"`              // "people" | "companies"
+	ParentType string    `json:"parent_type" form:"parent_type"`              // "person" | "company"
 	Title      string    `json:"title"       form:"title"`                    // Optional headline
 	Body       string    `json:"body"        form:"body"`                     // Main text content
 	Tags       string    `json:"tags"        form:"tags"`                     // Comma-separated tags (stored as CSV)
@@ -43,14 +43,14 @@ func (n *Note) BeforeSave(tx *gorm.DB) error {
 // and returns the normalized value.
 //
 // Valid parent types are:
-//   - "people"
-//   - "companies"
+//   - "person"
+//   - "company"
 func checkParentType(s string) (string, error) {
 	switch s {
-	case "people", "companies":
+	case ParentTypePerson, ParentTypeCompany:
 		return s, nil
 	default:
-		return "", fmt.Errorf("invalid parent_type %q (expected 'people' or 'companies')", s)
+		return "", fmt.Errorf("invalid parent_type %q (expected %q or %q)", s, ParentTypePerson, ParentTypeCompany)
 	}
 }
 

@@ -151,7 +151,7 @@ func (ctrl *controller) companydetail(c echo.Context) error {
 	}
 
 	// Load notes
-	notes, err := ctrl.model.LoadAllNotesForParent(ownerID, "companies", companyDB.ID)
+	notes, err := ctrl.model.LoadAllNotesForParent(ownerID, model.ParentTypeCompany, companyDB.ID)
 	if err != nil {
 		return ErrInvalid(err, "Kann Notizen nicht laden")
 	}
@@ -172,6 +172,8 @@ func (ctrl *controller) companydetail(c echo.Context) error {
 	m["companydetail"] = companyDB
 	m["title"] = companyDB.Name
 	m["ExistingTags"] = tagNames
+	m["noteparenttype"] = model.ParentTypeCompany
+
 	ctrl.model.TouchRecentView(ownerID, model.EntityCompany, companyDB.ID)
 
 	return c.Render(http.StatusOK, "companydetail.html", m)
@@ -250,7 +252,7 @@ func (ctrl *controller) companyedit(c echo.Context) error {
 				Label:      ci.Label,
 				Value:      ci.Value,
 				OwnerID:    ownerID,
-				ParentType: "company",
+				ParentType: model.ParentTypeCompany,
 			}
 			dbCompany.ContactInfos = append(dbCompany.ContactInfos, dbCI)
 		}

@@ -26,7 +26,7 @@ type ContactInfo struct {
 
 	OwnerID    uint   `gorm:"index"`                            // Tenant or account owner
 	ParentID   uint   `gorm:"index:idx_contact_parent"`         // Entity ID (company/person)
-	ParentType string `gorm:"size:50;index:idx_contact_parent"` // "companies" | "people"
+	ParentType string `gorm:"size:50;index:idx_contact_parent"` // "company" | "person"
 
 	Type  string `gorm:"size:30;index"` // Kind of contact info
 	Label string `gorm:"size:100"`      // e.g. “Office”, “HQ”, “Support”
@@ -101,7 +101,7 @@ func (crmdb *CRMDatabase) LoadPhone(phoneid any, ownerid any) (*ContactInfo, err
 // for a given company ID and owner ID. Used to clean up contacts on company deletion.
 func (crmdb *CRMDatabase) DeletePhoneWithCompanyIDAndOwnerID(companyid any, ownerid any) error {
 	ph := ContactInfo{}
-	result := crmdb.db.Where("owner_id = ? AND parent_id = ? and parent_type = ?", ownerid, companyid, "companies").Delete(&ph)
+	result := crmdb.db.Where("owner_id = ? AND parent_id = ? and parent_type = ?", ownerid, companyid, ParentTypeCompany).Delete(&ph)
 	if err := result.Error; err != nil {
 		return err
 	}
@@ -111,7 +111,7 @@ func (crmdb *CRMDatabase) DeletePhoneWithCompanyIDAndOwnerID(companyid any, owne
 // DeletePhoneWithPersonIDAndOwnerID deletes all ContactInfo records linked to a specific person.
 func (crmdb *CRMDatabase) DeletePhoneWithPersonIDAndOwnerID(personid any, ownerid any) error {
 	ph := ContactInfo{}
-	result := crmdb.db.Where("owner_id = ? AND parent_id = ? and parent_type = ?", ownerid, personid, "people").Delete(&ph)
+	result := crmdb.db.Where("owner_id = ? AND parent_id = ? and parent_type = ?", ownerid, personid, ParentTypePerson).Delete(&ph)
 	if err := result.Error; err != nil {
 		return err
 	}

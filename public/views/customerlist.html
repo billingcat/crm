@@ -103,7 +103,7 @@
     Export
   </button>
 
-  <!-- Dropdown öffnet NACH OBEN -->
+  <!-- Dropdown opens towards the top -->
   <div x-show="open" @click.away="open=false" x-cloak
        class="absolute bottom-full mb-1 w-36 bg-white border border-gray-200 rounded-md shadow">
     <a :href="exportUrl('csv')"   class="block px-3 py-2 hover:bg-gray-50">CSV</a>

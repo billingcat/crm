@@ -128,7 +128,7 @@
     </div>
   </div>
 
-  <!-- Positionen: Alpine State + Sortable Container -->
+  <!-- Positions: Alpine state + sortable container -->
   <div x-data="{ counter: 1, showDivs: [], defaultTax: Number(document.getElementById('defaultTaxRate')?.value || 0) }">
     <div id="positions">
       {{range $pos, $ignore := $invoice.InvoicePositions}}
@@ -329,11 +329,11 @@
   </a>
 </form>
 
-<!-- SortableJS (Drag&Drop) -->
+<!-- SortableJS (drag & drop) -->
 <script src="/static/js/Sortable.min.js"></script>
 
 <script>
-  // Nächsten freien Index (für Duplizieren)
+  // Next free index (used for duplication)
   function getNextPos() {
     let max = -1;
     document.querySelectorAll('fieldset.invoicepos').forEach(fs => {
@@ -343,7 +343,7 @@
     return max + 1;
   }
 
-  // Entfernen via Button
+  // Remove via button
   function removePosition(btn) {
     const fs = btn.closest('fieldset.invoicepos');
     if (fs) {
@@ -353,13 +353,13 @@
     }
   }
 
-  // Nach strukturellen Änderungen: alle Indizes konsistent umschreiben
+  // after structural changes: renumber all indices consistently
   function renumberPositions() {
     const fieldsets = Array.from(document.querySelectorAll('#positions fieldset.invoicepos'));
     fieldsets.forEach((fs, newPos) => {
       const oldPos = Number(fs.dataset.pos);
       if (oldPos === newPos) {
-        // Sichtbare Positionsanzeige trotzdem aktualisieren
+        // update visible position
         const posInputSame = fs.querySelector(`input[name="is${newPos}"]`);
         if (posInputSame) posInputSame.value = String(newPos + 1);
         return;
@@ -395,7 +395,7 @@
     updatetotals();
   }
 
-  // Pfeil-Fallback
+  // arrow fallback
   function moveUp(btn) {
     const fs = btn.closest('fieldset.invoicepos');
     const prev = fs?.previousElementSibling;
@@ -413,7 +413,7 @@
     }
   }
 
-  // Duplizieren
+  // duplicate
   function duplicatePosition(pos) {
     pos = Number(pos);
     const original = document.getElementById('fieldset' + pos);
@@ -422,7 +422,7 @@
     const newPos = getNextPos();
     const clone = original.cloneNode(true);
 
-    // Umschreiben auf neue Positionsnummer
+    // Rewrite to the new position number
     const rewrite = (s) => {
       if (!s) return s;
       return s
@@ -445,13 +445,13 @@
       }
     });
 
-    // Sichtbare Positionsnummer fortlaufend (wird nach renumber nochmal konsolidiert)
+    // visible position number reset to next (will be renumbered later)
     const posInput = clone.querySelector(`input[name="is${newPos}"]`);
     if (posInput) posInput.value = String(document.querySelectorAll('fieldset.invoicepos').length + 1);
 
     original.insertAdjacentElement('afterend', clone);
 
-    // Konsolidieren + Summen neu
+    // Consolidate and refresh totals
     renumberPositions();
     calculatesum(newPos);
   }
@@ -465,7 +465,7 @@
     updatetotals();
   }
 
-  // Summen
+  // sums
   function updatefields(position) {
     calculatesum(position);
     updatetotals();
@@ -496,7 +496,7 @@
     netsumElement.innerText = (Math.round(netsum * 100) / 100).toFixed(2);
     totalsumElement.innerText = (Math.round(totalsum * 100) / 100).toFixed(2);
 
-    // Steuerzeilen erzeugen
+    // tax rows
     const keys = Object.keys(taxsums).sort((a, b) => b - a);
     document.querySelectorAll('.taxrow').forEach(e => e.remove());
     for (let i = 0; i < keys.length; i++) {
@@ -537,7 +537,7 @@
     }
   }
 
-  // Init: Summen + Sortable
+  // init: sums + sortable
   document.addEventListener("DOMContentLoaded", function () {
     updatetotals();
     if (window.Sortable) {
@@ -553,17 +553,17 @@
 <script>
   // --- Utilities -------------------------------------------------------------
 
-  // Hilfsfunktion: CSRF aus hidden input holen
+  // helper function: get CSRF token from hidden input
   function getCSRFToken() {
     const el = document.querySelector('input[name="csrf"]');
     return el?.value || '';
   }
 
-  // Server-API: CSV/XML an Server schicken -> JSON (unser Schema) zurück
+  // Server API: send CSV/XML to the server and get JSON (our schema) back
   async function serverImportPositions(file) {
     const fd = new FormData();
     fd.append('file', file, file.name);
-    // CSRF: sowohl Header als auch Feld, je nach Middleware
+    // CSRF: send both header and form field, depending on middleware
     const csrf = getCSRFToken();
     fd.append('csrf', csrf);
 
@@ -577,7 +577,7 @@
       const text = await res.text().catch(() => '');
       throw new Error(`Server-Import fehlgeschlagen (${res.status}): ${text || 'Unbekannter Fehler'}`);
     }
-    // Erwartet: { version: 1, positions: [...] }
+    // expected: { version: 1, positions: [...] }
     return res.json();
   }
 
@@ -585,7 +585,7 @@
   function removeAllPositions() {
     const container = document.getElementById('positions');
     container.querySelectorAll('fieldset.invoicepos').forEach(fs => fs.remove());
-    // Nummerierung nach dem Leeren wieder konsistent (jetzt 0 Zeilen)
+    // numbering consistent after clearing (now 0 rows)
     renumberPositions();
     updatetotals();
   }
@@ -613,7 +613,7 @@
 
   function clearImportError() { showImportError(''); }
 
-  // Eine neue leere Position hinzufügen (verwendet deinen Alpine-Button)
+  // add a new empty position row and wait until it's in the DOM
   function addEmptyPositionRow() {
     return new Promise((resolve) => {
       const container = document.getElementById('positions');
@@ -641,7 +641,6 @@
     });
   }
 
-  // Position befüllen
   function fillPosition(pos, { unit, quantity, net_price, tax_rate, text }) {
     // Fallbacks
     const defaultTax = Number(document.getElementById('defaultTaxRate')?.value || 0);
@@ -656,11 +655,10 @@
     if (!Number.isNaN(tax)) setValueById(`steuersatz${pos}`, String(tax).replace('.', ','));
     setValueById(`text${pos}`, text || '');
 
-    // Einzelzeilen-Summe + Gesamtsummen aktualisieren
+    // Recalculate line total
     calculatesum(pos);
   }
 
-  // JSON Parser nach festem Schema
   function parsePositionsFromJSON(text) {
     let data;
     try {
@@ -671,7 +669,7 @@
     if (!data || typeof data !== 'object' || !Array.isArray(data.positions)) {
       throw new Error('JSON hat kein "positions"-Array.');
     }
-    // Lightweight-Validierung
+    // Lightweight validation
     const out = [];
     data.positions.forEach((p, i) => {
       if (!p || typeof p !== 'object') throw new Error(`positions[${i}] ist ungültig.`);
@@ -689,9 +687,7 @@
     return out;
   }
 
-
-
-  // Datei-Import End-to-end: JSON lokal, CSV/XML via Server -> JSON
+  // file import end-to-end: JSON local, CSV/XML via server -> JSON
   async function handleImportFile(file) {
     clearImportError();
     if (!file) return;
@@ -699,15 +695,15 @@
     const ext = (file.name.split('.').pop() || '').toLowerCase();
 
     try {
-      // 1) JSON direkt im Browser parsen
+      // 1) Parse JSON directly in the browser
       let payload;
       if (ext === 'json') {
         const text = await file.text();
-        payload = parsePositionsFromJSON(text); // -> Array von Zeilen (text, quantity, net_price, tax_rate?, unit?)
-        // Wrap in unser einheitliches Objekt
+        payload = parsePositionsFromJSON(text); // -> Array of rows (text, quantity, net_price, tax_rate?, unit?)
+        // Wrap into our unified object
         payload = { version: 1, positions: payload };
       } else if (ext === 'csv' || ext === 'xml') {
-        // 2) CSV/XML zum Server -> Server gibt JSON-Format zurück
+        // 2) Send CSV/XML to the server -> server returns JSON format
         payload = await serverImportPositions(file); // -> {version:1, positions:[...]}
       } else {
         throw new Error('Nur .json, .csv oder .xml werden unterstützt.');
@@ -717,12 +713,12 @@
         throw new Error('Antwort hat kein "positions"-Array.');
       }
 
-      // 3) Replace-Modus: erst leeren, dann Zeilen erzeugen
+      // 3) Replace mode: clear existing rows, then recreate them
       removeAllPositions();
 
-      // 4) Zeilen nacheinander erzeugen & füllen (MutationObserver-Variante)
+      // 4) Create and populate rows sequentially (mutation observer variant)
       for (const r of payload.positions) {
-        const pos = await addEmptyPositionRow(); // wartet bis Fieldset im DOM
+        const pos = await addEmptyPositionRow(); // waits until the fieldset is in the DOM
         fillPosition(pos, r);
       }
       renumberPositions();
@@ -734,7 +730,7 @@
   }
 
 
-  // File-Input Listener
+  // File-Input listener
   document.addEventListener('DOMContentLoaded', () => {
     const fileInput = document.getElementById('import-file');
     if (fileInput) {

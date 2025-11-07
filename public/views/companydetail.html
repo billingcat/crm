@@ -183,21 +183,21 @@
     </div>
   </div>
 
-  <!-- Toolbar + Formular teilen sich denselben Alpine-Scope -->
+  <!-- Toolbar and form share the same Alpine scope -->
   <div x-data="{
        openInvoices: false,
        noteOpen: new URLSearchParams(window.location.search).get('addNote') === '1'
      }">
 
-    <!-- Button-Leiste -->
+    <!-- Button bar -->
     <div class="flex flex-wrap items-center gap-2 mb-4 mt-4">
-      <!-- Bearbeiten -->
+      <!-- Edit -->
       <a href="/company/edit/{{.ID}}"
         class="inline-block bg-primary text-text px-6 py-3 rounded-button font-bold hover:bg-hover hover:text-white transition-colors">
         <i class="fas fa-edit"></i> Bearbeiten
       </a>
 
-      <!-- Rechnungen (Dropdown) -->
+      <!-- Invoices (dropdown) -->
       {{ with $.companydetail.Invoices}}
       <div class="relative inline-block text-left">
         <button @click="openInvoices = !openInvoices"
@@ -222,25 +222,25 @@
       </div>
       {{ end }}
 
-      <!-- Neue Rechnung -->
+      <!-- New invoice -->
       <a href="/invoice/new/{{.ID}}"
         class="inline-block px-4 py-2 bg-white border rounded-button shadow hover:bg-gray-50">
         <i class="fas fa-plus-circle"></i> Neue Rechnung
       </a>
 
-      <!-- Neuer Kontakt -->
+      <!-- New contact -->
       <a href="/person/new/{{.ID}}"
         class="inline-block px-4 py-2 bg-white border rounded-button shadow hover:bg-gray-50">
         <i class="fas fa-plus-circle"></i> Neuer Kontakt
       </a>
 
-      <!-- Neue Notiz -->
+      <!-- New note -->
       <button @click.prevent="noteOpen = !noteOpen; if(noteOpen) $nextTick(() => $refs.noteTitle?.focus())"
         class="inline-block px-4 py-2 bg-white border rounded-button shadow hover:bg-gray-50">
         <i class="fas fa-sticky-note"></i> Neue Notiz
       </button>
 
-      <!-- Fallback ohne JS -->
+      <!-- Fallback without JS -->
       <noscript>
         <a href="/note/new/{{.ID}}" class="inline-block px-4 py-2 bg-white border rounded-button shadow">
           Neue Notiz
@@ -248,7 +248,7 @@
       </noscript>
     </div>
 
-    <!-- Ausklapp-Formular: Neue Notiz -->
+    <!-- Expandable form: new note -->
     <div x-show="noteOpen" x-transition x-cloak class="bg-gray-50 rounded-lg p-4 mb-6 border border-gray-200">
       {{ with $.flash_note_error }}
       <div class="mb-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md p-2">{{.}}</div>
@@ -257,7 +257,7 @@
       <form method="POST" action="/notes/create" class="space-y-3">
         {{ with $.CSRFToken }}<input type="hidden" name="csrf" value="{{.}}">{{ end }}
         <input type="hidden" name="parent_id" value="{{.ID}}">
-        <input type="hidden" name="parent_type" value="companies">
+        <input type="hidden" name="parent_type" value="{{ $.noteparenttype }}">
 
         <div>
           <label for="note_title" class="block text-sm font-medium text-gray-700">Titel</label>
@@ -289,28 +289,28 @@
     </div>
   </div>
 
-  <!-- Notizen-Liste -->
+  <!-- Notes list -->
   {{ with $.notes }}
   <div class="bg-white border border-gray-200 rounded-lg divide-y">
     {{ range . }}
     <div class="p-4 relative group" x-data="{ edit: false }">
       {{ $isAuthor := eq $.uid .AuthorID }}
 
-      <!-- Edit-Button nur für Autor -->
+      <!-- Edit button only for author -->
       {{ if $isAuthor }}
-      <!-- Desktop: auf Hover einblenden -->
+      <!-- Desktop: show on hover -->
       <button x-show="!edit" @click="edit = true"
         class="hidden sm:inline-flex items-center gap-1 absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-xs px-2 py-1 border rounded-md bg-white hover:bg-gray-50 shadow">
         <i class="fas fa-pen"></i> Bearbeiten
       </button>
-      <!-- Mobile: immer sichtbar -->
+      <!-- Mobile: always visible -->
       <button x-show="!edit" @click="edit = true"
         class="sm:hidden absolute top-2 right-2 text-xs px-2 py-1 border rounded-md bg-white shadow">
         ✎
       </button>
       {{ end }}
 
-      <!-- Anzeige-Modus -->
+      <!-- Display mode -->
       <div x-show="!edit">
         {{ if .Title }}
         <h3 class="font-semibold mb-1">{{ .Title }}</h3>
@@ -340,7 +340,7 @@
         {{ end }}
       </div>
 
-      <!-- Edit-Modus (Inline-Formular) -->
+      <!-- Edit mode (inline form) -->
       {{ if $isAuthor }}
       <div x-show="edit" x-cloak class="mt-2">
         <form method="POST" action="/notes/update/{{ .ID }}" class="space-y-2 bg-gray-50 border rounded-lg p-3">

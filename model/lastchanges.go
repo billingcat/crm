@@ -189,9 +189,9 @@ func (crmdb *CRMDatabase) LoadActivity(ownerID any, limit int) (*ActivityHydrati
 			noteSet[h.ItemID] = struct{}{}
 			if h.ParentType != nil && h.ParentID != nil {
 				switch *h.ParentType {
-				case "companies":
+				case ParentTypeCompany:
 					companySet[*h.ParentID] = struct{}{}
-				case "people":
+				case ParentTypePerson:
 					personSet[*h.ParentID] = struct{}{}
 				}
 			}
