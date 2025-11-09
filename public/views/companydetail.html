@@ -145,44 +145,82 @@
       }))
     })
   </script>
+  <!-- Wrapper with vertical rhythm -->
+  <div class="space-y-6">
 
-  {{ with .Background}}
-  <div class="bg-gray-50 rounded-lg p-4 mb-2">
-    <p>{{.}}</p>
-  </div>
-  {{end}}
-
-  <div class="bg-gray-50 rounded-lg p-4">
-    <p>{{.Address1}}{{with .Address2}}<br>{{.}}{{end}}
-      <br>{{.Zip}} {{.City}}<br>
-      {{.Country}}
-    </p>
-  </div>
-
-  <div class="bg-gray-50 rounded-lg p-4 mt-4">
-    <p>E-Mail für Rechnungen: <a href="mailto:{{.InvoiceEmail}}">{{.InvoiceEmail}}</a><br>
-      USt-IdNr: {{.VATID}}</p>
-
-    <div class="mt-4">
-      <i>Kontaktdaten:</i>
-      {{ range .ContactInfos }}
-      <p>
-        {{ .Label }}:
-        <a href="{{ .SafeHref }}" {{ if .OpensInNewTab }}target="_blank" rel="noopener noreferrer" {{ end }}>
-          {{ .Value }}
-        </a>
-      </p>
+    {{ if or .CustomerNumber .Background }}
+    <section class="backdrop-blur-sm bg-white/70 rounded-xl p-4 shadow-sm border border-white/50">
+      <h2 class="text-lg font-semibold text-gray-800 mb-2">Allgemein</h2>
+      {{ with .CustomerNumber }}
+      <p class="text-gray-700"><span class="font-medium">Kundennummer:</span> {{ . }}</p>
       {{ end }}
-    </div>
 
-    <div class="mt-4">
-      <i>Kontakte:</i>
-      {{ range .Contacts}}
-      <p><a href="/person/{{.ID}}">{{.Name}}</a></p>
-      {{end}}
-    </div>
+      {{ with .Background }}
+      <p class="text-gray-600 mt-2">{{ . }}</p>
+      {{ end }}
+    </section>
+    {{ end }}
+
+    <section class="backdrop-blur-sm bg-white/70 rounded-xl p-4 shadow-sm border border-white/50">
+      <h2 class="text-lg font-semibold text-gray-800 mb-2">Adresse</h2>
+      <address class="not-italic leading-relaxed text-gray-700">
+        {{ .Address1 }}{{ with .Address2 }}<br>{{ . }}{{ end }}<br>
+        {{ .Zip }} {{ .City }}<br>
+        {{ .Country }}
+      </address>
+      <h2 class="text-lg font-semibold text-gray-800 mb-2 mt-2">Kontaktdaten</h2>
+      {{ if gt (len .ContactInfos) 0 }}
+      <dl class="divide-y divide-gray-200">
+        {{ range .ContactInfos }}
+        <div class="py-2 grid grid-cols-3 gap-2">
+          <dt class="text-gray-500">{{ .Label }}</dt>
+          <dd class="col-span-2">
+            <a class="text-blue-600 hover:underline" href="{{ .SafeHref }}" {{ if .OpensInNewTab }}target="_blank"
+              rel="noopener noreferrer" {{ end }}>
+              {{ .Value }}
+            </a>
+          </dd>
+        </div>
+        {{ end }}
+      </dl>
+      {{ else }}
+      <p class="text-gray-500 italic">Keine Kontaktdaten hinterlegt.</p>
+      {{ end }}
+      <h2 class="text-lg font-semibold text-gray-800 mb-2 mt-2">Kontakte</h2>
+      {{ if gt (len .Contacts) 0 }}
+      <ul class="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+        {{ range .Contacts }}
+        <li>
+          <a class="block rounded-lg px-3 py-2 hover:bg-gray-100 transition" href="/person/{{ .ID }}">
+            {{ .Name }}
+          </a>
+        </li>
+        {{ end }}
+      </ul>
+      {{ else }}
+      <p class="text-gray-500 italic">Keine Kontakte vorhanden.</p>
+      {{ end }}
+
+    </section>
+
+    {{ if or .InvoiceEmail .VATID }}
+    <section class="backdrop-blur-sm bg-white/70 rounded-xl p-4 shadow-sm border border-white/50">
+      <h2 class="text-lg font-semibold text-gray-800 mb-2">Rechnung</h2>
+      <div class="text-gray-700 space-y-1">
+        {{ with .InvoiceEmail }}
+        <p>E-Mail für Rechnungen:
+          <a class="text-blue-600 hover:underline" href="mailto:{{ . }}">{{ . }}</a>
+        </p>
+        {{ end }}
+
+        {{ with .VATID }}
+        <p>USt-IdNr: {{ . }}</p>
+        {{ end }}
+      </div>
+    </section>
+    {{ end }}
+
   </div>
-
   <!-- Toolbar and form share the same Alpine scope -->
   <div x-data="{
        openInvoices: false,
