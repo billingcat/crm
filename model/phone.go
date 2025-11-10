@@ -24,9 +24,9 @@ type ContactInfo struct {
 	UpdatedAt time.Time
 	DeletedAt gorm.DeletedAt `gorm:"index"`
 
-	OwnerID    uint   `gorm:"index"`                            // Tenant or account owner
-	ParentID   uint   `gorm:"index:idx_contact_parent"`         // Entity ID (company/person)
-	ParentType string `gorm:"size:50;index:idx_contact_parent"` // "company" | "person"
+	OwnerID    uint       `gorm:"index"`                            // Tenant or account owner
+	ParentID   uint       `gorm:"index:idx_contact_parent"`         // Entity ID (company/person)
+	ParentType ParentType `gorm:"size:50;index:idx_contact_parent"` // "company" | "person"
 
 	Type  string `gorm:"size:30;index"` // Kind of contact info
 	Label string `gorm:"size:100"`      // e.g. “Office”, “HQ”, “Support”

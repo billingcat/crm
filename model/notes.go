@@ -18,14 +18,14 @@ import (
 // on save to reflect the last modification time.
 type Note struct {
 	gorm.Model
-	OwnerID    uint      `json:"owner_id"    form:"owner_id"`                 // Set server-side: tenant/owner scope
-	AuthorID   uint      `json:"author_id"   form:"-"           gorm:"index"` // Set server-side: creating user
-	ParentID   uint      `json:"parent_id"   form:"parent_id"`                // ID of the parent record
-	ParentType string    `json:"parent_type" form:"parent_type"`              // "person" | "company"
-	Title      string    `json:"title"       form:"title"`                    // Optional headline
-	Body       string    `json:"body"        form:"body"`                     // Main text content
-	Tags       string    `json:"tags"        form:"tags"`                     // Comma-separated tags (stored as CSV)
-	EditedAt   time.Time `json:"edited_at"   form:"edited_at"`                // Usually managed server-side
+	OwnerID    uint       `json:"owner_id"    form:"owner_id"`                 // Set server-side: tenant/owner scope
+	AuthorID   uint       `json:"author_id"   form:"-"           gorm:"index"` // Set server-side: creating user
+	ParentID   uint       `json:"parent_id"   form:"parent_id"`                // ID of the parent record
+	ParentType ParentType `json:"parent_type" form:"parent_type"`              // "person" | "company"
+	Title      string     `json:"title"       form:"title"`                    // Optional headline
+	Body       string     `json:"body"        form:"body"`                     // Main text content
+	Tags       string     `json:"tags"        form:"tags"`                     // Comma-separated tags (stored as CSV)
+	EditedAt   time.Time  `json:"edited_at"   form:"edited_at"`                // Usually managed server-side
 }
 
 // BeforeSave GORM hook — automatically updates EditedAt timestamp
@@ -38,21 +38,6 @@ func (n *Note) BeforeSave(tx *gorm.DB) error {
 // -----------------------
 // Helper functions
 // -----------------------
-
-// checkParentType checks that the given parent type is valid
-// and returns the normalized value.
-//
-// Valid parent types are:
-//   - "person"
-//   - "company"
-func checkParentType(s string) (string, error) {
-	switch s {
-	case ParentTypePerson, ParentTypeCompany:
-		return s, nil
-	default:
-		return "", fmt.Errorf("invalid parent_type %q (expected %q or %q)", s, ParentTypePerson, ParentTypeCompany)
-	}
-}
 
 // SplitTags splits a comma-separated string into a cleaned slice of tags,
 // trimming whitespace and skipping empty entries.
@@ -87,11 +72,11 @@ func JoinTags(a []string) string {
 // CreateNote inserts a new note record after normalizing its ParentType.
 // EditedAt is automatically set via BeforeSave.
 func (crmdb *CRMDatabase) CreateNote(n *Note) error {
-	pt, err := checkParentType(n.ParentType)
-	if err != nil {
-		return err
+	if n.ParentType.IsValid() {
+		n.ParentType = n.ParentType
+	} else {
+		return fmt.Errorf("invalid parent_type %q", n.ParentType)
 	}
-	n.ParentType = pt
 	return crmdb.db.Create(n).Error
 }
 
@@ -118,7 +103,7 @@ type NoteFilters struct {
 
 // LoadAllNotesForParent is a convenience wrapper around ListNotesForParent
 // using default (empty) filters.
-func (crmdb *CRMDatabase) LoadAllNotesForParent(ownerID uint, parentType string, parentID uint) ([]Note, error) {
+func (crmdb *CRMDatabase) LoadAllNotesForParent(ownerID uint, parentType ParentType, parentID uint) ([]Note, error) {
 	return crmdb.ListNotesForParent(ownerID, parentType, parentID, NoteFilters{})
 }
 
@@ -126,12 +111,11 @@ func (crmdb *CRMDatabase) LoadAllNotesForParent(ownerID uint, parentType string,
 // optionally filtered by search terms, with pagination support.
 //
 // Search applies a simple LIKE filter over title, body, and tags (case-sensitive by default).
-func (crmdb *CRMDatabase) ListNotesForParent(ownerID uint, parentType string, parentID uint, f NoteFilters) ([]Note, error) {
-	pt, err := checkParentType(parentType)
-	if err != nil {
-		return nil, err
+func (crmdb *CRMDatabase) ListNotesForParent(ownerID uint, parentType ParentType, parentID uint, f NoteFilters) ([]Note, error) {
+	if !parentType.IsValid() {
+		return nil, fmt.Errorf("invalid parent_type %q", parentType)
 	}
-
+	var err error
 	limit := f.Limit
 	if limit <= 0 || limit > 200 {
 		limit = 50
@@ -139,7 +123,7 @@ func (crmdb *CRMDatabase) ListNotesForParent(ownerID uint, parentType string, pa
 	offset := f.Offset
 
 	q := crmdb.db.
-		Where("owner_id = ? AND parent_type = ? AND parent_id = ?", ownerID, pt, parentID)
+		Where("owner_id = ? AND parent_type = ? AND parent_id = ?", ownerID, parentType, parentID)
 
 	if s := strings.TrimSpace(f.Search); s != "" {
 		like := "%" + s + "%"

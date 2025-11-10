@@ -9,12 +9,12 @@ import (
 // ActivityHead represents a normalized, cross-entity activity item.
 // It unifies companies, invoices, and notes into a single chronological feed.
 type ActivityHead struct {
-	ItemType   string    `gorm:"column:item_type"` // "company" | "invoice" | "note"
-	ItemID     uint      `gorm:"column:item_id"`
-	CreatedAt  time.Time `gorm:"column:created_at"`
-	CompanyID  *uint     `gorm:"column:company_id"`  // Only for invoices
-	ParentType *string   `gorm:"column:parent_type"` // Only for notes
-	ParentID   *uint     `gorm:"column:parent_id"`   // Only for notes
+	ItemType   string      `gorm:"column:item_type"` // "company" | "invoice" | "note"
+	ItemID     uint        `gorm:"column:item_id"`
+	CreatedAt  time.Time   `gorm:"column:created_at"`
+	CompanyID  *uint       `gorm:"column:company_id"`  // Only for invoices
+	ParentType *ParentType `gorm:"column:parent_type"` // Only for notes
+	ParentID   *uint       `gorm:"column:parent_id"`   // Only for notes
 }
 
 // GetActivityHeads returns the most recent items across all major entity types

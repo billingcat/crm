@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"encoding/csv"
 	"fmt"
 	"net/http"
@@ -19,12 +20,12 @@ import (
 func (ctrl *controller) companyInit(e *echo.Echo) {
 	g := e.Group("/company")
 	g.Use(ctrl.authMiddleware)
-	g.GET("/new", ctrl.companynew)
+	g.GET("/new", ctrl.upsertCompany)
+	g.POST("/new", ctrl.upsertCompany)
+	g.GET("/edit/:id", ctrl.upsertCompany)
+	g.POST("/edit/:id", ctrl.upsertCompany)
 	g.GET("/list", ctrl.companylist)
 	g.GET("/list/export", ctrl.companyExport)
-	g.POST("/new", ctrl.companynew)
-	g.GET("/edit/:id", ctrl.companyedit)
-	g.POST("/edit/:id", ctrl.companyedit)
 	g.GET("/:id/:name", ctrl.companydetail)
 	g.GET("/:id", ctrl.companydetail)
 	g.POST("/:id/tags", ctrl.companyTagsUpdate)
@@ -61,25 +62,48 @@ type companyForm struct {
 	Tags                   []string          `form:"tags"` // multiple inputs
 }
 
-func (ctrl *controller) companynew(c echo.Context) error {
-	m := ctrl.defaultResponseMap(c, "Neue Firma anlegen")
+// upsertCompany handles both creating a new company and editing an existing one.
+// It decides by the presence of the :id route param: empty => new, non-empty => edit.
+func (ctrl *controller) upsertCompany(c echo.Context) error {
+	ownerID := c.Get("ownerid").(uint)
+	idParam := strings.TrimSpace(c.Param("id"))
+	isNew := idParam == ""
+
+	// Common response map
+	title := "Neue Firma anlegen"
+	if !isNew {
+		title = "Firma bearbeiten"
+	}
+	m := ctrl.defaultResponseMap(c, title)
+
 	switch c.Request().Method {
 	case http.MethodGet:
-		m["submit"] = "Firma anlegen"
-		m["action"] = "/company/new"
-		m["cancel"] = "/"
+		if isNew {
+			// Render empty form with a (non-binding) number suggestion
+			m["submit"] = "Firma anlegen"
+			m["action"] = "/company/new"
+			m["cancel"] = "/"
 
-		// Optional: show a formatted suggestion in the placeholder
-		// (non-persistent; real allocation happens in NextCustomerNumberTx)
-		suggestion, _ := ctrl.model.SuggestNextCustomerNumber(c.Request().Context())
-		m["company"] = model.Company{
-			CustomerNumber: suggestion, // used as placeholder in your template
+			suggestion, _ := ctrl.model.SuggestNextCustomerNumber(c.Request().Context())
+			m["company"] = model.Company{
+				CustomerNumber: suggestion, // Template can show this as placeholder
+			}
+			return c.Render(http.StatusOK, "companyedit.html", m)
 		}
+
+		// Edit: load and render existing record
+		company, err := ctrl.model.LoadCompany(idParam, ownerID)
+		if err != nil {
+			return ErrInvalid(fmt.Errorf("cannot find company with id %v and ownerid %v", idParam, ownerID), "Kann Firma nicht laden")
+		}
+		m["title"] = company.Name + " bearbeiten"
+		m["company"] = company
+		m["action"] = fmt.Sprintf("/company/edit/%d", company.ID)
+		m["cancel"] = fmt.Sprintf("/company/%d", company.ID)
+		m["submit"] = "Daten ändern"
 		return c.Render(http.StatusOK, "companyedit.html", m)
 
 	case http.MethodPost:
-		ownerID := c.Get("ownerid").(uint)
-
 		// Decode form
 		if err := c.Request().ParseForm(); err != nil {
 			return ErrInvalid(err, "Fehler beim Verarbeiten der Formulardaten")
@@ -90,89 +114,151 @@ func (ctrl *controller) companynew(c echo.Context) error {
 			return ErrInvalid(err, "Fehler beim Verarbeiten der Formulardaten")
 		}
 
-		dbCompany := &model.Company{
-			Address1:               strings.TrimSpace(comp.Address1),
-			Address2:               strings.TrimSpace(comp.Address2),
-			Background:             strings.TrimSpace(comp.Background),
-			ContactInvoice:         strings.TrimSpace(comp.ContactInvoice),
-			InvoiceCurrency:        strings.TrimSpace(comp.InvoiceCurrency),
-			InvoiceExemptionReason: strings.TrimSpace(comp.InvoiceExemptionReason),
-			InvoiceFooter:          strings.TrimSpace(comp.InvoiceFooter),
-			InvoiceOpening:         strings.TrimSpace(comp.InvoiceOpening),
-			InvoiceTaxType:         strings.TrimSpace(comp.InvoiceTaxType),
-			CustomerNumber:         strings.TrimSpace(comp.CustomerNumber), // handled below
-			Country:                strings.TrimSpace(comp.Country),
-			Name:                   strings.TrimSpace(comp.Name),
-			City:                   strings.TrimSpace(comp.City),
-			OwnerID:                ownerID,
-			Zip:                    strings.TrimSpace(comp.Zip),
-			InvoiceEmail:           strings.TrimSpace(comp.EmailInvoice),
-			SupplierNumber:         strings.TrimSpace(comp.SupplierNumber),
-			VATID:                  strings.TrimSpace(comp.VATID),
-		}
-
-		// ContactInfos (trim)
-		for _, ci := range comp.Phone {
-			ci.Type = strings.TrimSpace(ci.Type)
-			ci.Label = strings.TrimSpace(ci.Label)
-			ci.Value = strings.TrimSpace(ci.Value)
-			if ci.Value == "" {
-				continue
-			}
-			dbCI := model.ContactInfo{
-				Type:       ci.Type,
-				Label:      ci.Label,
-				Value:      ci.Value,
-				OwnerID:    ownerID,
-				ParentType: model.ParentTypeCompany,
-			}
-			dbCompany.ContactInfos = append(dbCompany.ContactInfos, dbCI)
-		}
-
-		// VAT
+		// Load or init DB object
+		var dbCompany *model.Company
 		var err error
-		dbCompany.DefaultTaxRate, err = decimal.NewFromString(strings.TrimSpace(comp.DefaultTaxRate))
-		if err != nil {
+		if isNew {
+			dbCompany = &model.Company{OwnerID: ownerID}
+		} else {
+			dbCompany, err = ctrl.model.LoadCompany(idParam, ownerID)
+			if err != nil {
+				return ErrInvalid(fmt.Errorf("cannot find company with id %v and ownerid %v", idParam, ownerID), "Kann Firma nicht laden")
+			}
+		}
+
+		// Copy editable fields from form (for new and edit)
+		applyFormToCompany(dbCompany, comp)
+
+		// Parse DefaultTaxRate
+		if dbCompany.DefaultTaxRate, err = decimal.NewFromString(strings.TrimSpace(comp.DefaultTaxRate)); err != nil {
 			return ErrInvalid(err, "Fehler beim Verarbeiten der Mehrwertsteuer")
 		}
 
-		// ---- Customer number handling (model-only) ----
-		// Rule:
-		// - Empty -> allocate via NextCustomerNumberTx
-		// - Non-empty -> must be free (or same record; here new => excludeID=0) and may lift the counter
-		if dbCompany.CustomerNumber == "" {
-			num, _, allocErr := ctrl.model.NextCustomerNumberTx(c.Request().Context())
+		// Rebuild ContactInfos (same strategy for new/edit; new just replaces empty)
+		dbCompany.ContactInfos = buildContactInfos(comp.Phone, ownerID, model.ParentTypeCompany)
+
+		// Customer number rules
+		desired := strings.TrimSpace(comp.CustomerNumber)
+		if err := ctrl.handleCustomerNumber(c.Request().Context(), dbCompany, desired, isNew); err != nil {
+			return err // already wrapped with ErrInvalid inside
+		}
+
+		// Normalize tags consistently
+		tagNames := normalizeSliceInput(comp.Tags)
+
+		// Persist
+		if err := ctrl.model.SaveCompany(dbCompany, ownerID, tagNames); err != nil {
+			return ErrInvalid(err, "Fehler beim Speichern der Firma")
+		}
+
+		// Redirect: keep existing behavior (pretty URL on edit)
+		if isNew {
+			return c.Redirect(http.StatusSeeOther, fmt.Sprintf("/company/%d", dbCompany.ID))
+		}
+		return c.Redirect(http.StatusSeeOther, fmt.Sprintf("/company/%d/%s", dbCompany.ID, dbCompany.Name))
+	}
+
+	return fmt.Errorf("unknown method %s", c.Request().Method)
+}
+
+// applyFormToCompany copies common form fields to the model.Company.
+// Trims inputs and keeps comments in English as requested.
+func applyFormToCompany(dst *model.Company, src companyForm) {
+	dst.Background = strings.TrimSpace(src.Background)
+	dst.Name = strings.TrimSpace(src.Name)
+	dst.Address1 = strings.TrimSpace(src.Address1)
+	dst.Address2 = strings.TrimSpace(src.Address2)
+	dst.InvoiceEmail = strings.TrimSpace(src.EmailInvoice)
+	dst.SupplierNumber = strings.TrimSpace(src.SupplierNumber)
+	dst.ContactInvoice = strings.TrimSpace(src.ContactInvoice)
+	dst.City = strings.TrimSpace(src.City)
+	dst.Zip = strings.TrimSpace(src.Zip)
+	dst.VATID = strings.TrimSpace(src.VATID)
+	dst.Country = strings.TrimSpace(src.Country)
+	dst.InvoiceOpening = strings.TrimSpace(src.InvoiceOpening)
+	dst.InvoiceCurrency = strings.TrimSpace(src.InvoiceCurrency)
+	dst.InvoiceTaxType = strings.TrimSpace(src.InvoiceTaxType)
+	dst.InvoiceFooter = strings.TrimSpace(src.InvoiceFooter)
+	dst.InvoiceExemptionReason = strings.TrimSpace(src.InvoiceExemptionReason)
+	// CustomerNumber is handled separately (business rules).
+}
+
+// buildContactInfos trims and maps form ContactInfos to model.ContactInfo slice.
+func buildContactInfos(items []contactInfoForm, ownerID uint, parentType model.ParentType) []model.ContactInfo {
+	out := make([]model.ContactInfo, 0, len(items))
+	for _, ci := range items {
+		t := strings.TrimSpace(ci.Type)
+		l := strings.TrimSpace(ci.Label)
+		v := strings.TrimSpace(ci.Value)
+		if v == "" {
+			continue
+		}
+		out = append(out, model.ContactInfo{
+			Type:       t,
+			Label:      l,
+			Value:      v,
+			OwnerID:    ownerID,
+			ParentType: parentType,
+		})
+	}
+	return out
+}
+
+// handleCustomerNumber encapsulates the "new vs. edit" customer number rules,
+// including availability checks and counter lifting.
+func (ctrl *controller) handleCustomerNumber(ctx context.Context, dbCompany *model.Company, desired string, isNew bool) error {
+	switch {
+	case isNew:
+		// New company:
+		// - Empty => allocate via NextCustomerNumberTx
+		// - Non-empty => must be free and may lift counter
+		if desired == "" {
+			num, _, allocErr := ctrl.model.NextCustomerNumberTx(ctx)
 			if allocErr != nil {
 				return ErrInvalid(allocErr, "Kundennummer konnte nicht automatisch vergeben werden")
 			}
 			dbCompany.CustomerNumber = num
-		} else {
-			ok, msg, chkErr := ctrl.model.CheckCustomerNumber(c.Request().Context(), dbCompany.CustomerNumber, 0 /* excludeID for new = 0 */)
-			if chkErr != nil {
-				return ErrInvalid(chkErr, "Fehler bei der Kundennummernprüfung")
-			}
-			if !ok {
-				if msg == "" {
-					msg = "Kundennummer bereits vergeben"
-				}
-				return ErrInvalid(fmt.Errorf("customer number taken"), msg)
-			}
-			// Try to lift the counter when the provided value is ahead of settings
-			if liftErr := ctrl.model.MaybeLiftCustomerCounterFor(c.Request().Context(), dbCompany.CustomerNumber); liftErr != nil {
-				// non-fatal vs. fatal is your choice; I make it fatal to keep invariants strong
-				return ErrInvalid(liftErr, "Konnte Zählerstand nicht anheben")
-			}
+			return nil
 		}
-		// ----------------------------------------------
-
-		tagNames := normalizeSliceInput(comp.Tags)
-
-		if err := ctrl.model.SaveCompany(dbCompany, ownerID, tagNames); err != nil {
-			return ErrInvalid(err, "Fehler beim Speichern der Firma")
+		ok, msg, chkErr := ctrl.model.CheckCustomerNumber(ctx, desired, 0 /* exclude none on new */)
+		if chkErr != nil {
+			return ErrInvalid(chkErr, "Fehler bei der Kundennummernprüfung")
 		}
-		return c.Redirect(http.StatusSeeOther, fmt.Sprintf("/company/%d", dbCompany.ID))
+		if !ok {
+			if msg == "" {
+				msg = "Kundennummer bereits vergeben"
+			}
+			return ErrInvalid(fmt.Errorf("customer number taken"), msg)
+		}
+		if liftErr := ctrl.model.MaybeLiftCustomerCounterFor(ctx, desired); liftErr != nil {
+			return ErrInvalid(liftErr, "Konnte Zählerstand nicht anheben")
+		}
+		dbCompany.CustomerNumber = desired
+		return nil
+
+	default:
+		// Edit:
+		// - Empty input => keep current (no change)
+		// - Non-empty and different => must be available (excluding this record), then lift counter
+		if desired == "" || desired == dbCompany.CustomerNumber {
+			return nil
+		}
+		ok, msg, chkErr := ctrl.model.CheckCustomerNumber(ctx, desired, dbCompany.ID)
+		if chkErr != nil {
+			return ErrInvalid(chkErr, "Fehler bei der Kundennummernprüfung")
+		}
+		if !ok {
+			if msg == "" {
+				msg = "Kundennummer bereits vergeben"
+			}
+			return ErrInvalid(fmt.Errorf("customer number taken"), msg)
+		}
+		if liftErr := ctrl.model.MaybeLiftCustomerCounterFor(ctx, desired); liftErr != nil {
+			return ErrInvalid(liftErr, "Konnte Zählerstand nicht anheben")
+		}
+		dbCompany.CustomerNumber = desired
+		return nil
 	}
-	return fmt.Errorf("Unknown method %s", c.Request().Method)
 }
 
 func (ctrl *controller) companydetail(c echo.Context) error {
@@ -214,118 +300,6 @@ func (ctrl *controller) companydetail(c echo.Context) error {
 	return c.Render(http.StatusOK, "companydetail.html", m)
 }
 
-func (ctrl *controller) companyedit(c echo.Context) error {
-	m := ctrl.defaultResponseMap(c, "Firma bearbeiten")
-	ownerID := c.Get("ownerid").(uint)
-
-	switch c.Request().Method {
-	case http.MethodGet:
-		paramCompanyID := c.Param("id")
-		company, err := ctrl.model.LoadCompany(paramCompanyID, ownerID)
-		if err != nil {
-			return ErrInvalid(fmt.Errorf("cannot find company with id %v and ownerid %v", paramCompanyID, ownerID), "Kann Firma nicht laden")
-		}
-
-		m["title"] = company.Name + " bearbeiten"
-		m["company"] = company
-		m["action"] = fmt.Sprintf("/company/edit/%d", company.ID)
-		m["cancel"] = fmt.Sprintf("/company/%d", company.ID)
-		m["submit"] = "Daten ändern"
-		return c.Render(http.StatusOK, "companyedit.html", m)
-
-	case http.MethodPost:
-		// Decode form
-		if err := c.Request().ParseForm(); err != nil {
-			return ErrInvalid(err, "Fehler beim Verarbeiten der Formulardaten")
-		}
-		var comp companyForm
-		dec := form.NewDecoder()
-		if err := dec.Decode(&comp, c.Request().Form); err != nil {
-			return ErrInvalid(err, "Fehler beim Verarbeiten der Formulardaten")
-		}
-
-		// Load DB object
-		paramCompanyID := c.Param("id")
-		dbCompany, err := ctrl.model.LoadCompany(paramCompanyID, ownerID)
-		if err != nil {
-			return ErrInvalid(fmt.Errorf("cannot find company with id %v and ownerid %v", paramCompanyID, ownerID), "Kann Firma nicht laden")
-		}
-
-		// Update basic fields (trim inputs where appropriate)
-		dbCompany.Background = strings.TrimSpace(comp.Background)
-		dbCompany.Name = strings.TrimSpace(comp.Name)
-		// Customer number handled below
-		dbCompany.Address1 = strings.TrimSpace(comp.Address1)
-		dbCompany.Address2 = strings.TrimSpace(comp.Address2)
-		dbCompany.InvoiceEmail = strings.TrimSpace(comp.EmailInvoice)
-		dbCompany.SupplierNumber = strings.TrimSpace(comp.SupplierNumber)
-		dbCompany.ContactInvoice = strings.TrimSpace(comp.ContactInvoice)
-		dbCompany.City = strings.TrimSpace(comp.City)
-		dbCompany.Zip = strings.TrimSpace(comp.Zip)
-		dbCompany.VATID = strings.TrimSpace(comp.VATID)
-		dbCompany.Country = strings.TrimSpace(comp.Country)
-		dbCompany.InvoiceOpening = strings.TrimSpace(comp.InvoiceOpening)
-		dbCompany.InvoiceCurrency = strings.TrimSpace(comp.InvoiceCurrency)
-		dbCompany.InvoiceTaxType = strings.TrimSpace(comp.InvoiceTaxType)
-		dbCompany.InvoiceFooter = strings.TrimSpace(comp.InvoiceFooter)
-		dbCompany.InvoiceExemptionReason = strings.TrimSpace(comp.InvoiceExemptionReason)
-
-		if dbCompany.DefaultTaxRate, err = decimal.NewFromString(strings.TrimSpace(comp.DefaultTaxRate)); err != nil {
-			return ErrInvalid(err, "Fehler beim Verarbeiten der Mehrwertsteuer")
-		}
-
-		// --- Customer number handling (model-only) ---
-		// Rule for edit:
-		// - Empty input => keep current db value (no change)
-		// - Non-empty and different => must be available (excluding this company),
-		//   and lift counter if the numeric part is ahead of settings.
-		desiredNumber := strings.TrimSpace(comp.CustomerNumber)
-		if desiredNumber != "" && desiredNumber != dbCompany.CustomerNumber {
-			ok, msg, chkErr := ctrl.model.CheckCustomerNumber(c.Request().Context(), desiredNumber, dbCompany.ID)
-			if chkErr != nil {
-				return ErrInvalid(chkErr, "Fehler bei der Kundennummernprüfung")
-			}
-			if !ok {
-				if msg == "" {
-					msg = "Kundennummer bereits vergeben"
-				}
-				return ErrInvalid(fmt.Errorf("customer number taken"), msg)
-			}
-			if liftErr := ctrl.model.MaybeLiftCustomerCounterFor(c.Request().Context(), desiredNumber); liftErr != nil {
-				return ErrInvalid(liftErr, "Konnte Zählerstand nicht anheben")
-			}
-			dbCompany.CustomerNumber = desiredNumber
-		}
-		// ------------------------------------------------
-
-		// Replace contact infos (simple strategy: rebuild list)
-		dbCompany.ContactInfos = []model.ContactInfo{}
-		for _, ci := range comp.Phone {
-			ci.Type = strings.TrimSpace(ci.Type)
-			ci.Label = strings.TrimSpace(ci.Label)
-			ci.Value = strings.TrimSpace(ci.Value)
-			if ci.Value == "" {
-				continue
-			}
-			dbCI := model.ContactInfo{
-				Type:       ci.Type,
-				Label:      ci.Label,
-				Value:      ci.Value,
-				OwnerID:    ownerID,
-				ParentType: model.ParentTypeCompany,
-			}
-			dbCompany.ContactInfos = append(dbCompany.ContactInfos, dbCI)
-		}
-
-		if err := ctrl.model.SaveCompany(dbCompany, ownerID, comp.Tags); err != nil {
-			return ErrInvalid(err, "Fehler beim Speichern der Firma")
-		}
-		if err = c.Redirect(http.StatusSeeOther, fmt.Sprintf("/company/%d/%s", dbCompany.ID, dbCompany.Name)); err != nil {
-			return ErrInvalid(err, "Fehler beim Weiterleiten zur Firmenseite")
-		}
-	}
-	return nil
-}
 func normalizeSliceInput(in []string) []string {
 	seen := map[string]bool{}
 	var out []string
@@ -427,7 +401,7 @@ func (ctrl *controller) companylist(c echo.Context) error {
 
 // tagsForParent returns all active tags for a given entity (parent type + ID).
 // Usage in templates: {{ range (tagsForParent $.OwnerID "company" .ID) }} ... {{ end }}
-func (ctrl *controller) tagsForParent(ownerID any, parentType string, parentID any) []model.Tag {
+func (ctrl *controller) tagsForParent(ownerID any, parentType model.ParentType, parentID any) []model.Tag {
 	oid, ok1 := ownerID.(uint)
 	if !ok1 {
 		switch v := ownerID.(type) {

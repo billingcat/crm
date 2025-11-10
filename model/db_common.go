@@ -34,6 +34,24 @@ type server struct {
 	DBLogger   string
 }
 
+type ParentType string
+
+const (
+	ParentTypeCompany ParentType = "company"
+	ParentTypePerson  ParentType = "person"
+)
+
+func (p ParentType) String() string { return string(p) }
+
+func (p ParentType) IsValid() bool {
+	switch p {
+	case ParentTypeCompany, ParentTypePerson:
+		return true
+	default:
+		return false
+	}
+}
+
 // shared helper for GORM logger
 func gormLoggerFor(cfg *Config, svr server) *gorm.Config {
 	gormConfig := &gorm.Config{}

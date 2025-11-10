@@ -36,21 +36,16 @@ type TagLink struct {
 	DeletedAt gorm.DeletedAt `gorm:"index"`
 
 	// All NOT NULL and all part of the unique constraint
-	OwnerID    uint   `gorm:"not null;uniqueIndex:uniq_tag_parent,priority:1"`
-	TagID      uint   `gorm:"not null;index:idx_taglink_tag;uniqueIndex:uniq_tag_parent,priority:2"`
-	ParentType string `gorm:"size:32;not null;index:idx_taglink_parent,priority:1;uniqueIndex:uniq_tag_parent,priority:3"`
-	ParentID   uint   `gorm:"not null;index:idx_taglink_parent,priority:2;uniqueIndex:uniq_tag_parent,priority:4"`
+	OwnerID    uint       `gorm:"not null;uniqueIndex:uniq_tag_parent,priority:1"`
+	TagID      uint       `gorm:"not null;index:idx_taglink_tag;uniqueIndex:uniq_tag_parent,priority:2"`
+	ParentType ParentType `gorm:"size:32;not null;index:idx_taglink_parent,priority:1;uniqueIndex:uniq_tag_parent,priority:3"`
+	ParentID   uint       `gorm:"not null;index:idx_taglink_parent,priority:2;uniqueIndex:uniq_tag_parent,priority:4"`
 
 	Tag Tag `gorm:"constraint:OnDelete:CASCADE;"`
 }
 
 func (Tag) TableName() string     { return "tags" }
 func (TagLink) TableName() string { return "tag_links" }
-
-const (
-	ParentTypeCompany = "company"
-	ParentTypePerson  = "person"
-)
 
 // normalizeTag turns a user-facing name into its canonical Norm string.
 func normalizeTag(s string) string {
@@ -125,7 +120,7 @@ addTagsToParent creates TagLink rows for the given parent.
 It ignores duplicates thanks to the unique index + DoNothing.
 */
 // comments in English
-func (crmdb *CRMDatabase) addTagsToParent(tx *gorm.DB, ownerID uint, parentType string, parentID uint, tags []Tag) error {
+func (crmdb *CRMDatabase) addTagsToParent(tx *gorm.DB, ownerID uint, parentType ParentType, parentID uint, tags []Tag) error {
 	if len(tags) == 0 {
 		return nil
 	}
@@ -161,7 +156,7 @@ func (crmdb *CRMDatabase) addTagsToParent(tx *gorm.DB, ownerID uint, parentType 
 func (crmdb *CRMDatabase) replaceTagsForParent(
 	tx *gorm.DB,
 	ownerID uint,
-	parentType string,
+	parentType ParentType,
 	parentID uint,
 	newTags []Tag,
 ) error {
@@ -247,7 +242,7 @@ func diffUint(a, b []uint) []uint {
 }
 
 // ListTagsForParent returns the Tag list for a given parent.
-func (crmdb *CRMDatabase) ListTagsForParent(ownerID uint, parentType string, parentID uint) ([]Tag, error) {
+func (crmdb *CRMDatabase) ListTagsForParent(ownerID uint, parentType ParentType, parentID uint) ([]Tag, error) {
 	var tags []Tag
 	err := crmdb.db.
 		Table("tag_links AS tl").
