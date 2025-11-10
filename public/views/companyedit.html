@@ -63,12 +63,79 @@
       <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
         name="contactinvoice" id="contactinvoice" placeholder="Max Mustermann" value="{{$company.ContactInvoice}}">
     </div>
+   <div x-data="customerNumChecker({ initial: '{{.company.CustomerNumber}}',  exclude: '{{.company.ID}}' })"
+      x-init="checkNow()">
+      <label class="form-label" for="customer_number">Kundennummer</label>
+      <div class="relative">
+        <input id="customer_number" name="customer_number" type="text"
+          class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5 pr-9"
+          x-model.trim="value" @input.debounce.400ms="checkNow()" autocomplete="off" placeholder="{{.company.CustomerNumber}}">
+        <input type="hidden" name="company_id" value="{{.company.ID}}">
 
-    <div>
-      <label for="customernumber">Kundennummer</label>
-      <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
-        id="customernumber" name="customernumber" placeholder="12345" value="{{$company.CustomerNumber}}">
+        <!-- Status-icon right -->
+        <div class="absolute inset-y-0 right-2 flex items-center pointer-events-none">
+          <template x-if="state === 'checking'">
+            <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" opacity=".2" />
+              <path d="M12 2a10 10 0 0 1 10 10" fill="none" stroke="currentColor" stroke-width="2" />
+            </svg>
+          </template>
+          <template x-if="state === 'ok'">
+            <span class="text-green-600">✓</span>
+          </template>
+          <template x-if="state === 'taken'">
+            <span class="text-red-600">●</span>
+          </template>
+        </div>
+      </div>
+
+      <p class="text-xs mt-1" :class="{
+       'text-gray-500': state==='idle' || state==='checking',
+       'text-green-700': state==='ok',
+       'text-red-700': state==='taken',
+       'text-orange-700': state==='error'
+     }" x-text="message"></p>
     </div>
+
+    <script>
+      function customerNumChecker({ initial = '', exclude = '' } = {}) {
+        return {
+          value: initial || '',
+          exclude: exclude || '',
+          state: 'idle',   // idle | checking | ok | taken | error
+          message: '',
+          lastQuery: '',
+          async checkNow() {
+            // empty -> neutral
+            if (!this.value) {
+              this.state = 'idle';
+              this.message = 'Vorschlag – kann überschrieben werden.';
+              return;
+            }
+            const q = this.value;
+            this.lastQuery = q;
+            this.state = 'checking';
+            this.message = 'Prüfe Verfügbarkeit…';
+
+            const qs = new URLSearchParams({ num: q });
+            if (this.exclude) qs.set('exclude', this.exclude);
+
+            try {
+              const res = await fetch(`/api/customer-number/check?${qs.toString()}`, {
+                headers: { 'Accept': 'application/json' }, cache: 'no-store'
+              });
+              const data = await res.json();
+              if (this.lastQuery !== q) return;
+              if (data.ok) { this.state = 'ok'; this.message = 'Verfügbar'; }
+              else { this.state = 'taken'; this.message = data.message || 'Bereits vergeben'; }
+            } catch {
+              if (this.lastQuery !== q) return;
+              this.state = 'error'; this.message = 'Fehler bei der Prüfung';
+            }
+          }
+        };
+      }
+    </script>
     <div>
       <label for="lieferantennummer">Lieferantennummer</label>
       <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"

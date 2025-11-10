@@ -719,6 +719,7 @@ func NewController(crmdb *model.CRMDatabase) error {
 	ctrl.adminInit(e)
 	ctrl.apiInit(e)
 	ctrl.letterheadInit(e)
+	ctrl.customernumberInit(e)
 
 	if err := e.Start(fmt.Sprintf(":%d", crmdb.Config.Port)); err != nil {
 		return fmt.Errorf("cannot start application %w", err)

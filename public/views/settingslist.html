@@ -93,6 +93,25 @@
                 name="uselocalcounter" id="uselocalcounter" value="true" {{ if .UseLocalCounter }}checked{{ end }}>
         </div>
         <div class="sm:col-span-2"></div>
+               <div class="sm:col-span-2">
+            <label class="form-label" for="custprefix">Kundennr.-Prefix</label>
+            <input class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+                type="text" name="custprefix" id="custprefix" placeholder="K-" value="{{.CustomerNumberPrefix}}">
+        </div>
+
+        <div class="sm:col-span-2">
+            <label class="form-label" for="custwidth">Kundennr.-Breite</label>
+            <input class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+                type="number" min="1" max="12" step="1" name="custwidth" id="custwidth"
+                value="{{.CustomerNumberWidth}}">
+        </div>
+
+        <div class="sm:col-span-2">
+            <label class="form-label" for="custcounter">Kundennr.-Zähler</label>
+            <input class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+                type="number" min="1" step="1" name="custcounter" id="custcounter" value="{{.CustomerNumberCounter}}">
+        </div>
+
         <div class="sm:col-span-2">
             <label class="form-label" for="bankname">Konto Inhaber</label>
             <input class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"

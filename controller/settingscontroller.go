@@ -30,6 +30,10 @@ type settingsForm struct {
 	Bankname        string `form:"bankname"`
 	Bankiban        string `form:"bankiban"`
 	Bankbic         string `form:"bankbic"`
+	CustomerPrefix  string `form:"custprefix"`  // e.g. "K-"
+	CustomerWidth   int    `form:"custwidth"`   // e.g. 5
+	CustomerCounter int64  `form:"custcounter"` // e.g. 1000
+
 }
 
 func (ctrl *controller) settingsInit(e *echo.Echo) {
@@ -94,6 +98,9 @@ func (ctrl *controller) settingslist(c echo.Context) error {
 			BankName:              f.Bankname,
 			BankIBAN:              f.Bankiban,
 			BankBIC:               f.Bankbic,
+			CustomerNumberPrefix:  f.CustomerPrefix,
+			CustomerNumberWidth:   f.CustomerWidth,
+			CustomerNumberCounter: f.CustomerCounter,
 		}
 
 		if err := ctrl.model.SaveSettings(dbSettings); err != nil {

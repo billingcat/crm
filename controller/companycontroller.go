@@ -41,7 +41,7 @@ type contactInfoForm struct {
 type companyForm struct {
 	Background             string            `form:"background"`
 	Name                   string            `form:"name"`
-	CustomerNumber         string            `form:"customernumber"`
+	CustomerNumber         string            `form:"customer_number"`
 	EmailInvoice           string            `form:"emailinvoice"`
 	SupplierNumber         string            `form:"suppliernumber"`
 	ContactInvoice         string            `form:"contactinvoice"`
@@ -68,13 +68,19 @@ func (ctrl *controller) companynew(c echo.Context) error {
 		m["submit"] = "Firma anlegen"
 		m["action"] = "/company/new"
 		m["cancel"] = "/"
-		m["company"] = model.Company{}
+
+		// Optional: show a formatted suggestion in the placeholder
+		// (non-persistent; real allocation happens in NextCustomerNumberTx)
+		suggestion, _ := ctrl.model.SuggestNextCustomerNumber(c.Request().Context())
+		m["company"] = model.Company{
+			CustomerNumber: suggestion, // used as placeholder in your template
+		}
 		return c.Render(http.StatusOK, "companyedit.html", m)
 
 	case http.MethodPost:
 		ownerID := c.Get("ownerid").(uint)
 
-		// Form dekodieren
+		// Decode form
 		if err := c.Request().ParseForm(); err != nil {
 			return ErrInvalid(err, "Fehler beim Verarbeiten der Formulardaten")
 		}
@@ -94,7 +100,7 @@ func (ctrl *controller) companynew(c echo.Context) error {
 			InvoiceFooter:          strings.TrimSpace(comp.InvoiceFooter),
 			InvoiceOpening:         strings.TrimSpace(comp.InvoiceOpening),
 			InvoiceTaxType:         strings.TrimSpace(comp.InvoiceTaxType),
-			CustomerNumber:         strings.TrimSpace(comp.CustomerNumber),
+			CustomerNumber:         strings.TrimSpace(comp.CustomerNumber), // handled below
 			Country:                strings.TrimSpace(comp.Country),
 			Name:                   strings.TrimSpace(comp.Name),
 			City:                   strings.TrimSpace(comp.City),
@@ -105,7 +111,7 @@ func (ctrl *controller) companynew(c echo.Context) error {
 			VATID:                  strings.TrimSpace(comp.VATID),
 		}
 
-		// ContactInfos: dein Code ist ok; Trimming hinzugefügt
+		// ContactInfos (trim)
 		for _, ci := range comp.Phone {
 			ci.Type = strings.TrimSpace(ci.Type)
 			ci.Label = strings.TrimSpace(ci.Label)
@@ -118,7 +124,7 @@ func (ctrl *controller) companynew(c echo.Context) error {
 				Label:      ci.Label,
 				Value:      ci.Value,
 				OwnerID:    ownerID,
-				ParentType: model.ParentTypeCompany, // statt "company" als Magic-String
+				ParentType: model.ParentTypeCompany,
 			}
 			dbCompany.ContactInfos = append(dbCompany.ContactInfos, dbCI)
 		}
@@ -129,6 +135,35 @@ func (ctrl *controller) companynew(c echo.Context) error {
 		if err != nil {
 			return ErrInvalid(err, "Fehler beim Verarbeiten der Mehrwertsteuer")
 		}
+
+		// ---- Customer number handling (model-only) ----
+		// Rule:
+		// - Empty -> allocate via NextCustomerNumberTx
+		// - Non-empty -> must be free (or same record; here new => excludeID=0) and may lift the counter
+		if dbCompany.CustomerNumber == "" {
+			num, _, allocErr := ctrl.model.NextCustomerNumberTx(c.Request().Context())
+			if allocErr != nil {
+				return ErrInvalid(allocErr, "Kundennummer konnte nicht automatisch vergeben werden")
+			}
+			dbCompany.CustomerNumber = num
+		} else {
+			ok, msg, chkErr := ctrl.model.CheckCustomerNumber(c.Request().Context(), dbCompany.CustomerNumber, 0 /* excludeID for new = 0 */)
+			if chkErr != nil {
+				return ErrInvalid(chkErr, "Fehler bei der Kundennummernprüfung")
+			}
+			if !ok {
+				if msg == "" {
+					msg = "Kundennummer bereits vergeben"
+				}
+				return ErrInvalid(fmt.Errorf("customer number taken"), msg)
+			}
+			// Try to lift the counter when the provided value is ahead of settings
+			if liftErr := ctrl.model.MaybeLiftCustomerCounterFor(c.Request().Context(), dbCompany.CustomerNumber); liftErr != nil {
+				// non-fatal vs. fatal is your choice; I make it fatal to keep invariants strong
+				return ErrInvalid(liftErr, "Konnte Zählerstand nicht anheben")
+			}
+		}
+		// ----------------------------------------------
 
 		tagNames := normalizeSliceInput(comp.Tags)
 
@@ -199,7 +234,7 @@ func (ctrl *controller) companyedit(c echo.Context) error {
 		return c.Render(http.StatusOK, "companyedit.html", m)
 
 	case http.MethodPost:
-		// decode form
+		// Decode form
 		if err := c.Request().ParseForm(); err != nil {
 			return ErrInvalid(err, "Fehler beim Verarbeiten der Formulardaten")
 		}
@@ -209,36 +244,61 @@ func (ctrl *controller) companyedit(c echo.Context) error {
 			return ErrInvalid(err, "Fehler beim Verarbeiten der Formulardaten")
 		}
 
+		// Load DB object
 		paramCompanyID := c.Param("id")
 		dbCompany, err := ctrl.model.LoadCompany(paramCompanyID, ownerID)
 		if err != nil {
 			return ErrInvalid(fmt.Errorf("cannot find company with id %v and ownerid %v", paramCompanyID, ownerID), "Kann Firma nicht laden")
 		}
 
-		// Stammdaten aktualisieren
-		dbCompany.Background = comp.Background
-		dbCompany.Name = comp.Name
-		dbCompany.CustomerNumber = comp.CustomerNumber
-		dbCompany.Address1 = comp.Address1
-		dbCompany.Address2 = comp.Address2
-		dbCompany.InvoiceEmail = comp.EmailInvoice
-		dbCompany.SupplierNumber = comp.SupplierNumber
-		dbCompany.ContactInvoice = comp.ContactInvoice
-		dbCompany.City = comp.City
-		dbCompany.Zip = comp.Zip
-		dbCompany.VATID = comp.VATID
-		dbCompany.Country = comp.Country
-		dbCompany.InvoiceOpening = comp.InvoiceOpening
-		dbCompany.InvoiceCurrency = comp.InvoiceCurrency
-		dbCompany.InvoiceTaxType = comp.InvoiceTaxType
-		dbCompany.InvoiceFooter = comp.InvoiceFooter
-		dbCompany.InvoiceExemptionReason = comp.InvoiceExemptionReason
+		// Update basic fields (trim inputs where appropriate)
+		dbCompany.Background = strings.TrimSpace(comp.Background)
+		dbCompany.Name = strings.TrimSpace(comp.Name)
+		// Customer number handled below
+		dbCompany.Address1 = strings.TrimSpace(comp.Address1)
+		dbCompany.Address2 = strings.TrimSpace(comp.Address2)
+		dbCompany.InvoiceEmail = strings.TrimSpace(comp.EmailInvoice)
+		dbCompany.SupplierNumber = strings.TrimSpace(comp.SupplierNumber)
+		dbCompany.ContactInvoice = strings.TrimSpace(comp.ContactInvoice)
+		dbCompany.City = strings.TrimSpace(comp.City)
+		dbCompany.Zip = strings.TrimSpace(comp.Zip)
+		dbCompany.VATID = strings.TrimSpace(comp.VATID)
+		dbCompany.Country = strings.TrimSpace(comp.Country)
+		dbCompany.InvoiceOpening = strings.TrimSpace(comp.InvoiceOpening)
+		dbCompany.InvoiceCurrency = strings.TrimSpace(comp.InvoiceCurrency)
+		dbCompany.InvoiceTaxType = strings.TrimSpace(comp.InvoiceTaxType)
+		dbCompany.InvoiceFooter = strings.TrimSpace(comp.InvoiceFooter)
+		dbCompany.InvoiceExemptionReason = strings.TrimSpace(comp.InvoiceExemptionReason)
 
 		if dbCompany.DefaultTaxRate, err = decimal.NewFromString(strings.TrimSpace(comp.DefaultTaxRate)); err != nil {
 			return ErrInvalid(err, "Fehler beim Verarbeiten der Mehrwertsteuer")
 		}
 
-		// Kontaktinfos neu setzen (einfachste Variante: ersetzen)
+		// --- Customer number handling (model-only) ---
+		// Rule for edit:
+		// - Empty input => keep current db value (no change)
+		// - Non-empty and different => must be available (excluding this company),
+		//   and lift counter if the numeric part is ahead of settings.
+		desiredNumber := strings.TrimSpace(comp.CustomerNumber)
+		if desiredNumber != "" && desiredNumber != dbCompany.CustomerNumber {
+			ok, msg, chkErr := ctrl.model.CheckCustomerNumber(c.Request().Context(), desiredNumber, dbCompany.ID)
+			if chkErr != nil {
+				return ErrInvalid(chkErr, "Fehler bei der Kundennummernprüfung")
+			}
+			if !ok {
+				if msg == "" {
+					msg = "Kundennummer bereits vergeben"
+				}
+				return ErrInvalid(fmt.Errorf("customer number taken"), msg)
+			}
+			if liftErr := ctrl.model.MaybeLiftCustomerCounterFor(c.Request().Context(), desiredNumber); liftErr != nil {
+				return ErrInvalid(liftErr, "Konnte Zählerstand nicht anheben")
+			}
+			dbCompany.CustomerNumber = desiredNumber
+		}
+		// ------------------------------------------------
+
+		// Replace contact infos (simple strategy: rebuild list)
 		dbCompany.ContactInfos = []model.ContactInfo{}
 		for _, ci := range comp.Phone {
 			ci.Type = strings.TrimSpace(ci.Type)
@@ -266,7 +326,6 @@ func (ctrl *controller) companyedit(c echo.Context) error {
 	}
 	return nil
 }
-
 func normalizeSliceInput(in []string) []string {
 	seen := map[string]bool{}
 	var out []string

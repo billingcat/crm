@@ -1,8 +1,11 @@
 package model
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"unicode"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -29,6 +32,9 @@ type Settings struct {
 	BankIBAN              string `gorm:"column:bank_iban"`
 	BankName              string `gorm:"column:bank_name"`
 	BankBIC               string `gorm:"column:bank_bic"`
+	CustomerNumberPrefix  string `gorm:"column:customer_number_prefix"`  // e.g. "K-"
+	CustomerNumberWidth   int    `gorm:"column:customer_number_width"`   // e.g. 5 -> K-00001
+	CustomerNumberCounter int64  `gorm:"column:customer_number_counter"` // current counter (e.g. 1000)
 }
 
 // LoadSettings loads the settings row for a given owner.
@@ -85,6 +91,9 @@ func (crmdb *CRMDatabase) UpdateSettings(s *Settings) error {
 			"bank_iban":               s.BankIBAN,
 			"bank_name":               s.BankName,
 			"bank_bic":                s.BankBIC,
+			"customer_number_prefix":  s.CustomerNumberPrefix,
+			"customer_number_width":   s.CustomerNumberWidth,
+			"customer_number_counter": s.CustomerNumberCounter,
 			"updated_at":              gorm.Expr("NOW()"),
 		}).Error
 }
@@ -101,12 +110,196 @@ func (crmdb *CRMDatabase) SaveSettings(s *Settings) error {
 	}
 	return crmdb.db.Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "owner_id"}}, // conflict target
-		DoUpdates: clause.AssignmentColumns([]string{
-			"company_name", "invoice_contact", "invoice_email",
-			"zip", "address1", "address2", "city", "country_code",
-			"vat_id", "tax_number", "invoice_number_template",
-			"use_local_counter", "bank_iban", "bank_name", "bank_bic",
-			"updated_at",
+		DoUpdates: clause.Assignments(map[string]any{
+			"company_name":            s.CompanyName,
+			"invoice_contact":         s.InvoiceContact,
+			"invoice_email":           s.InvoiceEMail,
+			"zip":                     s.ZIP,
+			"address1":                s.Address1,
+			"address2":                s.Address2,
+			"city":                    s.City,
+			"country_code":            s.CountryCode,
+			"vat_id":                  s.VATID,
+			"tax_number":              s.TAXNumber,
+			"invoice_number_template": s.InvoiceNumberTemplate,
+			"use_local_counter":       s.UseLocalCounter,
+			"bank_iban":               s.BankIBAN,
+			"bank_name":               s.BankName,
+			"bank_bic":                s.BankBIC,
+			"customer_number_prefix":  s.CustomerNumberPrefix,
+			"customer_number_width":   s.CustomerNumberWidth,
+			"customer_number_counter": s.CustomerNumberCounter,
+
+			// ensure updated_at changes on UPSERT
+			"updated_at": gorm.Expr("CURRENT_TIMESTAMP"),
 		}),
 	}).Create(s).Error
+}
+
+// formatCustomerNumber builds the display string: prefix + zero-padded width + n (e.g. "K-" + 5 + 42 => "K-00042").
+func formatCustomerNumber(prefix string, width int, n int64) string {
+	if width < 0 {
+		width = 0
+	}
+	return fmt.Sprintf("%s%0*d", prefix, width, n)
+}
+
+var ErrNoSettingsRow = errors.New("no settings row found")
+
+// NextCustomerNumberTx allocates the next unique customer number in a transaction.
+// Returns the formatted string and the numeric value used.
+func (crmdb *CRMDatabase) NextCustomerNumberTx(ctx context.Context) (string, int64, error) {
+	var result string
+	var numeric int64
+
+	err := crmdb.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Lock settings row for update (Postgres/MySQL). SQLite ignores this clause.
+		var s Settings
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			First(&s).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrNoSettingsRow
+			}
+			return err
+		}
+
+		// Try from counter+1 upwards until free.
+		tryVal := s.CustomerNumberCounter + 1
+		for {
+			candidate := formatCustomerNumber(s.CustomerNumberPrefix, s.CustomerNumberWidth, tryVal)
+			var cnt int64
+			if err := tx.Model(&Company{}).
+				Where("customer_number = ?", candidate).
+				Count(&cnt).Error; err != nil {
+				return err
+			}
+			if cnt == 0 {
+				// Found free number -> persist counter and return
+				s.CustomerNumberCounter = tryVal
+				if err := tx.Model(&Settings{}).Where("id = ?", s.ID).
+					Updates(map[string]any{
+						"customer_number_counter": s.CustomerNumberCounter,
+					}).Error; err != nil {
+					return err
+				}
+				result = candidate
+				numeric = tryVal
+				return nil
+			}
+			tryVal++
+		}
+	})
+	return result, numeric, err
+}
+
+// parseNumericPart extracts the numeric tail after the configured prefix.
+func parseNumericPart(prefix, s string) (int64, bool) {
+	if !strings.HasPrefix(s, prefix) {
+		return 0, false
+	}
+	tail := strings.TrimPrefix(s, prefix)
+	if tail == "" {
+		return 0, false
+	}
+	for _, r := range tail {
+		if !unicode.IsDigit(r) {
+			return 0, false
+		}
+	}
+	var n int64
+	_, err := fmt.Sscan(tail, &n)
+	if err != nil {
+		return 0, false
+	}
+	return n, true
+}
+
+// --- Public API ---
+
+// SuggestNextCustomerNumber returns a non-persistent suggestion (counter+1 formatted).
+func (crmdb *CRMDatabase) SuggestNextCustomerNumber(ctx context.Context) (string, error) {
+	var s Settings
+	if err := crmdb.db.WithContext(ctx).First(&s).Error; err != nil {
+		return "", err
+	}
+	n := s.CustomerNumberCounter + 1
+	return formatCustomerNumber(s.CustomerNumberPrefix, s.CustomerNumberWidth, n), nil
+}
+
+// CheckCustomerNumber validates whether a customer number is valid and available.
+//
+// It enforces format rules from settings (prefix and numeric width) and checks uniqueness.
+// Returns:
+//
+//	ok=true  -> number is syntactically valid and available (or belongs to excludeID)
+//	ok=false -> invalid or taken; message gives human-readable reason
+func (crmdb *CRMDatabase) CheckCustomerNumber(ctx context.Context, num string, excludeID uint) (ok bool, message string, err error) {
+	// Empty -> treated as a neutral suggestion
+	if num == "" {
+		return true, "Vorschlag – kann überschrieben werden.", nil
+	}
+
+	// Load settings for validation rules
+	var s Settings
+	if err := crmdb.db.WithContext(ctx).First(&s).Error; err != nil {
+		return false, "Fehler beim Laden der Einstellungen", err
+	}
+
+	prefix := strings.TrimSpace(s.CustomerNumberPrefix)
+	width := s.CustomerNumberWidth
+
+	// Check prefix
+	if prefix != "" && !strings.HasPrefix(num, prefix) {
+		return false, fmt.Sprintf("Kundennummer muss mit „%s“ beginnen", prefix), nil
+	}
+
+	// Extract numeric tail after prefix
+	tail := strings.TrimPrefix(num, prefix)
+	if tail == "" {
+		return false, "Fehlende Zahl nach Präfix", nil
+	}
+
+	for _, r := range tail {
+		if !unicode.IsDigit(r) {
+			return false, "Kundennummer darf nur Ziffern enthalten", nil
+		}
+	}
+
+	// Check width (if defined)
+	if width > 0 && len(tail) != width {
+		return false, fmt.Sprintf("Kundennummer muss genau %d-stellig sein", width), nil
+	}
+
+	// Uniqueness check
+	var comp Company
+	q := crmdb.db.WithContext(ctx).Where("customer_number = ?", num)
+	if err := q.First(&comp).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return true, "", nil
+		}
+		return false, "Datenbankfehler", err
+	}
+
+	// Allow if same company (excludeID)
+	if excludeID != 0 && comp.ID == excludeID {
+		return true, "", nil
+	}
+
+	// Taken by another record
+	return false, "Kundennummer bereits vergeben", nil
+}
+
+// MaybeLiftCustomerCounterFor raises the settings counter if num's numeric part is ahead.
+func (crmdb *CRMDatabase) MaybeLiftCustomerCounterFor(ctx context.Context, num string) error {
+	return crmdb.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var s Settings
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&s).Error; err != nil {
+			return err
+		}
+		if n, ok := parseNumericPart(s.CustomerNumberPrefix, num); ok && n > s.CustomerNumberCounter {
+			return tx.Model(&Settings{}).Where("id = ?", s.ID).
+				Update("customer_number_counter", n).Error
+		}
+		return nil
+	})
 }
