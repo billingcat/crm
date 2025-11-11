@@ -138,9 +138,7 @@
             class="ml-2 w-20 border rounded px-2 py-1">
         </label>
         <label class="text-sm">Line spacing (pt)
-          <input
-            type="number" step="0.1"
-            x-model.number="regionsByKind.addressee.lineSpacing"
+          <input type="number" step="0.1" x-model.number="regionsByKind.addressee.lineSpacing"
             class="ml-2 w-24 border rounded px-2 py-1">
         </label>
 
@@ -180,9 +178,7 @@
             class="ml-2 w-20 border rounded px-2 py-1">
         </label>
         <label class="text-sm">Line spacing (pt)
-          <input
-            type="number" step="0.1"
-            x-model.number="regionsByKind.invoice_info.lineSpacing"
+          <input type="number" step="0.1" x-model.number="regionsByKind.invoice_info.lineSpacing"
             class="ml-2 w-24 border rounded px-2 py-1">
         </label>
 
@@ -211,9 +207,7 @@
             class="ml-2 w-20 border rounded px-2 py-1">
         </label>
         <label class="text-sm">Line spacing (pt)
-          <input
-            type="number" step="0.1"
-            x-model.number="regionsByKind.main_area.lineSpacing"
+          <input type="number" step="0.1" x-model.number="regionsByKind.main_area.lineSpacing"
             class="ml-2 w-24 border rounded px-2 py-1">
         </label>
 
@@ -392,10 +386,29 @@
         }
         return `left:${this.cm2px(r.xCm)}px;top:${this.cm2px(r.yCm)}px;width:${this.cm2px(r.widthCm)}px;height:${this.cm2px(r.heightCm)}px;`;
       },
+      ensurePage2Defaults() {
+        if (!this.hasPage2) return;
 
+        const r = this.regionsByKind.main_area;
+        if (!r) return;
+
+        // set "Enable region on page 2" automatically
+        r.hasPage2 = true;
+
+        // if some page 2 values are missing, fill with defaults
+        const isZero = (n) => !(n > 0);
+        if (isZero(r.width2Cm) || isZero(r.height2Cm)) {
+          // take values from page 1 with 2cm margin
+          r.x2Cm = (r.xCm && r.xCm > 0) ? r.xCm : 2;
+          r.y2Cm = (r.yCm && r.yCm > 0) ? r.yCm : 2;
+          r.width2Cm = (r.widthCm && r.widthCm > 0) ? r.widthCm : (this.pageWidthCm - 4);
+          r.height2Cm = (r.heightCm && r.heightCm > 0) ? r.heightCm : (this.pageHeightCm - 4);
+        }
+      },
       // ---- Init / zoom ----
       async init() {
         this.fitToWidth();
+        this.ensurePage2Defaults();
         try {
           const res = await fetch(`/letterhead/${this.templateID}/fonts`, { credentials: 'same-origin' });
           if (res.ok) {
