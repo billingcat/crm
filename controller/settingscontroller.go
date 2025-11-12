@@ -41,7 +41,12 @@ func (ctrl *controller) settingsInit(e *echo.Echo) {
 	g.Use(ctrl.authMiddleware)
 	g.GET("/profile", ctrl.showProfile)
 	g.POST("/profile", ctrl.updateProfile)
-	g.POST("/tokens/create", ctrl.settingsTokenCreate)     // create a new API token
+	g.POST("/profile/delete-start", ctrl.settingsDeleteStart)    // validates "DELETE", then redirect
+	g.GET("/profile/delete-confirm", ctrl.settingsDeleteConfirm) // show password confirm page
+	g.POST("/profile/delete-confirm", ctrl.settingsDeleteDo)     // verify password, soft-delete
+	g.GET("/goodbye", ctrl.goodbye)                              // optional farewell page
+	g.POST("/tokens/create", ctrl.settingsTokenCreate)           // create a new API token
+	g.GET("/tokens/create", ctrl.settingsTokenCreate)
 	g.POST("/tokens/revoke/:id", ctrl.settingsTokenRevoke) // revoke an existing token
 	g.GET("", ctrl.settingslist)
 	g.POST("", ctrl.settingslist)
@@ -160,6 +165,10 @@ func (ctrl *controller) updateProfile(c echo.Context) error {
 func (ctrl *controller) settingsTokenCreate(c echo.Context) error {
 	uid := c.Get("uid").(uint)
 
+	// if method == GET, show settings page
+	if c.Request().Method == http.MethodGet {
+		return ctrl.showProfile(c)
+	}
 	u, err := ctrl.model.GetUserByID(uid)
 	if err != nil || u == nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "cannot load user")
@@ -209,4 +218,91 @@ func (ctrl *controller) settingsTokenRevoke(c echo.Context) error {
 
 	// Redirect back to profile (safe — no plaintext token involved here)
 	return c.Redirect(http.StatusFound, "/settings/profile")
+}
+
+// settingsDeleteStart validates the "DELETE" confirmation and redirects to the password confirm page.
+func (ctrl *controller) settingsDeleteStart(c echo.Context) error {
+	confirm := c.FormValue("confirm")
+	if confirm != "DELETE" {
+		AddFlash(c, "error", "Bestätigung fehlgeschlagen. Tippe exakt „DELETE“.")
+		return c.Redirect(http.StatusSeeOther, "/settings/profile")
+	}
+
+	// Optional: set a short-lived flag in session to allow the confirm page (anti-CSRF/flow hardening).
+	if err := SetSessionValue(c, "delete_flow_ok", "1"); err != nil {
+		c.Get("logger").(*slog.Logger).Warn("sessionSet delete_flow_ok failed", "err", err)
+	}
+
+	return c.Redirect(http.StatusSeeOther, "/settings/profile/delete-confirm")
+}
+
+// settingsDeleteConfirm renders the password prompt page.
+func (ctrl *controller) settingsDeleteConfirm(c echo.Context) error {
+	// Optional: require the flow flag
+	if v := GetSessionValue(c, "delete_flow_ok"); v != "1" {
+		AddFlash(c, "error", "Ungültiger Lösch-Workflow. Starte erneut.")
+		return c.Redirect(http.StatusSeeOther, "/settings/profile")
+	}
+	return c.Render(http.StatusOK, "delete_confirm.html", ctrl.defaultResponseMap(c, "Löschung bestätigen"))
+}
+
+// settingsDeleteDo verifies the password and performs soft-delete + immediate access revocation.
+func (ctrl *controller) settingsDeleteDo(c echo.Context) error {
+	// CSRF via hidden input is already present
+
+	// Require correct flow
+	if v := GetSessionValue(c, "delete_flow_ok"); v != "1" {
+		AddFlash(c, "error", "Ungültiger Lösch-Workflow. Starte erneut.")
+		return c.Redirect(http.StatusSeeOther, "/settings/profile")
+	}
+	// Clear the flow flag
+	_ = DeleteSessionValue(c, "delete_flow_ok")
+
+	// Verify password
+	password := c.FormValue("password")
+	if password == "" {
+		AddFlash(c, "error", "Bitte Passwort eingeben.")
+		return c.Redirect(http.StatusSeeOther, "/settings/profile/delete-confirm")
+	}
+	userID := c.Get("uid").(uint)
+	user, err := ctrl.model.GetUserByID(userID)
+	if err != nil || user == nil {
+		c.Get("logger").(*slog.Logger).Error("cannot load user for delete", "err", err, "userID", userID)
+		AddFlash(c, "error", "Interner Fehler.")
+		return c.Redirect(http.StatusSeeOther, "/settings/profile/delete-confirm")
+	}
+
+	if !ctrl.model.CheckPassword(user, password) {
+		AddFlash(c, "error", "Passwort falsch.")
+		return c.Redirect(http.StatusSeeOther, "/settings/profile/delete-confirm")
+	}
+
+	// 1) Immediately revoke access (tokens + sessions)
+	if err := ctrl.model.RevokeUserAccessImmediate(c.Request().Context(), userID); err != nil {
+		c.Get("logger").(*slog.Logger).Error("RevokeUserAccessImmediate failed", "err", err, "userID", userID)
+		AddFlash(c, "error", "Fehler beim Widerrufen der Zugänge.")
+		return c.Redirect(http.StatusSeeOther, "/settings/profile/delete-confirm")
+	}
+
+	// 2) Soft-delete the user account (mark as deleted_at, start 30-day grace)
+	if err := ctrl.model.SoftDeleteUserAccount(c.Request().Context(), userID); err != nil {
+		c.Get("logger").(*slog.Logger).Error("SoftDeleteUserAccount failed", "err", err, "userID", userID)
+		AddFlash(c, "error", "Account konnte nicht gelöscht werden.")
+		return c.Redirect(http.StatusSeeOther, "/settings/profile/delete-confirm")
+	}
+
+	// 3) Logout current session (cookie/session invalidation)
+	if err := ctrl.logout(c); err != nil {
+		c.Get("logger").(*slog.Logger).Warn("logout failed after delete", "err", err)
+	}
+
+	return c.Redirect(http.StatusSeeOther, "/goodbye")
+}
+
+// Optional minimal goodbye page
+func (ctrl *controller) goodbye(c echo.Context) error {
+	return c.Render(http.StatusOK, "goodbye.html", map[string]any{
+		"Title":   "Account gelöscht",
+		"Message": "Dein Account wurde zur Löschung vorgemerkt. Zugänge sind widerrufen; Datenlöschung erfolgt routinemäßig nach 30 Tagen.",
+	})
 }

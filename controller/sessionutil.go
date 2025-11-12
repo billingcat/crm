@@ -72,3 +72,33 @@ func applySessionOptionsFromPersist(c echo.Context, sess *sessions.Session) {
 
 	sess.Options = cookieOptions(maxAge, cfg)
 }
+
+// GetSessionValue returns a string value from the session, or "" if not found.
+func GetSessionValue(c echo.Context, key string) string {
+	sw, err := LoadSession(c)
+	if err != nil {
+		return ""
+	}
+	val, _ := sw.Values()[key].(string)
+	return val
+}
+
+// SetSessionValue sets a key/value in the session and saves immediately.
+func SetSessionValue(c echo.Context, key, value string) error {
+	sw, err := LoadSession(c)
+	if err != nil {
+		return err
+	}
+	sw.Values()[key] = value
+	return sw.Save()
+}
+
+// DeleteSessionValue removes a key from the session and saves immediately.
+func DeleteSessionValue(c echo.Context, key string) error {
+	sw, err := LoadSession(c)
+	if err != nil {
+		return err
+	}
+	delete(sw.Values(), key)
+	return sw.Save()
+}

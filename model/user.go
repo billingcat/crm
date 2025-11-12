@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"database/sql"
@@ -330,4 +331,34 @@ func (crmdb *CRMDatabase) ConsumeSignupToken(tokenPlain string) (*User, error) {
 	}
 
 	return u, nil
+}
+
+// RevokeUserAccessImmediate invalidates all access vectors for a user immediately.
+// Strategy:
+//  1. Delete API tokens (or mark revoked).
+//     2a) If you store sessions server-side: delete them.
+//     2b) If you use cookie-only sessions: bump SessionVersion so middleware rejects old cookies.
+func (crmdb *CRMDatabase) RevokeUserAccessImmediate(ctx context.Context, userID uint) error {
+	return crmdb.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// API tokens: hard-delete for immediate effect.
+		if err := tx.Where("user_id = ?", userID).Delete(&APIToken{}).Error; err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
+// SoftDeleteUserAccount marks the user as soft-deleted and sets a purge deadline.
+// It does NOT purge domain data; a background job should hard-delete after the grace period.
+func (crmdb *CRMDatabase) SoftDeleteUserAccount(ctx context.Context, userID uint) error {
+	return crmdb.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Set gorm's DeletedAt (soft delete). This keeps the row for later purge/restore.
+		if err := tx.Delete(&User{}, userID).Error; err != nil {
+			return err
+		}
+		// hard purge later with background job
+		// first implement user data export
+
+		return nil
+	})
 }

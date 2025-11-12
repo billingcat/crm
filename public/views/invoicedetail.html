@@ -119,6 +119,16 @@
     </div>
   </div>
 
+    <div class="bg-white shadow rounded-xl p-4">
+    <p class="text-sm text-gray-500">Netto</p>
+    <p class="">{{$invoice.NetTotal | rounddecimal}} EUR</p>
+    {{ range $invoice.TaxAmounts}}
+    <p class="text-sm text-gray-500">Umsatzsteuer {{.Rate}}%</p>
+    <p>{{.Amount | rounddecimal }}</p>
+    {{end}}
+    <p class="text-sm text-gray-500">Gesamtbetrag</p>
+    <p class="">{{$invoice.GrossTotal | rounddecimal}} EUR</p>
+  </div>
   <!-- letterhead -->
   <div class="bg-white shadow rounded-xl p-4">
     <p class="text-sm text-gray-500">Briefkopf</p>
@@ -169,16 +179,7 @@
     {{- end }}
   </div>
 
-  <div class="bg-white shadow rounded-xl p-4">
-    <p class="text-sm text-gray-500">Netto</p>
-    <p class="">{{$invoice.NetTotal | rounddecimal}} EUR</p>
-    {{ range $invoice.TaxAmounts}}
-    <p class="text-sm text-gray-500">Umsatzsteuer {{.Rate}}%</p>
-    <p>{{.Amount | rounddecimal }}</p>
-    {{end}}
-    <p class="text-sm text-gray-500">Gesamtbetrag</p>
-    <p class="">{{$invoice.GrossTotal | rounddecimal}} EUR</p>
-  </div>
+
 
   <div class="bg-white shadow rounded-xl p-4">
     <p class="text-sm text-gray-500">Steuerart</p>

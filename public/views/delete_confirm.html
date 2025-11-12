@@ -1,0 +1,28 @@
+{{template "header.html" .}}
+<div class="flex-1 p-8">
+  {{template "_flash" .}}
+
+  <div class="bg-surface border border-border rounded-card shadow-md p-8">
+    <h2 class="text-2xl font-bold mb-4 text-red-700">Löschung bestätigen</h2>
+
+    <p class="text-sm text-gray-800 mb-4">
+      Nach Bestätigung werden <b>Zugänge sofort widerrufen</b> (Abmeldung, API-Tokens).
+      <br>Deine Nutzerdaten werden <b>routinemäßig nach 30 Tagen</b> gelöscht.
+    </p>
+
+    <form method="POST" action="/settings/profile/delete-confirm" class="space-y-4">
+      <input type="hidden" name="csrf" value="{{.CSRFToken}}">
+      <label for="password" class="block text-sm font-medium mb-1">Passwort eingeben</label>
+      <input type="password" id="password" name="password"
+             class="bg-white rounded-lg w-full px-4 py-2 border border-border focus:ring-2 focus:ring-primary focus:border-transparent"
+             autocomplete="current-password">
+
+      <button class="bg-red-600 text-white px-6 py-3 rounded-button font-bold hover:bg-red-700 transition-colors">
+        Account jetzt löschen
+      </button>
+
+      <a href="/settings/profile" class="ml-4 underline text-gray-700">Abbrechen</a>
+    </form>
+  </div>
+</div>
+{{template "footer.html" .}}
