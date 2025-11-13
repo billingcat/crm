@@ -1,6 +1,5 @@
 # billingcat
 
-
 <img src="https://billingcat.de/images/billingcat.png" width="256">
 
 billingcat is a lightweight CRM and invoicing tool, made for freelancers and small businesses.
@@ -20,7 +19,7 @@ Check out [billingcat.de](https://billingcat.de) – you can sign up for the new
 - Open Source and SaaS
 
 >  Note: billingcat is currently available **only in German** (source code and user interface).
-> "billingcat" is a registered trademark of Patrick Gundlach.
+>  "billingcat" is a registered trademark of Patrick Gundlach.
 
 ---
 
@@ -35,15 +34,63 @@ Check out [billingcat.de](https://billingcat.de) – you can sign up for the new
 
 ---
 
-## Getting started
+## Installation
 
-Clone the repo and run:
+billingcat can be **self-hosted** or used as a hosted SaaS on [billingcat.de](https://billingcat.de).
+
+The recommended and up-to-date installation instructions are documented in the
+**billingcat manual** (currently **German only**):
+
+- 👉 _Installation chapter in the documentation (German):_
+  <https://docs.billingcat.de/de/docs/install/>
+
+The manual covers:
+
+- local development setup (SQLite)
+- configuration via `config.toml`
+- running migrations
+- production deployment (e.g. with PostgreSQL)
+- PDF generation via speedata Publisher
+- e-mail setup
+
+If you just want to experiment locally, the very short version is:
 
 ```bash
-go run main.go
+git clone https://github.com/billingcat/crm.git
+cd crm
+cp config.toml.example config.toml
+go run -tags sqlite .
 ```
 
-More detailed setup instructions will follow soon™.
+Then open:
+
+- <http://localhost:5555/register>
+
+The **first registered user** becomes the **admin user**.
+
+For all details and edge cases, please refer to the documentation.
+
+---
+
+## Getting started
+
+If you:
+
+- want to **self-host** billingcat → read the
+  [**[installation section in the installation guide]**](https://docs.billingcat.de/de/docs/install/)
+- want to **just try it as SaaS** → keep an eye on
+  <https://billingcat.de> and subscribe to the newsletter.
+
+For local hacking, a minimal workflow looks like this:
+
+```bash
+git clone https://github.com/billingcat/crm.git
+cd crm
+cp config.toml.example config.toml
+go run -tags sqlite .
+```
+
+More complete setup instructions (production, databases, mail, PDF, …) live in the manual.
 
 ---
 
@@ -56,7 +103,8 @@ billingcat is dual-licensed:
   See the [LICENSE](./License.md) file for details.
 
 - **Commercial License**: if you want to use billingcat **without the AGPL requirements** (e.g. inside proprietary products or SaaS offerings), get in touch.
-Contact: [hallo@billingcat.de]
+  
+  Contact: [hallo@billingcat.de]
 
 ---
 
@@ -80,7 +128,5 @@ Just open an issue or a PR here on GitHub.
 This project makes use of third-party libraries like Alpine.js, Tailwind CSS and Font Awesome (see [Notice.md](./Notice.md)).
 
 ---
-
-
 
 Made with ❤️ by a small business, for small businesses.
