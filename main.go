@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"log"
 	"os"
@@ -34,7 +35,6 @@ func loadConfig() (*model.Config, error) {
 // runMigrations applies all pending migrations.
 // In development it runs automatically; in production only when explicitly requested.
 func runMigrations(cfg *model.Config) {
-
 	src := "file://" + filepath.ToSlash(migrationsDir())
 	dsn := migrateDSN(cfg)
 
@@ -44,10 +44,34 @@ func runMigrations(cfg *model.Config) {
 	}
 	defer func() { _, _ = m.Close() }()
 
-	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
-		log.Fatalf("migration failed: %v", err)
+	for {
+		v, dirty, verr := m.Version()
+		if verr == migrate.ErrNilVersion {
+			v = 0
+			dirty = false
+		} else if verr != nil {
+			log.Fatalf("read migration version failed: %v", verr)
+		}
+		log.Printf("▶ applying next migration (current version=%d, dirty=%v)", v, dirty)
+
+		err := m.Steps(1)
+		if err == migrate.ErrNoChange {
+			log.Println("migrations applied")
+			return
+		}
+
+		// Some versions of golang-migrate report "no more migrations"
+		// as something like "file does not exist" / ErrUnknownVersion instead.
+		// You can treat that as "we're done" as well:
+		if errors.Is(err, os.ErrNotExist) {
+			log.Println("no further migrations – done")
+			return
+		}
+
+		if err != nil {
+			log.Fatalf("❌ migration step starting from version %d failed: %v", v, err)
+		}
 	}
-	log.Println("migrations applied")
 }
 
 func main() {
