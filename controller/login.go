@@ -291,13 +291,10 @@ func (ctrl *controller) register(c echo.Context) error {
 	if !ctrl.model.Config.RegistrationAllowed {
 		return echo.NewHTTPError(http.StatusForbidden, "Registration is disabled")
 	}
-	sw, err := LoadSession(c)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Errorf("cannot load session: %w", err))
-	}
-	// when the user is already logged in, redirect to home
-	if _, exists := sw.Values()["uid"]; exists {
-		return c.Redirect(http.StatusSeeOther, "/")
+
+	if err := ClearSession(c); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError,
+			fmt.Errorf("cannot clear session: %w", err))
 	}
 
 	ctx := c.Request().Context()

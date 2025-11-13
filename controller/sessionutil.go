@@ -1,6 +1,11 @@
 package controller
 
 import (
+	"errors"
+	"log"
+	"strings"
+
+	"github.com/gorilla/securecookie"
 	"github.com/gorilla/sessions"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
@@ -20,7 +25,14 @@ type SessionWriter struct {
 func LoadSession(c echo.Context) (*SessionWriter, error) {
 	sess, err := session.Get("session", c)
 	if err != nil {
-		return nil, err
+		if isRecoverableSessionError(err) {
+			// Treat invalid cookie as "no session" and start fresh.
+			// Session object is still usable and will overwrite the cookie
+			// on Save().
+			log.Printf("invalid session cookie, starting fresh: %v", err)
+		} else {
+			return nil, err
+		}
 	}
 	return &SessionWriter{sess: sess, c: c}, nil
 }
@@ -101,4 +113,57 @@ func DeleteSessionValue(c echo.Context, key string) error {
 	}
 	delete(sw.Values(), key)
 	return sw.Save()
+}
+
+func isRecoverableSessionError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// Typical securecookie decode error
+	if strings.Contains(err.Error(), "securecookie: the value is not valid") {
+		return true
+	}
+
+	var scErr *securecookie.Error
+	if errors.As(err, &scErr) {
+		return true
+	}
+
+	return false
+}
+func resetSession(c echo.Context, name string) (*sessions.Session, error) {
+	// vorhandenes Cookie invalidieren
+	sess, _ := session.Get(name, c)
+	if sess != nil {
+		sess.Options.MaxAge = -1
+		_ = sess.Save(c.Request(), c.Response())
+	}
+
+	// frische Session erzeugen
+	newSess, err := session.Get(name, c)
+	if err != nil {
+		return nil, err
+	}
+	return newSess, nil
+}
+
+// ClearSession invalidates the current session cookie and clears all values.
+// It treats invalid/old cookies as "nothing to clear".
+func ClearSession(c echo.Context) error {
+	sess, err := session.Get("session", c)
+	if err != nil && !isRecoverableSessionError(err) {
+		return err
+	}
+	if sess == nil {
+		sess = sessions.NewSession(nil, "session")
+	}
+
+	for k := range sess.Values {
+		delete(sess.Values, k)
+	}
+
+	sess.Options.MaxAge = -1
+
+	return sess.Save(c.Request(), c.Response())
 }
