@@ -140,6 +140,7 @@ func (ctrl *controller) defaultResponseMap(c echo.Context, title string) map[str
 	if c.Get("is_admin") != nil {
 		responseMap["is_admin"] = c.Get("is_admin").(bool)
 	}
+	responseMap["useInvitations"] = ctrl.model.Config.UseInvitationCodes
 	responseMap["ownerid"] = ownerID
 	responseMap["uid"] = userID.(uint)
 

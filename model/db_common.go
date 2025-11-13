@@ -16,6 +16,7 @@ type Config struct {
 	MailAPIKey               string
 	MailSecret               string
 	Mode                     string
+	UseInvitationCodes       bool
 	Port                     int
 	PublishingServerAddress  string
 	PublishingServerUsername string

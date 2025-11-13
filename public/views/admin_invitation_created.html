@@ -1,0 +1,40 @@
+{{template "header.html" . }}
+<div class="mb-8" id="main-content">
+    {{template "_flash" .}}
+
+    <div class="max-w-2xl mx-auto mt-4">
+        <div class="bg-white border border-gray-200 rounded-lg p-6">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">Einladung erstellt</h2>
+
+            <p class="text-sm text-gray-700 mb-4">
+                Die Einladung wurde erstellt. Kopiere den folgenden Link und sende ihn an die Person, die du einladen möchtest.
+            </p>
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                    Einladungslink
+                </label>
+                <input
+                    type="text"
+                    readonly
+                    class="w-full border border-gray-300 rounded px-3 py-2 text-xs font-mono bg-gray-50 cursor-text"
+                    value="{{ .invite_url }}">
+                <p class="mt-1 text-xs text-gray-500">
+                    Der Link enthält einen eindeutigen Code. Behandle ihn wie ein persönliches Einladungstoken.
+                </p>
+            </div>
+
+            <div class="mt-6 flex flex-wrap gap-3">
+                <a href="/admin/invitations"
+                   class="inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 bg-white hover:bg-gray-50">
+                    Zur Übersicht der Einladungen
+                </a>
+                <a href="/admin/invitations"
+                   class="inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg bg-gray-900 text-white hover:bg-gray-800">
+                    Weitere Einladung erstellen
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{{template "footer.html" . }}

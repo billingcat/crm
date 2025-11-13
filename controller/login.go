@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/billingcat/crm/model"
 	"github.com/gorilla/sessions"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
@@ -284,45 +285,122 @@ func (ctrl *controller) handlePasswordResetSubmit(c echo.Context) error {
 }
 
 // register handles GET (render form) and POST (start enumeration-safe signup).
-// For POST: if email exists, send sign-in/reset mail; otherwise create a pending signup token.
+// When invitation codes are enabled, a valid invitation token is required for both
+// GET (showing the form) and POST (submitting the signup).
 func (ctrl *controller) register(c echo.Context) error {
 	if !ctrl.model.Config.RegistrationAllowed {
 		return echo.NewHTTPError(http.StatusForbidden, "Registration is disabled")
 	}
+	sw, err := LoadSession(c)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Errorf("cannot load session: %w", err))
+	}
+	// when the user is already logged in, redirect to home
+	if _, exists := sw.Values()["uid"]; exists {
+		return c.Redirect(http.StatusSeeOther, "/")
+	}
+
+	ctx := c.Request().Context()
+	m := ctrl.defaultResponseMap(c, "Registrierung")
+
+	var inviteToken string
+
+	// Simple usability check: only expiration for now.
+	isUsable := func(inv *model.Invitation) bool {
+		if inv.ExpiresAt != nil && time.Now().After(*inv.ExpiresAt) {
+			return false
+		}
+		return true
+	}
+
+	// Helper to load and validate an invitation when invitation codes are enabled.
+	loadAndValidateInvitation := func(method string) error {
+		if !ctrl.model.Config.UseInvitationCodes {
+			// No invitation required; nothing to do.
+			return nil
+		}
+
+		if method == http.MethodGet {
+			inviteToken = c.QueryParam("token")
+		} else {
+			// For POST we normally read from form, but fall back to query as a safety net.
+			inviteToken = c.FormValue("token")
+			if strings.TrimSpace(inviteToken) == "" {
+				inviteToken = c.QueryParam("token")
+			}
+		}
+
+		inviteToken = strings.TrimSpace(inviteToken)
+		if inviteToken == "" {
+			// With UseInvitationCodes=true, registration without token is not allowed.
+			return echo.NewHTTPError(http.StatusNotFound, "Ungültige oder abgelaufene Einladung.")
+		}
+
+		inv, err := ctrl.model.FindInvitationByToken(ctx, inviteToken)
+		if err != nil || inv == nil {
+			// Treat lookup failure or missing invitation as "not found".
+			return echo.NewHTTPError(http.StatusNotFound, "Ungültige oder abgelaufene Einladung.")
+		}
+
+		if !isUsable(inv) {
+			return echo.NewHTTPError(http.StatusNotFound, "Ungültige oder abgelaufene Einladung.")
+		}
+
+		// Expose invitation to the template / later logic.
+		m["token"] = inviteToken
+		m["invite"] = inv
+		return nil
+	}
+
+	// GET → validate invitation (if required) and render form.
 	if c.Request().Method == http.MethodGet {
-		m := ctrl.defaultResponseMap(c, "Register")
+		if err := loadAndValidateInvitation(http.MethodGet); err != nil {
+			return err
+		}
 		return c.Render(http.StatusOK, "register.html", m)
+	}
+
+	// POST → invitation must also be valid before we do anything else.
+	if err := loadAndValidateInvitation(http.MethodPost); err != nil {
+		return err
 	}
 
 	email := strings.TrimSpace(strings.ToLower(c.FormValue("email")))
 	password := c.FormValue("password")
 
+	// Neutral response used to avoid email enumeration.
 	neutral := func() error {
-		m := ctrl.defaultResponseMap(c, "Register")
 		m["flash_success"] = "If we can create or locate an account for that email, we have sent you an email with next steps."
 		return c.Render(http.StatusOK, "register_submitted.html", m)
 	}
 
+	// Lookup existing user; on DB error, fall back to neutral response.
 	existingUser, err := ctrl.model.GetUserByEMail(email)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return neutral()
 	}
+
 	if existingUser != nil {
+		// Existing account: send sign-in / reset mail but keep UI neutral.
 		body := "Someone tried to sign up with your email. If this was you, sign in here or reset your password."
 		_ = ctrl.sendEmail(email, "Sign in to billingcat", body)
 		return neutral()
 	}
 
+	// No existing user → create signup token (pending verification).
 	signupToken, tokenHash, err := generateRandomToken()
 	if err != nil {
 		return neutral()
 	}
+
+	// Optionally: associate signup with invitation here if you want:
+	// e.g. pass inviteToken or invite.ID into CreateSignupToken.
 	if _, err := ctrl.model.CreateSignupToken(email, password, 30*time.Minute, signupToken); err != nil {
 		return neutral()
 	}
 
 	verifyURL := fmt.Sprintf("%s://%s/verify?token=%s", c.Scheme(), c.Request().Host, url.QueryEscape(signupToken))
-	_ = tokenHash
+	_ = tokenHash // currently unused, kept for future hardening.
 
 	body := fmt.Sprintf(
 		"Please confirm your email for billingcat:\n\n%s\n\nThe link is valid for 30 minutes. If you did not request this, you can ignore this message.",

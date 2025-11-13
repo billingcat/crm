@@ -127,9 +127,37 @@
                         </div>
                         {{/* when is_admin == true, show /admin/users button */}}
                         {{ if .is_admin }}
-                        <a href="/admin/users" class='inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium
-          {{- if eq $.path "/admin/users"}} border-primary-light text-white{{else}} border-transparent text-gray-700
-                            hover:border-hover hover:text-white{{end}}'>Benutzer</a>
+                        <div class="relative inline-block text-left" x-data="{open:false}"
+                            @keydown.escape.window="open=false">
+                            <button type="button" @click="open = !open" :aria-expanded="open.toString()"
+                                aria-haspopup="true" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium
+        {{ if or (eq $.path " /admin/users") (eq $.path "/admin/invitations" ) }} border-primary-light text-white {{
+                                else }} border-transparent text-gray-700 hover:border-hover hover:text-white {{ end }}">
+                                Admin
+                                <svg class="ml-1 h-4 w-4" aria-hidden="true">
+                                    <use href="#updownsvg"></use>
+                                </svg>
+                            </button>
+
+                            <!-- Menu -->
+                            <div x-cloak x-show="open" @click.outside="open=false" x-transition
+                                class="absolute left-0 mt-2 w-56 origin-top-left rounded-md shadow-lg bg-white ring-1 ring-black/5 z-50">
+                                <div class="py-1" role="menu" aria-orientation="vertical" tabindex="-1">
+                                    <a href="/admin/users"
+                                        class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem"
+                                        tabindex="-1">
+                                        Benutzer
+                                    </a>
+                                    {{ if .useInvitations }}
+                                    <a href="/admin/invitations"
+                                        class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem"
+                                        tabindex="-1">
+                                        Einladungen
+                                    </a>
+                                    {{ end}}
+                                </div>
+                            </div>
+                        </div>
                         {{ end }}
                     </div>
                 </div>

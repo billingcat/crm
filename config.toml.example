@@ -3,6 +3,8 @@ port = 5555
 # mode="production"
 mode="development"
 registrationAllowed=false
+useinvitationcodes=true
+
 basedir="dir to main.go"
 xmldir="/tmp/zugferdxml"
 

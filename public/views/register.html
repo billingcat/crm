@@ -13,15 +13,12 @@
 
       <form class="space-y-4" method="POST" action="/register" novalidate>
         <input type="hidden" name="csrf" value="{{ .CSRFToken }}">
+        <input type="hidden" name="token" value="{{ .token }}">
+
         <!-- Email -->
         <div class="mb-5">
           <label for="email" class="block text-sm font-medium mb-1">E-Mail</label>
-          <input
-            type="email"
-            id="email"
-            name="email"
-            autocomplete="email"
-            required
+          <input type="email" id="email" name="email" autocomplete="email" required
             class="bg-white rounded-lg w-full px-4 py-2 border border-border rounded-button focus:ring-2 focus:ring-primary focus:border-transparent" />
           <p class="text-xs text-gray-500 mt-1">
             Wir senden dir einen Bestätigungslink. Erst danach geht’s weiter.
