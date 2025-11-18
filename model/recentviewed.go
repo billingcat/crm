@@ -7,13 +7,17 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+// EntityType defines the type of entity that was recently viewed
 type EntityType string
 
 const (
+	// EntityCompany represents a company entity
 	EntityCompany EntityType = "company"
-	EntityPerson  EntityType = "person"
+	// EntityPerson represents a person entity
+	EntityPerson EntityType = "person"
 )
 
+// RecentView tracks recently viewed entities by users
 type RecentView struct {
 	UserID     uint       `gorm:"not null;index:idx_user_view,priority:1"`
 	EntityType EntityType `gorm:"type:text;not null;index:idx_user_view,priority:2"`
@@ -21,9 +25,10 @@ type RecentView struct {
 	ViewedAt   time.Time  `gorm:"not null;index:idx_user_viewed_at,priority:2"`
 }
 
-// Composite unique key
+// TableName sets the table name for RecentView
 func (RecentView) TableName() string { return "recent_views" }
 
+// TouchRecentView updates or creates a recent view entry for the given user and entity
 func (crmdb *CRMDatabase) TouchRecentView(userID uint, et EntityType, entityID uint) error {
 	db := crmdb.db
 	rv := RecentView{
@@ -35,6 +40,7 @@ func (crmdb *CRMDatabase) TouchRecentView(userID uint, et EntityType, entityID u
 	}).Create(&rv).Error
 }
 
+// RecentItem represents a recently viewed item with its details
 type RecentItem struct {
 	EntityType EntityType
 	EntityID   uint
@@ -42,6 +48,7 @@ type RecentItem struct {
 	Name       string // Firmenname oder Personenname
 }
 
+// GetRecentItems retrieves the most recently viewed items for a user, limited by the specified number
 func (crmdb *CRMDatabase) GetRecentItems(userID uint, limit int) ([]RecentItem, error) {
 	db := crmdb.db
 	items := []RecentItem{}
