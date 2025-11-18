@@ -144,6 +144,7 @@ func formatCustomerNumber(prefix string, width int, n int64) string {
 	return fmt.Sprintf("%s%0*d", prefix, width, n)
 }
 
+// ErrNoSettingsRow is returned when no settings row exists in the database.
 var ErrNoSettingsRow = errors.New("no settings row found")
 
 // NextCustomerNumberTx allocates the next unique customer number in a transaction.
@@ -219,9 +220,16 @@ func parseNumericPart(prefix, s string) (int64, bool) {
 // SuggestNextCustomerNumber returns a non-persistent suggestion (counter+1 formatted).
 func (crmdb *CRMDatabase) SuggestNextCustomerNumber(ctx context.Context) (string, error) {
 	var s Settings
-	if err := crmdb.db.WithContext(ctx).First(&s).Error; err != nil {
+	err := crmdb.db.WithContext(ctx).First(&s).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// domain specific error when no settings row exists
+			return "", ErrNoSettingsRow
+		}
+		// other errors
 		return "", err
 	}
+
 	n := s.CustomerNumberCounter + 1
 	return formatCustomerNumber(s.CustomerNumberPrefix, s.CustomerNumberWidth, n), nil
 }

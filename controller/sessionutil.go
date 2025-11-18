@@ -132,21 +132,6 @@ func isRecoverableSessionError(err error) bool {
 
 	return false
 }
-func resetSession(c echo.Context, name string) (*sessions.Session, error) {
-	// vorhandenes Cookie invalidieren
-	sess, _ := session.Get(name, c)
-	if sess != nil {
-		sess.Options.MaxAge = -1
-		_ = sess.Save(c.Request(), c.Response())
-	}
-
-	// frische Session erzeugen
-	newSess, err := session.Get(name, c)
-	if err != nil {
-		return nil, err
-	}
-	return newSess, nil
-}
 
 // ClearSession invalidates the current session cookie and clears all values.
 // It treats invalid/old cookies as "nothing to clear".

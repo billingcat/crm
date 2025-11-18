@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -79,14 +80,26 @@ func (ctrl *controller) upsertCompany(c echo.Context) error {
 	switch c.Request().Method {
 	case http.MethodGet:
 		if isNew {
-			// Render empty form with a (non-binding) number suggestion
 			m["submit"] = "Firma anlegen"
 			m["action"] = "/company/new"
 			m["cancel"] = "/"
 
-			suggestion, _ := ctrl.model.SuggestNextCustomerNumber(c.Request().Context())
+			ctx := c.Request().Context()
+			suggestion, err := ctrl.model.SuggestNextCustomerNumber(ctx)
+			if err != nil {
+				if errors.Is(err, model.ErrNoSettingsRow) {
+					AddFlash(c, "info", "Bitte richte zunächst die Grundeinstellungen ein, bevor du Firmen anlegst.")
+					return c.Redirect(http.StatusSeeOther, "/settings")
+				}
+
+				return echo.NewHTTPError(
+					http.StatusInternalServerError,
+					fmt.Errorf("cannot suggest customer number: %w", err),
+				)
+			}
+
 			m["company"] = model.Company{
-				CustomerNumber: suggestion, // Template can show this as placeholder
+				CustomerNumber: suggestion,
 			}
 			return c.Render(http.StatusOK, "companyedit.html", m)
 		}
