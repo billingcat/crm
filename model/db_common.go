@@ -5,11 +5,13 @@ import (
 	"gorm.io/gorm/logger"
 )
 
+// CRMDatabase wraps the GORM database connection and holds the configuration
 type CRMDatabase struct {
 	db     *gorm.DB
 	Config *Config
 }
 
+// Config holds the application configuration, it is read from config.toml
 type Config struct {
 	Basedir                  string
 	CookieSecret             string
@@ -35,15 +37,19 @@ type server struct {
 	DBLogger   string
 }
 
+// ParentType defines the type of parent entity for certain records (notes, contacts)
 type ParentType string
 
 const (
+	// ParentTypeCompany is a customer.
 	ParentTypeCompany ParentType = "company"
-	ParentTypePerson  ParentType = "person"
+	// ParentTypePerson is a contact person.
+	ParentTypePerson ParentType = "person"
 )
 
 func (p ParentType) String() string { return string(p) }
 
+// IsValid checks if the ParentType is valid (= either company or person)
 func (p ParentType) IsValid() bool {
 	switch p {
 	case ParentTypeCompany, ParentTypePerson:

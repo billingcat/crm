@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -21,6 +22,7 @@ import (
 )
 
 func loadConfig() (*model.Config, error) {
+	fmt.Println("Read config file: config.toml")
 	data, err := os.ReadFile("config.toml")
 	if err != nil {
 		return nil, err
@@ -29,6 +31,22 @@ func loadConfig() (*model.Config, error) {
 	if err := toml.Unmarshal(data, cfg); err != nil {
 		return nil, err
 	}
+	// if base directory is not a directory, return an error
+	fi, err := os.Stat(cfg.Basedir)
+
+	// fallback to current working directory
+	if err != nil {
+		cfg.Basedir, err = os.Getwd()
+		if err != nil {
+			return nil, err
+		}
+	} else if !fi.IsDir() {
+		cfg.Basedir, err = os.Getwd()
+		if err != nil {
+			return nil, err
+		}
+	}
+	fmt.Println("Use base dir:", cfg.Basedir)
 	return cfg, nil
 }
 

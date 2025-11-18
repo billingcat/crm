@@ -242,9 +242,13 @@
 				<Pagetype name="all pages" test="true()">
 					<Margin top="10mm" bottom="10mm" left="20mm" right="10mm" />
 					<AtPageCreation>
-						<PlaceObject row="20mm" column="200mm" hreference="right">
-							<Image file="logo.pdf" width="40mm" />
-						</PlaceObject>
+						<Switch>
+							<Case test="sd:file-exists('logo.pdf')">
+								<PlaceObject row="20mm" column="200mm" hreference="right">
+									<Image file="logo.pdf" width="40mm" />
+								</PlaceObject>
+							</Case>
+						</Switch>
 					</AtPageCreation>
 					<AtPageShipout>
 						<PlaceObject column="0mm" row="0mm">

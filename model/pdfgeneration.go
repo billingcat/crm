@@ -98,7 +98,9 @@ func (crmdb *CRMDatabase) CreateZUGFeRDPDF(inv *Invoice, ownerID uint, xmlpath s
 	if !hasLayout {
 		// attach default layout
 		genericLayout := filepath.Join(crmdb.Config.Basedir, "assets", "generic", "layout.xml")
-		attachFile(p, genericLayout, "layout.xml")
+		if err = attachFile(p, genericLayout, "layout.xml"); err != nil {
+			return err
+		}
 	}
 	resp, err := ep.Publish(p)
 	if err != nil {
