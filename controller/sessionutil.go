@@ -115,6 +115,8 @@ func DeleteSessionValue(c echo.Context, key string) error {
 	return sw.Save()
 }
 
+// isRecoverableSessionError checks whether the given error from session.Get()
+// indicates an invalid or old session cookie that can be treated as "no session".
 func isRecoverableSessionError(err error) bool {
 	if err == nil {
 		return false
@@ -125,7 +127,7 @@ func isRecoverableSessionError(err error) bool {
 		return true
 	}
 
-	var scErr *securecookie.Error
+	var scErr securecookie.Error
 	if errors.As(err, &scErr) {
 		return true
 	}
