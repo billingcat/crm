@@ -517,7 +517,7 @@ func (ctrl *controller) invoiceZUGFeRDValidateRedirect(c echo.Context) error {
 	return c.Redirect(http.StatusSeeOther, fmt.Sprintf("/invoice/detail/%d", inv.ID))
 }
 
-// invoiceZUGFeRDXML now ALWAYS generates/serves the XML, regardless of validation results.
+// invoiceZUGFeRDXML always generates/serves the XML, regardless of validation results.
 // If the invoice is not a draft and an XML already exists, it is re-used.
 func (ctrl *controller) invoiceZUGFeRDXML(c echo.Context) error {
 	ownerID := c.Get("ownerid").(uint)

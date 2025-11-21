@@ -348,6 +348,7 @@ func createZUGFerdXML(inv *Invoice, settings *Settings, company *Company) einvoi
 		Seller: einvoice.Party{
 			Name:              settings.CompanyName,
 			VATaxRegistration: settings.VATID,
+			FCTaxRegistration: settings.TAXNumber,
 			PostalAddress: &einvoice.PostalAddress{
 				Line1:        settings.Address1,
 				Line2:        settings.Address2,
@@ -418,7 +419,7 @@ func createZUGFerdXML(inv *Invoice, settings *Settings, company *Company) einvoi
 		}
 		zi.InvoiceLines = append(zi.InvoiceLines, li)
 	}
-	zi.UpdateApplicableTradeTax(map[string]string{"AE": inv.ExemptionReason, "K": inv.ExemptionReason})
+	zi.UpdateApplicableTradeTax(map[string]string{"AE": inv.ExemptionReason, "K": inv.ExemptionReason, "E": inv.ExemptionReason})
 	zi.UpdateTotals()
 	// BR-53
 	if !zi.TaxTotalVAT.IsZero() {
