@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -52,20 +53,26 @@ func (ctrl *controller) personnew(c echo.Context) error {
 	switch c.Request().Method {
 	case http.MethodGet:
 		// If a company id is provided, load just that company; otherwise list all companies.
+		var companies []*model.Company
 		companyID := c.Param("company")
 		if companyID != "" {
 			cmpy, err := ctrl.model.LoadCompany(companyID, ownerID)
 			if err != nil {
 				return ErrInvalid(err, "Error loading company")
 			}
-			m["companies"] = []*model.Company{cmpy}
+			companies = []*model.Company{cmpy}
 		} else {
 			var err error
-			m["companies"], err = ctrl.model.LoadAllCompanies(ownerID)
+			companies, err = ctrl.model.LoadAllCompanies(ownerID)
 			if err != nil {
 				return ErrInvalid(err, "Error loading companies")
 			}
+			// Sort alphabetically (case-insensitive) for a predictable dropdown order.
+			sort.Slice(companies, func(i, j int) bool {
+				return strings.ToLower(companies[i].Name) < strings.ToLower(companies[j].Name)
+			})
 		}
+		m["companies"] = companies
 		m["persondetail"] = &model.Person{}
 		m["action"] = "/person/new"
 		m["submit"] = "Create Contact"

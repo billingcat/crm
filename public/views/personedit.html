@@ -31,110 +31,109 @@
         <input class="editfield" type="email" id="email" name="email" value="{{ .EMail}}"
             placeholder="person@company.de">
     </div>
-<div>
-  <h2>Kontaktdaten</h2>
-</div>
-
-{{ range $i, $p := .ContactInfos }}
-<div id="contactedit{{$i}}" class="grid grid-cols-6 gap-2 items-start" data-pos="{{$i}}">
-  <!-- Type -->
-  <div>
-    <label class="block text-xs mb-1" for="contact{{$i}}type">Typ</label>
-    <select id="contact{{$i}}type" name="phone[{{$i}}].type"
-            class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5">
-      {{ $t := $p.Type }}
-      <option value="phone"    {{ if eq $t "phone" }}selected{{ end }}>Telefon</option>
-      <option value="fax"      {{ if eq $t "fax" }}selected{{ end }}>Fax</option>
-      <option value="email"    {{ if eq $t "email" }}selected{{ end }}>E-Mail</option>
-      <option value="website"  {{ if eq $t "website" }}selected{{ end }}>Website</option>
-      <option value="linkedin" {{ if eq $t "linkedin" }}selected{{ end }}>LinkedIn</option>
-      <option value="twitter"  {{ if eq $t "twitter" }}selected{{ end }}>Twitter</option>
-      <option value="github"   {{ if eq $t "github" }}selected{{ end }}>GitHub</option>
-      <option value="other"    {{ if eq $t "other" }}selected{{ end }}>Sonstiges</option>
-    </select>
-  </div>
-
-  <!-- Label -->
-  <div class="col-span-2">
-    <label class="block text-xs mb-1" for="contact{{$i}}label">Bezeichnung</label>
-    <input id="contact{{$i}}label" list="labelList" name="phone[{{$i}}].label"
-           class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
-           value="{{$p.Label}}">
-  </div>
-
-  <!-- Value -->
-  <div class="col-span-2">
-    <label class="block text-xs mb-1" for="contact{{$i}}value">Angabe</label>
-    <input id="contact{{$i}}value" type="text" name="phone[{{$i}}].value"
-           class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
-           value="{{$p.Value}}">
-  </div>
-
-  <!-- Remove -->
-  <div class="pt-6">
-    <button class="btn" type="button" onclick="document.getElementById('contactedit{{$i}}').remove();">
-      <img src="/static/images/trash.svg" alt="Löschen">
-    </button>
-  </div>
-</div>
-{{ end }}
-
-{{ $l := len .ContactInfos }}
-
-<!-- Neue dynamische Zeilen -->
-<template x-for="(div, index) in showDivs" :key="div.id">
-  <div class="grid grid-cols-6 gap-2 mt-2 items-start">
-    <!-- Type -->
     <div>
-      <label class="block text-xs mb-1" :for="'contact' + (index + {{ $l }}) + 'type'">Typ</label>
-      <select :id="'contact' + (index + {{ $l }}) + 'type'"
-              :name="'phone[' + (index + {{ $l }}) + '].type'"
-              class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5">
-        <option value="phone">Telefon</option>
-        <option value="fax">Fax</option>
-        <option value="email">E-Mail</option>
-        <option value="website">Website</option>
-        <option value="linkedin">LinkedIn</option>
-        <option value="twitter">Twitter</option>
-        <option value="github">GitHub</option>
-        <option value="other">Sonstiges</option>
-      </select>
+        <h2>Kontaktdaten</h2>
     </div>
 
-    <!-- Label -->
-    <div class="col-span-2">
-      <label class="block text-xs mb-1" :for="'contact' + (index + {{ $l }}) + 'label'">Bezeichnung</label>
-      <input :id="'contact' + (index + {{ $l }}) + 'label'" list="labelList"
-             :name="'phone[' + (index + {{ $l }}) + '].label'"
-             class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5">
-    </div>
+    {{ range $i, $p := .ContactInfos }}
+    <div id="contactedit{{$i}}" class="grid grid-cols-6 gap-2 items-start" data-pos="{{$i}}">
+        <!-- Type -->
+        <div>
+            <label class="block text-xs mb-1" for="contact{{$i}}type">Typ</label>
+            <select id="contact{{$i}}type" name="phone[{{$i}}].type"
+                class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5">
+                {{ $t := $p.Type }}
+                <option value="phone" {{ if eq $t "phone" }}selected{{ end }}>Telefon</option>
+                <option value="fax" {{ if eq $t "fax" }}selected{{ end }}>Fax</option>
+                <option value="email" {{ if eq $t "email" }}selected{{ end }}>E-Mail</option>
+                <option value="website" {{ if eq $t "website" }}selected{{ end }}>Website</option>
+                <option value="linkedin" {{ if eq $t "linkedin" }}selected{{ end }}>LinkedIn</option>
+                <option value="twitter" {{ if eq $t "twitter" }}selected{{ end }}>Twitter</option>
+                <option value="github" {{ if eq $t "github" }}selected{{ end }}>GitHub</option>
+                <option value="other" {{ if eq $t "other" }}selected{{ end }}>Sonstiges</option>
+            </select>
+        </div>
 
-    <!-- Value -->
-    <div class="col-span-2">
-      <label class="block text-xs mb-1" :for="'contact' + (index + {{ $l }}) + 'value'">Angabe</label>
-      <input :id="'contact' + (index + {{ $l }}) + 'value'" type="text"
-             :name="'phone[' + (index + {{ $l }}) + '].value'"
-             class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5">
-    </div>
+        <!-- Label -->
+        <div class="col-span-2">
+            <label class="block text-xs mb-1" for="contact{{$i}}label">Bezeichnung</label>
+            <input id="contact{{$i}}label" list="labelList" name="phone[{{$i}}].label"
+                class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+                value="{{$p.Label}}">
+        </div>
 
-    <!-- Remove -->
-    <div class="pt-6">
-      <button class="btn" type="button" @click="showDivs.splice(index, 1)">
-        <img src="/static/images/trash.svg" alt="Löschen">
-      </button>
-    </div>
-  </div>
-</template>
+        <!-- Value -->
+        <div class="col-span-2">
+            <label class="block text-xs mb-1" for="contact{{$i}}value">Angabe</label>
+            <input id="contact{{$i}}value" type="text" name="phone[{{$i}}].value"
+                class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+                value="{{$p.Value}}">
+        </div>
 
-<!-- Vorschläge für Label -->
-<datalist id="labelList">
-  <option value="Arbeit">
-  <option value="Durchwahl">
-  <option value="Mobil">
-  <option value="Privat">
-  <option value="Support">
-  <option value="Zentrale">
-</datalist>
+        <!-- Remove -->
+        <div class="pt-6">
+            <button class="btn" type="button" onclick="document.getElementById('contactedit{{$i}}').remove();">
+                <img src="/static/images/trash.svg" alt="Löschen">
+            </button>
+        </div>
+    </div>
+    {{ end }}
+
+    {{ $l := len .ContactInfos }}
+
+    <!-- Neue dynamische Zeilen -->
+    <template x-for="(div, index) in showDivs" :key="div.id">
+        <div class="grid grid-cols-6 gap-2 mt-2 items-start">
+            <!-- Type -->
+            <div>
+                <label class="block text-xs mb-1" :for="'contact' + (index + {{ $l }}) + 'type'">Typ</label>
+                <select :id="'contact' + (index + {{ $l }}) + 'type'" :name="'phone[' + (index + {{ $l }}) + '].type'"
+                    class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5">
+                    <option value="phone">Telefon</option>
+                    <option value="fax">Fax</option>
+                    <option value="email">E-Mail</option>
+                    <option value="website">Website</option>
+                    <option value="linkedin">LinkedIn</option>
+                    <option value="twitter">Twitter</option>
+                    <option value="github">GitHub</option>
+                    <option value="other">Sonstiges</option>
+                </select>
+            </div>
+
+            <!-- Label -->
+            <div class="col-span-2">
+                <label class="block text-xs mb-1" :for="'contact' + (index + {{ $l }}) + 'label'">Bezeichnung</label>
+                <input :id="'contact' + (index + {{ $l }}) + 'label'" list="labelList"
+                    :name="'phone[' + (index + {{ $l }}) + '].label'"
+                    class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5">
+            </div>
+
+            <!-- Value -->
+            <div class="col-span-2">
+                <label class="block text-xs mb-1" :for="'contact' + (index + {{ $l }}) + 'value'">Angabe</label>
+                <input :id="'contact' + (index + {{ $l }}) + 'value'" type="text"
+                    :name="'phone[' + (index + {{ $l }}) + '].value'"
+                    class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5">
+            </div>
+
+            <!-- Remove -->
+            <div class="pt-6">
+                <button class="btn" type="button" @click="showDivs.splice(index, 1)">
+                    <img src="/static/images/trash.svg" alt="Löschen">
+                </button>
+            </div>
+        </div>
+    </template>
+
+    <!-- Vorschläge für Label -->
+    <datalist id="labelList">
+        <option value="Arbeit">
+        <option value="Durchwahl">
+        <option value="Mobil">
+        <option value="Privat">
+        <option value="Support">
+        <option value="Zentrale">
+    </datalist>
 
     <div class="mt-2">
         <button @click="showDivs.push({ id: counter, location: '', number: '' }); counter++"
@@ -159,11 +158,10 @@
             class="col-span-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700" type="button">
             Löschen
         </button>
-<div x-show="confirmDelete" x-cloak
-     class="col-span-1 fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div x-show="confirmDelete" x-cloak
+            class="col-span-1 fixed inset-0 bg-black/50 flex items-center justify-center z-50">
 
-  <div class="bg-white p-6 rounded shadow-lg w-full max-w-md text-center"
-       x-data="{
+            <div class="bg-white p-6 rounded shadow-lg w-full max-w-md text-center" x-data="{
          csrf: '{{ $.CSRFToken }}',
          deleting: false,
          async doDelete() {
@@ -183,26 +181,23 @@
          }
        }">
 
-    <h2 class="text-lg font-semibold mb-4">Bist du sicher?</h2>
-    <p class="mb-6">Diese Aktion kann nicht rückgängig gemacht werden.</p>
+                <h2 class="text-lg font-semibold mb-4">Bist du sicher?</h2>
+                <p class="mb-6">Diese Aktion kann nicht rückgängig gemacht werden.</p>
 
-    <div class="flex justify-center gap-4">
-      <button type="button"
-              @click="confirmDelete = false"
-              class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">
-        Abbrechen
-      </button>
+                <div class="flex justify-center gap-4">
+                    <button type="button" @click="confirmDelete = false"
+                        class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">
+                        Abbrechen
+                    </button>
 
-      <button type="button"
-              @click="confirmDelete = false; doDelete()"
-              :disabled="deleting"
-              class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50">
-        <span x-text="deleting ? 'Lösche…' : 'Ja, löschen'"></span>
-      </button>
-    </div>
+                    <button type="button" @click="confirmDelete = false; doDelete()" :disabled="deleting"
+                        class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50">
+                        <span x-text="deleting ? 'Lösche…' : 'Ja, löschen'"></span>
+                    </button>
+                </div>
 
-  </div>
-</div>
+            </div>
+        </div>
 
         {{ end }}
     </div>
