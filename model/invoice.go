@@ -47,6 +47,7 @@ type Invoice struct {
 	OccurrenceDate   time.Time
 	Opening          string // Text before invoice
 	OrderNumber      string
+	BuyerReference   string
 	OwnerID          uint
 	SupplierNumber   string
 	TaxAmounts       []TaxAmount `gorm:"-"`
@@ -154,6 +155,7 @@ func (crmdb *CRMDatabase) UpdateInvoice(inv *Invoice, ownerid uint) error {
 			"currency":         inv.Currency,
 			"tax_number":       inv.TaxNumber,
 			"order_number":     inv.OrderNumber,
+			"buyer_reference":  inv.BuyerReference,
 			"supplier_number":  inv.SupplierNumber,
 			"counter":          inv.Counter,
 			"contact_invoice":  inv.ContactInvoice,
@@ -342,6 +344,7 @@ func createZUGFerdXML(inv *Invoice, settings *Settings, company *Company) einvoi
 		InvoiceDate:         inv.Date,
 		OccurrenceDateTime:  inv.OccurrenceDate,
 		InvoiceCurrencyCode: inv.Currency,
+		BuyerReference:      inv.BuyerReference,
 		Notes: []einvoice.Note{{
 			Text: text,
 		}},

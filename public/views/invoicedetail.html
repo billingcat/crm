@@ -94,7 +94,11 @@
     <p>{{.}}</p>
     {{end}}
     {{ with $invoice.OrderNumber }}
-    <p class="text-sm text-gray-500">Bestellnummer</p>
+    <p class="text-sm text-gray-500">Bestellnummer, Auftragsnummer</p>
+    <p>{{.}}</p>
+    {{ end }}
+    {{ with $invoice.BuyerReference }}
+    <p class="text-sm text-gray-500">Käuferreferenz, Leitweg-ID</p>
     <p>{{.}}</p>
     {{ end }}
     {{ with $invoice.SupplierNumber }}

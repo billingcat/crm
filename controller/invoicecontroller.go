@@ -65,6 +65,7 @@ type invoicepos struct {
 
 type invoice struct {
 	Anrede                 string       `form:"anrede"`
+	BuyerReference         string       `form:"buyerreference"`
 	CompanyID              uint         `form:"companyid"`
 	ContactInvoice         string       `form:"contactinvoice"`
 	Counter                uint         `form:"counter"`
@@ -112,6 +113,7 @@ func bindInvoice(c echo.Context) (*model.Invoice, error) {
 		SupplierNumber:  i.SupplierNumber,
 		Footer:          i.Fusszeile,
 		Opening:         i.Anrede,
+		BuyerReference:  i.BuyerReference,
 		TaxType:         i.Taxtype,
 		Currency:        i.Currency,
 		TaxNumber:       i.VATID,

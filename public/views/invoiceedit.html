@@ -10,7 +10,7 @@
 
   <div class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-4">
     <div>
-      <label for="date">Datum</label>
+      <label for="date">Datum {{ template "help-link" "invoices/#allgemeine-angaben"}}</label>
       <input type="date" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
         id="date" name="date" value="{{$invoice.Date | htmldate}}">
     </div>
@@ -30,9 +30,14 @@
         id="invoicenumber" name="invoicenumber" value="{{$invoice.Number}}">
     </div>
     <div>
-      <label for="ordernumber">Bestellnummer</label>
+      <label for="ordernumber">Bestellnummer, Auftragsnummer</label>
       <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
         id="ordernumber" name="ordernumber" value="{{$invoice.OrderNumber}}">
+    </div>
+    <div>
+      <label for="buyerreference">Käuferreferenz, Leitweg-ID</label>
+      <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+        id="buyerreference" name="buyerreference" value="{{$invoice.BuyerReference}}">
     </div>
     <div>
       <label for="suppliernumber">Lieferantennummer</label>
@@ -320,11 +325,21 @@
   </div>
 
   <button class="bg-primary text-text rounded-button font-bold hover:bg-hover hover:text-white transition-colors"
-    type="submit" onclick="updateAllFields()">{{ index . "submit" }}</button>
+    type="submit" onclick="updateAllFields()">
+    {{ index . "submit" }}
+  </button>
+
   <a class="btn btn-danger" href='{{ index . "cancel" }}'>
     <button type="button"
       class="bg-primary-light text-text px-6 py-3 rounded-button font-bold hover:bg-hover hover:text-white transition-colors">
       Abbruch
+    </button>
+  </a>
+
+  <a href="https://docs.billingcat.de/de/docs/invoices/" target="_blank" rel="noopener">
+    <button type="button"
+      class="bg-primary-light text-text px-6 py-3 rounded-button font-bold hover:bg-hover hover:text-white transition-colors">
+      Hilfe
     </button>
   </a>
 </form>
