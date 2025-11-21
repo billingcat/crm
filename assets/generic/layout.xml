@@ -177,6 +177,9 @@
 			<Case test="$code = 'H87'">
 				<Value>Stück</Value>
 			</Case>
+			<Case test="$code = 'LS'">
+				<Value>pauschal</Value>
+			</Case>
 			<Otherwise>
 				<Value select="$code" />
 			</Otherwise>
@@ -188,7 +191,7 @@
 	</Function>
 	<Function name="sf:format-amount">
 		<Param name="amount" />
-		<Value select="format-number($amount, '#,##0.00')" />
+		<Value select="translate(format-number($amount, '#,##0.00'), '.,', ',.')" />
 	</Function>
 
 
@@ -199,6 +202,9 @@
 		<SetVariable variable="ApplicableHeaderTradeSettlement" select="rsm:SupplyChainTradeTransaction/ram:ApplicableHeaderTradeSettlement" />
 		<SetVariable variable="PaymentTerms" select="rsm:SupplyChainTradeTransaction/ram:ApplicableHeaderTradeSettlement/ram:SpecifiedTradePaymentTerms" />
 		<SetVariable variable="currencyCode" select="sf:currency-code-to-text($ApplicableHeaderTradeSettlement/ram:InvoiceCurrencyCode)" />
+
+		<!-- invoice info row in mm from top -->
+		<SetVariable variable="invoiceinforow" select="45" />
 
 		<Switch>
 			<Case test="sd:file-exists('settings.xml')">
@@ -245,9 +251,11 @@
 						<Switch>
 							<Case test="sd:file-exists('logo.pdf')">
 								<PlaceObject row="20mm" column="200mm" hreference="right">
-									<Image file="logo.pdf" width="40mm" />
+									<Image file="logo.pdf" height="40mm"  />
 								</PlaceObject>
+								<SetVariable variable="invoiceinforow" select="65" />
 							</Case>
+
 						</Switch>
 					</AtPageCreation>
 					<AtPageShipout>
@@ -452,7 +460,7 @@
 						</Td>
 						<Td align="right" padding-right="4pt">
 							<Paragraph>
-								<Value select="ram:SpecifiedLineTradeSettlement/ram:SpecifiedTradeSettlementLineMonetarySummation/ram:LineTotalAmount" />
+								<Value select="sf:format-amount(ram:SpecifiedLineTradeSettlement/ram:SpecifiedTradeSettlementLineMonetarySummation/ram:LineTotalAmount)" />
 								<Value />
 								<Value select="ram:SpecifiedLineTradeAgreement/ram:GrossPriceProductTradePrice/@currencyID" />
 							</Paragraph>
@@ -469,7 +477,7 @@
 					</Td>
 					<Td align="right">
 						<Paragraph>
-							<Value select="$ApplicableHeaderTradeSettlement/ram:SpecifiedTradeSettlementHeaderMonetarySummation/ram:LineTotalAmount" />
+							<Value select="sf:format-amount($ApplicableHeaderTradeSettlement/ram:SpecifiedTradeSettlementHeaderMonetarySummation/ram:LineTotalAmount)" />
 							<Value>&#xa0;</Value>
 							<Value select="$currencyCode" />
 						</Paragraph>
@@ -484,7 +492,7 @@
 						</Td>
 						<Td align="right">
 							<Paragraph>
-								<Value select="ram:CalculatedAmount" />
+								<Value select="sf:format-amount(ram:CalculatedAmount)" />
 								<Value>&#xa0;</Value>
 								<Value select="$currencyCode" />
 							</Paragraph>
@@ -499,7 +507,7 @@
 					</Td>
 					<Td align="right">
 						<Paragraph>
-							<Value select="$ApplicableHeaderTradeSettlement/ram:SpecifiedTradeSettlementHeaderMonetarySummation/ram:GrandTotalAmount" />
+							<Value select="sf:format-amount($ApplicableHeaderTradeSettlement/ram:SpecifiedTradeSettlementHeaderMonetarySummation/ram:GrandTotalAmount)" />
 							<Value>&#xa0;</Value>
 							<Value select="$currencyCode" />
 						</Paragraph>
@@ -611,7 +619,7 @@
 				<PlaceObject column="{$region_invoice_info/bc:xCm + $region_invoice_info/bc:widthCm}cm" row="{$region_invoice_info/bc:yCm}cm" hreference="right" groupname="invoice_info" />
 			</Case>
 			<Otherwise>
-				<PlaceObject column="200mm" row="45mm" hreference="right" groupname="invoice_info" />
+				<PlaceObject column="200mm" row="{$invoiceinforow}mm" hreference="right" groupname="invoice_info" />
 			</Otherwise>
 		</Switch>
 
@@ -649,8 +657,12 @@
 						<Paragraph fontfamily="addressee">
 							<Value select="ram:Name" />
 							<Br />
-							<Value select="ram:DefinedTradeContact/ram:PersonName" />
-							<Br />
+							<Switch>
+								<Case test="not(ram:DefinedTradeContact/ram:PersonName = '')">
+									<Value select="ram:DefinedTradeContact/ram:PersonName" />
+									<Br />
+								</Case>
+							</Switch>
 							<Value select="ram:PostalTradeAddress/ram:LineOne" />
 							<Br />
 							<Switch>
