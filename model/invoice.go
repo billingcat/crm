@@ -616,3 +616,17 @@ func (crmdb *CRMDatabase) FindInvoices(ownerID uint, statuses []InvoiceStatus, c
 	err = q.Order(order).Limit(limit).Offset(offset).Find(&rows).Error
 	return
 }
+
+func (crmdb *CRMDatabase) ListInvoicesForExport(ownerID uint) ([]Invoice, error) {
+	var invs []Invoice
+
+	q := crmdb.db.
+		Where("owner_id = ?", ownerID).
+		Preload("InvoicePositions", "owner_id = ?", ownerID)
+
+	if err := q.Find(&invs).Error; err != nil {
+		return nil, fmt.Errorf("list invoices for export (owner %d): %w", ownerID, err)
+	}
+
+	return invs, nil
+}

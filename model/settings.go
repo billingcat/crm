@@ -311,3 +311,16 @@ func (crmdb *CRMDatabase) MaybeLiftCustomerCounterFor(ctx context.Context, num s
 		return nil
 	})
 }
+
+func (crmdb *CRMDatabase) LoadSettingsForExportCtx(
+	ctx context.Context,
+	ownerID uint,
+) (*Settings, error) {
+	var s Settings
+	if err := crmdb.db.WithContext(ctx).
+		Where("owner_id = ?", ownerID).
+		First(&s).Error; err != nil {
+		return nil, fmt.Errorf("load settings for export (owner %d): %w", ownerID, err)
+	}
+	return &s, nil
+}

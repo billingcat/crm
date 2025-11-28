@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"archive/zip"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -48,6 +49,7 @@ func (ctrl *controller) settingsInit(e *echo.Echo) {
 	g.POST("/tokens/create", ctrl.settingsTokenCreate)           // create a new API token
 	g.GET("/tokens/create", ctrl.settingsTokenCreate)
 	g.POST("/tokens/revoke/:id", ctrl.settingsTokenRevoke) // revoke an existing token
+	g.GET("/export/xml", ctrl.settingsExportXML)           // export data as XML
 	g.GET("", ctrl.settingslist)
 	g.POST("", ctrl.settingslist)
 }
@@ -305,4 +307,56 @@ func (ctrl *controller) goodbye(c echo.Context) error {
 		"Title":   "Account gelöscht",
 		"Message": "Dein Account wurde zur Löschung vorgemerkt. Zugänge sind widerrufen; Datenlöschung erfolgt routinemäßig nach 30 Tagen.",
 	})
+}
+
+// settingsExportXML exports all data for the current user's owner as XML in a ZIP archive.
+func (ctrl *controller) settingsExportXML(c echo.Context) error {
+	ownerID := c.Get("ownerid").(uint)
+	ctx := c.Request().Context()
+
+	res := c.Response()
+	res.Header().Set(echo.HeaderContentType, "application/zip")
+	res.Header().Set(
+		echo.HeaderContentDisposition,
+		`attachment; filename="billingcat-export.zip"`,
+	)
+
+	zw := zip.NewWriter(res)
+	defer zw.Close()
+
+	if err := ctrl.exportInvoicesXML(ctx, zw, ownerID); err != nil {
+		c.Logger().Errorf("failed to export invoices: %v", err)
+		return err
+	}
+
+	if err := ctrl.exportCustomersXML(ctx, zw, ownerID); err != nil {
+		c.Logger().Errorf("failed to export customers: %v", err)
+		return err
+	}
+
+	if err := ctrl.exportPersonsXML(ctx, zw, ownerID); err != nil {
+		c.Logger().Errorf("failed to export persons: %v", err)
+		return err
+	}
+	if err := ctrl.exportSettingsXML(ctx, zw, ownerID); err != nil {
+		c.Logger().Errorf("failed to export settings: %v", err)
+		return err
+	}
+
+	if err := ctrl.exportLetterheadTemplatesXML(ctx, zw, ownerID); err != nil {
+		c.Logger().Errorf("failed to export letterhead templates: %v", err)
+		return err
+	}
+
+	if err := ctrl.exportUserAssets(zw, ownerID); err != nil {
+		c.Logger().Errorf("failed to export user assets: %v", err)
+		return err
+	}
+
+	if err := ctrl.exportInvoiceFiles(zw, ownerID); err != nil {
+		c.Logger().Errorf("failed to export invoice files: %v", err)
+		return err
+	}
+
+	return nil
 }

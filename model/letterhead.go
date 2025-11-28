@@ -1,7 +1,9 @@
 package model
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"gorm.io/gorm"
@@ -293,4 +295,22 @@ func (db *CRMDatabase) UpdateLetterheadRegionsAndFonts(
 func (db *CRMDatabase) DeleteLetterheadTemplate(id, ownerID uint) error {
 	return db.db.Where("id = ? AND owner_id = ?", id, ownerID).
 		Delete(&LetterheadTemplate{}).Error
+}
+
+func (crmdb *CRMDatabase) ListLetterheadTemplatesForExportCtx(
+	ctx context.Context,
+	ownerID uint,
+) ([]LetterheadTemplate, error) {
+	var templates []LetterheadTemplate
+
+	q := crmdb.db.WithContext(ctx).
+		Where("owner_id = ?", ownerID).
+		Preload("Regions", "owner_id = ?", ownerID).
+		Order("id ASC")
+
+	if err := q.Find(&templates).Error; err != nil {
+		return nil, fmt.Errorf("list letterhead templates for export (owner %d): %w", ownerID, err)
+	}
+
+	return templates, nil
 }

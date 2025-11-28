@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -35,7 +36,7 @@ type Company struct {
 	InvoiceEmail           string          `gorm:"column:invoice_email"`
 	SupplierNumber         string          `gorm:"column:supplier_number"`
 	VATID                  string          `gorm:"column:vat_id"` // VAT identification number
-	Notes                  []Note          `gorm:"polymorphic:Parent;constraint:OnDelete:CASCADE;"`
+	Notes                  []Note          `gorm:"polymorphic:Parent;polymorphicValue:company;constraint:OnDelete:CASCADE;"`
 }
 
 var ErrNotAllowed = fmt.Errorf("not allowed")
@@ -271,4 +272,22 @@ func (crmdb *CRMDatabase) TagsForCompanies(ownerID uint, ids []uint) (map[uint][
 		out[r.CompanyID] = append(out[r.CompanyID], Tag{ID: r.ID, Name: r.Name})
 	}
 	return out, nil
+}
+
+func (crmdb *CRMDatabase) ListCompaniesForExportCtx(
+	ctx context.Context,
+	ownerID uint,
+) ([]Company, error) {
+	var companies []Company
+
+	q := crmdb.db.WithContext(ctx).
+		Where("owner_id = ?", ownerID).
+		Preload("ContactInfos").Preload("Notes").
+		Order("id ASC")
+
+	if err := q.Find(&companies).Error; err != nil {
+		return nil, fmt.Errorf("list companies for export (owner %d): %w", ownerID, err)
+	}
+
+	return companies, nil
 }

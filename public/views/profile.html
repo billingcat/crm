@@ -129,5 +129,20 @@
     </form>
   </div>
 
+  <!-- data export -->
+  <div class="bg-white border border-gray-200 rounded-card shadow-md p-8 mt-8">
+    <h2 class="text-2xl font-bold mb-2">Daten exportieren</h2>
+    <p class="text-sm text-gray-700 mb-4">
+      Du kannst alle deine Daten als ZIP-Datei im XML-Format exportieren
+      (Kunden, Rechnungen, Notizen usw.). Die Datei eignet sich zur Sicherung
+      oder zur Weiterverarbeitung in anderen Systemen.
+    </p>
+
+    <a href="/settings/export/xml"
+       class="inline-flex items-center bg-primary text-text px-6 py-3 rounded-button font-bold hover:bg-hover hover:text-white transition-colors">
+      Daten als ZIP (XML) exportieren
+    </a>
+  </div>
+
 </div>
 {{template "footer.html" .}}

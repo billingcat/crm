@@ -1,6 +1,9 @@
 package model
 
 import (
+	"context"
+	"fmt"
+
 	"gorm.io/gorm"
 )
 
@@ -18,7 +21,7 @@ type Person struct {
 	// Polymorphic association: ContactInfos belong to various parent types (here: Person).
 	ContactInfos []ContactInfo `gorm:"polymorphic:Parent;polymorphicValue:person"`
 	// Notes are polymorphic and cascade on delete; removing a Person deletes its Notes.
-	Notes []Note `gorm:"polymorphic:Parent;constraint:OnDelete:CASCADE;"`
+	Notes []Note `gorm:"polymorphic:Parent;polymorphicValue:person;constraint:OnDelete:CASCADE;"`
 }
 
 // CreatePerson inserts or updates a Person and (optionally) replaces its tags.
@@ -199,4 +202,26 @@ func (crmdb *CRMDatabase) FindAllPeopleWithText(search string, ownerid uint) ([]
 
 	err := q.Find(&people).Error
 	return people, err
+}
+
+// ListPersonsForExportCtx returns all persons for the given owner,
+// preloading ContactInfos and Notes.
+// Used for data export.
+func (crmdb *CRMDatabase) ListPersonsForExportCtx(
+	ctx context.Context,
+	ownerID uint,
+) ([]Person, error) {
+	var persons []Person
+
+	q := crmdb.db.WithContext(ctx).
+		Where("owner_id = ?", ownerID).
+		Preload("ContactInfos").
+		Preload("Notes").
+		Order("id ASC")
+
+	if err := q.Find(&persons).Error; err != nil {
+		return nil, fmt.Errorf("list persons for export (owner %d): %w", ownerID, err)
+	}
+
+	return persons, nil
 }

@@ -47,9 +47,3 @@ func apiOwnerID(c echo.Context) uint {
 	}
 	return 0
 }
-func apiScopes(c echo.Context) string {
-	if v, ok := c.Get(string(ctxScopes)).(string); ok {
-		return v
-	}
-	return ""
-}
