@@ -7,6 +7,7 @@ import (
 
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // Company is a legal entity (organization).
@@ -53,11 +54,16 @@ func (s *Store) SaveCompany(c *Company, ownerID uint, tagNames []string) error {
 		return ErrNotAllowed
 	}
 
+	// Capture ContactInfos so GORM doesn't auto-save associations on Create.
+	contactInfos := c.ContactInfos
+	c.ContactInfos = nil
+
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		// 1) Upsert company record (associations handled explicitly below)
 		var err error
 		if c.ID == 0 {
-			if err = tx.Create(c).Error; err != nil {
+			// Avoid auto-saving ContactInfos; we insert them explicitly later.
+			if err = tx.Omit(clause.Associations).Create(c).Error; err != nil {
 				return err
 			}
 		} else {
@@ -93,14 +99,14 @@ func (s *Store) SaveCompany(c *Company, ownerID uint, tagNames []string) error {
 			Delete(&ContactInfo{}).Error; err != nil {
 			return err
 		}
-		if len(c.ContactInfos) > 0 {
+		if len(contactInfos) > 0 {
 			// Ensure polymorphic linkage and owner scope on each row.
-			for i := range c.ContactInfos {
-				c.ContactInfos[i].OwnerID = ownerID
-				c.ContactInfos[i].ParentType = ParentTypeCompany
-				c.ContactInfos[i].ParentID = c.ID
+			for i := range contactInfos {
+				contactInfos[i].OwnerID = ownerID
+				contactInfos[i].ParentType = ParentTypeCompany
+				contactInfos[i].ParentID = c.ID
 			}
-			if err = tx.Create(&c.ContactInfos).Error; err != nil {
+			if err = tx.Create(&contactInfos).Error; err != nil {
 				return err
 			}
 		}

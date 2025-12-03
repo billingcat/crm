@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // Person represents a natural person (human contact).
@@ -80,10 +81,15 @@ func (s *Store) SavePerson(p *Person, ownerID uint, tagNames []string) error {
 		return ErrNotAllowed
 	}
 
+	// Capture ContactInfos to avoid GORM auto-saving associations on Create.
+	contactInfos := p.ContactInfos
+	p.ContactInfos = nil
+
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		var err error
 		if p.ID == 0 {
-			if err = tx.Create(p).Error; err != nil {
+			// Skip auto-saving associations; we handle ContactInfos manually below.
+			if err = tx.Omit(clause.Associations).Create(p).Error; err != nil {
 				return err
 			}
 		} else {
@@ -105,13 +111,13 @@ func (s *Store) SavePerson(p *Person, ownerID uint, tagNames []string) error {
 			Delete(&ContactInfo{}).Error; err != nil {
 			return err
 		}
-		if len(p.ContactInfos) > 0 {
-			for i := range p.ContactInfos {
-				p.ContactInfos[i].OwnerID = ownerID
-				p.ContactInfos[i].ParentType = ParentTypePerson
-				p.ContactInfos[i].ParentID = p.ID
+		if len(contactInfos) > 0 {
+			for i := range contactInfos {
+				contactInfos[i].OwnerID = ownerID
+				contactInfos[i].ParentType = ParentTypePerson
+				contactInfos[i].ParentID = p.ID
 			}
-			if err = tx.Create(&p.ContactInfos).Error; err != nil {
+			if err = tx.Create(&contactInfos).Error; err != nil {
 				return err
 			}
 		}
