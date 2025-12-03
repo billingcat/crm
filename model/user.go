@@ -53,10 +53,10 @@ func (u *User) BeforeSave(tx *gorm.DB) error {
 	return nil
 }
 
-func (crmdb *CRMDatabase) TouchLastLogin(u *User) error {
+func (s *Store) TouchLastLogin(u *User) error {
 	now := time.Now().UTC()
 	u.LastLoginAt = &now
-	return crmdb.db.Model(u).Update("last_login_at", now).Error
+	return s.db.Model(u).Update("last_login_at", now).Error
 }
 
 // ===== Pending Signup (separate table) =====
@@ -85,30 +85,30 @@ func (t *SignupToken) BeforeSave(tx *gorm.DB) error {
 
 // ---- User Authentication / Password ----
 
-func (crmdb *CRMDatabase) AuthenticateUser(email, password string) (*User, error) {
+func (s *Store) AuthenticateUser(email, password string) (*User, error) {
 	email = NormalizeEmail(email)
-	user, err := crmdb.GetUserByEMail(email)
+	user, err := s.GetUserByEMail(email)
 	if err != nil {
 		return nil, err
 	}
-	if !crmdb.CheckPassword(user, password) {
+	if !s.CheckPassword(user, password) {
 		return nil, ErrInvalidPassword
 	}
 	return user, nil
 }
 
-func (crmdb *CRMDatabase) GetUserByID(id any) (*User, error) {
+func (s *Store) GetUserByID(id any) (*User, error) {
 	var user User
 	if id == nil {
 		return nil, fmt.Errorf("user ID cannot be nil")
 	}
-	if err := crmdb.db.First(&user, id).Error; err != nil {
+	if err := s.db.First(&user, id).Error; err != nil {
 		return nil, err
 	}
 	return &user, nil
 }
 
-func (crmdb *CRMDatabase) SetPassword(u *User, password string) error {
+func (s *Store) SetPassword(u *User, password string) error {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return err
@@ -117,26 +117,26 @@ func (crmdb *CRMDatabase) SetPassword(u *User, password string) error {
 	return nil
 }
 
-func (crmdb *CRMDatabase) CheckPassword(u *User, password string) bool {
+func (s *Store) CheckPassword(u *User, password string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(password)) == nil
 }
 
-func (crmdb *CRMDatabase) GetUserByEMail(email string) (*User, error) {
+func (s *Store) GetUserByEMail(email string) (*User, error) {
 	email = NormalizeEmail(email)
 	var user User
-	if err := crmdb.db.Where("email = ?", email).First(&user).Error; err != nil {
+	if err := s.db.Where("email = ?", email).First(&user).Error; err != nil {
 		return nil, err
 	}
 	return &user, nil
 }
 
-func (crmdb *CRMDatabase) CreateUser(u *User) error {
+func (s *Store) CreateUser(u *User) error {
 	// Email normalized by hook
-	return crmdb.db.Create(u).Error
+	return s.db.Create(u).Error
 }
 
-func (crmdb *CRMDatabase) UpdateUser(u *User) error {
-	return crmdb.db.Save(u).Error
+func (s *Store) UpdateUser(u *User) error {
+	return s.db.Save(u).Error
 }
 
 // ---- Password Reset (fixed & safer) ----
@@ -144,21 +144,21 @@ func (crmdb *CRMDatabase) UpdateUser(u *User) error {
 // SetPasswordResetToken generates and stores a SHA-256 hash of the given token,
 // along with an expiry timestamp. The token itself is *not* stored in plain text.
 // This function works with PostgreSQL, SQLite, and MySQL/MariaDB.
-func (crmdb *CRMDatabase) SetPasswordResetToken(u *User, token string, expiry time.Time) error {
+func (s *Store) SetPasswordResetToken(u *User, token string, expiry time.Time) error {
 	sum := sha256.Sum256([]byte(token))
 
 	u.PasswordResetToken = sum[:] // store the 32-byte hash
 	u.PasswordResetExpiry = expiry
 
-	return crmdb.db.Save(u).Error
+	return s.db.Save(u).Error
 }
 
 // Find user by plaintext token – validates expiry + constant-time compare
-func (crmdb *CRMDatabase) GetUserByResetToken(token string) (*User, error) {
+func (s *Store) GetUserByResetToken(token string) (*User, error) {
 	sum := sha256.Sum256([]byte(token))
 	var u User
 
-	if err := crmdb.db.
+	if err := s.db.
 		Where("password_reset_token = ?", sum[:]).
 		First(&u).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -176,10 +176,10 @@ func (crmdb *CRMDatabase) GetUserByResetToken(token string) (*User, error) {
 	return &u, nil
 }
 
-func (crmdb *CRMDatabase) ClearPasswordResetToken(u *User) error {
+func (s *Store) ClearPasswordResetToken(u *User) error {
 	u.PasswordResetToken = nil
 	u.PasswordResetExpiry = time.Time{}
-	return crmdb.db.Save(u).Error
+	return s.db.Save(u).Error
 }
 
 // GetUserByResetTokenHashPrefix looks up a user by a prefix of the SHA-256 hash
@@ -193,7 +193,7 @@ func (crmdb *CRMDatabase) ClearPasswordResetToken(u *User) error {
 //
 // It performs a prefix match in the database, then verifies the full hash
 // in constant time to avoid timing side-channel attacks.
-func (crmdb *CRMDatabase) GetUserByResetTokenHashPrefix(fullHash []byte, prefixLen int) (*User, error) {
+func (s *Store) GetUserByResetTokenHashPrefix(fullHash []byte, prefixLen int) (*User, error) {
 	if prefixLen <= 0 || prefixLen > len(fullHash) {
 		return nil, fmt.Errorf("invalid prefix length")
 	}
@@ -203,7 +203,7 @@ func (crmdb *CRMDatabase) GetUserByResetTokenHashPrefix(fullHash []byte, prefixL
 	hexChars := prefixLen * 2              // 1 byte = 2 hex chars
 
 	// Detect current SQL dialect (postgres, sqlite, mysql, mariadb, etc.)
-	dialect := crmdb.db.Dialector.Name()
+	dialect := s.db.Dialector.Name()
 
 	var where string
 	var args []any
@@ -232,7 +232,7 @@ func (crmdb *CRMDatabase) GetUserByResetTokenHashPrefix(fullHash []byte, prefixL
 	}
 
 	var u User
-	if err := crmdb.db.Where(where, args...).First(&u).Error; err != nil {
+	if err := s.db.Where(where, args...).First(&u).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}
@@ -255,7 +255,7 @@ func (crmdb *CRMDatabase) GetUserByResetTokenHashPrefix(fullHash []byte, prefixL
 // ---- Signup (email verification) ----
 
 // CreateSignupToken: stores pending signup with token hash and optional password hash
-func (crmdb *CRMDatabase) CreateSignupToken(email, password string, ttl time.Duration, tokenPlain string) (*SignupToken, error) {
+func (s *Store) CreateSignupToken(email, password string, ttl time.Duration, tokenPlain string) (*SignupToken, error) {
 	email = NormalizeEmail(email)
 	if email == "" {
 		return nil, fmt.Errorf("email empty")
@@ -275,18 +275,18 @@ func (crmdb *CRMDatabase) CreateSignupToken(email, password string, ttl time.Dur
 		ExpiresAt:    time.Now().Add(ttl),
 		PasswordHash: string(pwHash),
 	}
-	if err := crmdb.db.Create(st).Error; err != nil {
+	if err := s.db.Create(st).Error; err != nil {
 		return nil, err
 	}
 	return st, nil
 }
 
 // ConsumeSignupToken: validates the token and creates the user afterwards (if not existing)
-func (crmdb *CRMDatabase) ConsumeSignupToken(tokenPlain string) (*User, error) {
+func (s *Store) ConsumeSignupToken(tokenPlain string) (*User, error) {
 	sum := sha256.Sum256([]byte(tokenPlain))
 
 	var st SignupToken
-	if err := crmdb.db.Where("token_hash = ?", sum[:]).First(&st).Error; err != nil {
+	if err := s.db.Where("token_hash = ?", sum[:]).First(&st).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrSignupTokenNotFound
 		}
@@ -298,11 +298,11 @@ func (crmdb *CRMDatabase) ConsumeSignupToken(tokenPlain string) (*User, error) {
 	if time.Now().After(st.ExpiresAt) {
 		return nil, ErrTokenExpired
 	}
-	if err := crmdb.db.Model(&st).Update("consumed_at", time.Now()).Error; err != nil {
+	if err := s.db.Model(&st).Update("consumed_at", time.Now()).Error; err != nil {
 		return nil, err
 	}
 
-	u, err := crmdb.GetUserByEMail(st.Email)
+	u, err := s.GetUserByEMail(st.Email)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
@@ -318,13 +318,13 @@ func (crmdb *CRMDatabase) ConsumeSignupToken(tokenPlain string) (*User, error) {
 			// fallback placeholder; force password set later
 			u.Password = string([]byte("$2a$10$notsetnotsetnotsetnotsetnotsetno4r3lG2vB4V"))
 		}
-		if err := crmdb.CreateUser(u); err != nil {
+		if err := s.CreateUser(u); err != nil {
 			return nil, err
 		}
 	} else {
 		if !u.Verified {
 			u.Verified = true
-			if err := crmdb.UpdateUser(u); err != nil {
+			if err := s.UpdateUser(u); err != nil {
 				return nil, err
 			}
 		}
@@ -338,8 +338,8 @@ func (crmdb *CRMDatabase) ConsumeSignupToken(tokenPlain string) (*User, error) {
 //  1. Delete API tokens (or mark revoked).
 //     2a) If you store sessions server-side: delete them.
 //     2b) If you use cookie-only sessions: bump SessionVersion so middleware rejects old cookies.
-func (crmdb *CRMDatabase) RevokeUserAccessImmediate(ctx context.Context, userID uint) error {
-	return crmdb.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+func (s *Store) RevokeUserAccessImmediate(ctx context.Context, userID uint) error {
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// API tokens: hard-delete for immediate effect.
 		if err := tx.Where("user_id = ?", userID).Delete(&APIToken{}).Error; err != nil {
 			return err
@@ -350,8 +350,8 @@ func (crmdb *CRMDatabase) RevokeUserAccessImmediate(ctx context.Context, userID 
 
 // SoftDeleteUserAccount marks the user as soft-deleted and sets a purge deadline.
 // It does NOT purge domain data; a background job should hard-delete after the grace period.
-func (crmdb *CRMDatabase) SoftDeleteUserAccount(ctx context.Context, userID uint) error {
-	return crmdb.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+func (s *Store) SoftDeleteUserAccount(ctx context.Context, userID uint) error {
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Set gorm's DeletedAt (soft delete). This keeps the row for later purge/restore.
 		if err := tx.Delete(&User{}, userID).Error; err != nil {
 			return err

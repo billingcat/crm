@@ -91,17 +91,17 @@ func hasScheme(s string) bool {
 // by its primary key and owner ID.
 //
 // Returns the matching ContactInfo or a gorm.ErrRecordNotFound if not found.
-func (crmdb *CRMDatabase) LoadPhone(phoneid any, ownerid any) (*ContactInfo, error) {
+func (s *Store) LoadPhone(phoneid any, ownerid any) (*ContactInfo, error) {
 	ph := ContactInfo{}
-	result := crmdb.db.Where("owner_id = ?", ownerid).First(&ph, phoneid)
+	result := s.db.Where("owner_id = ?", ownerid).First(&ph, phoneid)
 	return &ph, result.Error
 }
 
 // DeletePhoneWithCompanyIDAndOwnerID deletes all ContactInfo records of type "companies"
 // for a given company ID and owner ID. Used to clean up contacts on company deletion.
-func (crmdb *CRMDatabase) DeletePhoneWithCompanyIDAndOwnerID(companyid any, ownerid any) error {
+func (s *Store) DeletePhoneWithCompanyIDAndOwnerID(companyid any, ownerid any) error {
 	ph := ContactInfo{}
-	result := crmdb.db.Where("owner_id = ? AND parent_id = ? and parent_type = ?", ownerid, companyid, ParentTypeCompany).Delete(&ph)
+	result := s.db.Where("owner_id = ? AND parent_id = ? and parent_type = ?", ownerid, companyid, ParentTypeCompany).Delete(&ph)
 	if err := result.Error; err != nil {
 		return err
 	}
@@ -109,9 +109,9 @@ func (crmdb *CRMDatabase) DeletePhoneWithCompanyIDAndOwnerID(companyid any, owne
 }
 
 // DeletePhoneWithPersonIDAndOwnerID deletes all ContactInfo records linked to a specific person.
-func (crmdb *CRMDatabase) DeletePhoneWithPersonIDAndOwnerID(personid any, ownerid any) error {
+func (s *Store) DeletePhoneWithPersonIDAndOwnerID(personid any, ownerid any) error {
 	ph := ContactInfo{}
-	result := crmdb.db.Where("owner_id = ? AND parent_id = ? and parent_type = ?", ownerid, personid, ParentTypePerson).Delete(&ph)
+	result := s.db.Where("owner_id = ? AND parent_id = ? and parent_type = ?", ownerid, personid, ParentTypePerson).Delete(&ph)
 	if err := result.Error; err != nil {
 		return err
 	}
@@ -122,13 +122,13 @@ func (crmdb *CRMDatabase) DeletePhoneWithPersonIDAndOwnerID(personid any, owneri
 //
 // It first ensures the record exists, then performs a delete (soft delete if GORM
 // soft deletes are active on this model). Returns an error if not found or failed.
-func (crmdb *CRMDatabase) DeletePhone(id any) error {
+func (s *Store) DeletePhone(id any) error {
 	ph := ContactInfo{}
-	result := crmdb.db.First(&ph, id)
+	result := s.db.First(&ph, id)
 	if err := result.Error; err != nil {
 		return err
 	}
-	result = crmdb.db.Delete(&ph)
+	result = s.db.Delete(&ph)
 	if err := result.Error; err != nil {
 		return err
 	}

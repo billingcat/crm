@@ -32,7 +32,7 @@ func ensureDir(dirName string) error {
 // CreateZUGFeRDPDF creates a ZUGFeRD PDF file for the invoice. The XML is
 // expected to exist at the given location and the PDF gets written to the
 // location given by the last argument.
-func (crmdb *CRMDatabase) CreateZUGFeRDPDF(inv *Invoice, ownerID uint, xmlpath string, pdfpath string, logger *slog.Logger) error {
+func (s *Store) CreateZUGFeRDPDF(inv *Invoice, ownerID uint, xmlpath string, pdfpath string, logger *slog.Logger) error {
 	var err error
 	var settingsData []byte
 	if s := buildSettingsFromInvoice(inv); s != nil {
@@ -43,7 +43,7 @@ func (crmdb *CRMDatabase) CreateZUGFeRDPDF(inv *Invoice, ownerID uint, xmlpath s
 		}
 	}
 	useTemplate := inv.TemplateID != nil && inv.Template != nil
-	ep, err := api.NewEndpoint(crmdb.Config.PublishingServerUsername, crmdb.Config.PublishingServerAddress)
+	ep, err := api.NewEndpoint(s.Config.PublishingServerUsername, s.Config.PublishingServerAddress)
 	if err != nil {
 		return err
 	}
@@ -60,7 +60,7 @@ func (crmdb *CRMDatabase) CreateZUGFeRDPDF(inv *Invoice, ownerID uint, xmlpath s
 
 	p.Version = "5.1.28"
 
-	userAssetsDir := filepath.Join(crmdb.Config.Basedir, "assets", "userassets", fmt.Sprintf("owner%d", ownerID))
+	userAssetsDir := filepath.Join(s.Config.Basedir, "assets", "userassets", fmt.Sprintf("owner%d", ownerID))
 
 	if err = ensureDir(userAssetsDir); err != nil {
 		return err
@@ -97,7 +97,7 @@ func (crmdb *CRMDatabase) CreateZUGFeRDPDF(inv *Invoice, ownerID uint, xmlpath s
 	// if has layout or has custom letterhead, we do not attach the generic layout
 	if !hasLayout {
 		// attach default layout
-		genericLayout := filepath.Join(crmdb.Config.Basedir, "assets", "generic", "layout.xml")
+		genericLayout := filepath.Join(s.Config.Basedir, "assets", "generic", "layout.xml")
 		if err = attachFile(p, genericLayout, "layout.xml"); err != nil {
 			return err
 		}

@@ -112,7 +112,7 @@ func main() {
 		return
 	}
 
-	crmdb, err := model.InitDatabase(cfg)
+	s, err := model.InitDatabase(cfg)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -120,13 +120,13 @@ func main() {
 	if maintenance {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 		defer cancel()
-		if err := model.RunMaintenance(ctx, crmdb); err != nil {
+		if err := model.RunMaintenance(ctx, s); err != nil {
 			log.Fatal(err)
 		}
 		return
 	}
 
-	if err := controller.NewController(crmdb); err != nil {
+	if err := controller.NewController(s); err != nil {
 		log.Fatal(err)
 	}
 }

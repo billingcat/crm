@@ -10,7 +10,7 @@ import (
 )
 
 // InitDatabase for PostgreSQL
-func InitDatabase(cfg *Config) (*CRMDatabase, error) {
+func InitDatabase(cfg *Config) (*Store, error) {
 	svr := cfg.Servers[cfg.Mode]
 	fmt.Println("Use server postgresql and database", svr.DBName)
 
@@ -22,5 +22,5 @@ func InitDatabase(cfg *Config) (*CRMDatabase, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &CRMDatabase{db: db, Config: cfg}, nil
+	return &Store{db: db, Config: cfg}, nil
 }

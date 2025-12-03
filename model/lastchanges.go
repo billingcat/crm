@@ -26,7 +26,7 @@ type ActivityHead struct {
 // Parameters:
 //   - userID: owner/tenant identifier (scopes the query)
 //   - limit:  max number of feed items to return (defaults to 20 if <= 0)
-func (crmdb *CRMDatabase) GetActivityHeads(userID any, limit int) ([]ActivityHead, error) {
+func (s *Store) GetActivityHeads(userID any, limit int) ([]ActivityHead, error) {
 	if limit <= 0 {
 		limit = 20
 	}
@@ -67,7 +67,7 @@ WHERE owner_id = ?
 ORDER BY created_at DESC
 LIMIT ?;`
 
-	if err := crmdb.db.Raw(raw, userID, userID, userID, limit).Scan(&rows).Error; err != nil {
+	if err := s.db.Raw(raw, userID, userID, userID, limit).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
 	return rows, nil
@@ -79,13 +79,13 @@ LIMIT ?;`
 // specific owner, given a slice of IDs. This allows hydrating multiple items
 // efficiently when building composite views or feeds.
 
-func (crmdb *CRMDatabase) CompaniesByIDs(ownerID any, ids []uint) (map[uint]Company, error) {
+func (s *Store) CompaniesByIDs(ownerID any, ids []uint) (map[uint]Company, error) {
 	out := make(map[uint]Company)
 	if len(ids) == 0 {
 		return out, nil
 	}
 	var items []Company
-	if err := crmdb.db.
+	if err := s.db.
 		Where("owner_id = ? AND id IN ?", ownerID, ids).
 		Find(&items).Error; err != nil {
 		return nil, err
@@ -96,13 +96,13 @@ func (crmdb *CRMDatabase) CompaniesByIDs(ownerID any, ids []uint) (map[uint]Comp
 	return out, nil
 }
 
-func (crmdb *CRMDatabase) PeopleByIDs(ownerID any, ids []uint) (map[uint]Person, error) {
+func (s *Store) PeopleByIDs(ownerID any, ids []uint) (map[uint]Person, error) {
 	out := make(map[uint]Person)
 	if len(ids) == 0 {
 		return out, nil
 	}
 	var items []Person
-	if err := crmdb.db.
+	if err := s.db.
 		Where("owner_id = ? AND id IN ?", ownerID, ids).
 		Find(&items).Error; err != nil {
 		return nil, err
@@ -113,13 +113,13 @@ func (crmdb *CRMDatabase) PeopleByIDs(ownerID any, ids []uint) (map[uint]Person,
 	return out, nil
 }
 
-func (crmdb *CRMDatabase) InvoicesByIDs(ownerID any, ids []uint) (map[uint]Invoice, error) {
+func (s *Store) InvoicesByIDs(ownerID any, ids []uint) (map[uint]Invoice, error) {
 	out := make(map[uint]Invoice)
 	if len(ids) == 0 {
 		return out, nil
 	}
 	var items []Invoice
-	if err := crmdb.db.
+	if err := s.db.
 		Where("owner_id = ? AND id IN ?", ownerID, ids).
 		Find(&items).Error; err != nil {
 		return nil, err
@@ -130,13 +130,13 @@ func (crmdb *CRMDatabase) InvoicesByIDs(ownerID any, ids []uint) (map[uint]Invoi
 	return out, nil
 }
 
-func (crmdb *CRMDatabase) NotesByIDs(ownerID any, ids []uint) (map[uint]Note, error) {
+func (s *Store) NotesByIDs(ownerID any, ids []uint) (map[uint]Note, error) {
 	out := make(map[uint]Note)
 	if len(ids) == 0 {
 		return out, nil
 	}
 	var items []Note
-	if err := crmdb.db.
+	if err := s.db.
 		Where("owner_id = ? AND id IN ?", ownerID, ids).
 		Find(&items).Error; err != nil {
 		return nil, err
@@ -164,8 +164,8 @@ type ActivityHydration struct {
 //
 // This method effectively produces a complete in-memory view of recent activity
 // without issuing a separate SQL query per item.
-func (crmdb *CRMDatabase) LoadActivity(ownerID any, limit int) (*ActivityHydration, error) {
-	heads, err := crmdb.GetActivityHeads(ownerID, limit)
+func (s *Store) LoadActivity(ownerID any, limit int) (*ActivityHydration, error) {
+	heads, err := s.GetActivityHeads(ownerID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -207,19 +207,19 @@ func (crmdb *CRMDatabase) LoadActivity(ownerID any, limit int) (*ActivityHydrati
 	}
 
 	// Batch load all entity types in parallel-friendly sequence
-	cmap, err := crmdb.CompaniesByIDs(ownerID, toSlice(companySet))
+	cmap, err := s.CompaniesByIDs(ownerID, toSlice(companySet))
 	if err != nil {
 		return nil, err
 	}
-	pmap, err := crmdb.PeopleByIDs(ownerID, toSlice(personSet))
+	pmap, err := s.PeopleByIDs(ownerID, toSlice(personSet))
 	if err != nil {
 		return nil, err
 	}
-	imap, err := crmdb.InvoicesByIDs(ownerID, toSlice(invoiceSet))
+	imap, err := s.InvoicesByIDs(ownerID, toSlice(invoiceSet))
 	if err != nil {
 		return nil, err
 	}
-	nmap, err := crmdb.NotesByIDs(ownerID, toSlice(noteSet))
+	nmap, err := s.NotesByIDs(ownerID, toSlice(noteSet))
 	if err != nil {
 		return nil, err
 	}

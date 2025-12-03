@@ -10,7 +10,7 @@ import (
 )
 
 // InitDatabase for SQLite (pure Go)
-func InitDatabase(cfg *Config) (*CRMDatabase, error) {
+func InitDatabase(cfg *Config) (*Store, error) {
 	svr := cfg.Servers[cfg.Mode]
 	filename := svr.DBName
 	fmt.Println("Use server sqlite and database", filename)
@@ -19,5 +19,5 @@ func InitDatabase(cfg *Config) (*CRMDatabase, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &CRMDatabase{db: db, Config: cfg}, nil
+	return &Store{db: db, Config: cfg}, nil
 }

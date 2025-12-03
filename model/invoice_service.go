@@ -33,7 +33,7 @@ type InvoiceListQuery struct {
 //   - "date_desc" (default): ORDER BY date DESC
 //   - "date_asc":            ORDER BY date ASC
 //   - "created_desc":        ORDER BY created_at DESC
-func (crmdb *CRMDatabase) ListInvoices(ownerID uint, q InvoiceListQuery) (items []Invoice, nextCursor string, err error) {
+func (s *Store) ListInvoices(ownerID uint, q InvoiceListQuery) (items []Invoice, nextCursor string, err error) {
 	// Clamp/normalize limit
 	if q.Limit <= 0 || q.Limit > 200 {
 		q.Limit = 50
@@ -48,7 +48,7 @@ func (crmdb *CRMDatabase) ListInvoices(ownerID uint, q InvoiceListQuery) (items 
 	}
 
 	// Base query: owner scope
-	db := crmdb.db.Model(&Invoice{}).Where("owner_id = ?", ownerID)
+	db := s.db.Model(&Invoice{}).Where("owner_id = ?", ownerID)
 
 	// Optional filters
 	if q.Status != "" {
@@ -84,9 +84,9 @@ func (crmdb *CRMDatabase) ListInvoices(ownerID uint, q InvoiceListQuery) (items 
 
 // GetInvoiceByOwner loads a single invoice by id, ensuring it belongs to the given owner.
 // Returns gorm.ErrRecordNotFound when the invoice does not exist within the owner scope.
-func (crmdb *CRMDatabase) GetInvoiceByOwner(ownerID uint, id uint) (*Invoice, error) {
+func (s *Store) GetInvoiceByOwner(ownerID uint, id uint) (*Invoice, error) {
 	var inv Invoice
-	if err := crmdb.db.Where("owner_id = ?", ownerID).First(&inv, id).Error; err != nil {
+	if err := s.db.Where("owner_id = ?", ownerID).First(&inv, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, gorm.ErrRecordNotFound
 		}

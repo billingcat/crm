@@ -29,8 +29,8 @@ type RecentView struct {
 func (RecentView) TableName() string { return "recent_views" }
 
 // TouchRecentView updates or creates a recent view entry for the given user and entity
-func (crmdb *CRMDatabase) TouchRecentView(userID uint, et EntityType, entityID uint) error {
-	db := crmdb.db
+func (s *Store) TouchRecentView(userID uint, et EntityType, entityID uint) error {
+	db := s.db
 	rv := RecentView{
 		UserID: userID, EntityType: et, EntityID: entityID, ViewedAt: time.Now(),
 	}
@@ -49,8 +49,8 @@ type RecentItem struct {
 }
 
 // GetRecentItems retrieves the most recently viewed items for a user, limited by the specified number
-func (crmdb *CRMDatabase) GetRecentItems(userID uint, limit int) ([]RecentItem, error) {
-	db := crmdb.db
+func (s *Store) GetRecentItems(userID uint, limit int) ([]RecentItem, error) {
+	db := s.db
 	items := []RecentItem{}
 
 	var companies []RecentItem

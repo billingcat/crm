@@ -18,13 +18,13 @@ type Invitation struct {
 }
 
 // CreateInvitation inserts a new invitation into the database.
-func (crmdb *CRMDatabase) CreateInvitation(ctx context.Context, inv *Invitation) error {
+func (s *Store) CreateInvitation(ctx context.Context, inv *Invitation) error {
 	// Ensure CreatedAt is present if not set by caller
 	if inv.CreatedAt.IsZero() {
 		inv.CreatedAt = time.Now()
 	}
 
-	if err := crmdb.db.WithContext(ctx).Create(inv).Error; err != nil {
+	if err := s.db.WithContext(ctx).Create(inv).Error; err != nil {
 		return err
 	}
 
@@ -35,7 +35,7 @@ func (crmdb *CRMDatabase) CreateInvitation(ctx context.Context, inv *Invitation)
 // - Returns (nil, nil) if no invitation exists for the token.
 // - Returns (*Invitation, nil) on success.
 // - Returns a non-nil error for database errors.
-func (crmdb *CRMDatabase) FindInvitationByToken(ctx context.Context, token string) (*Invitation, error) {
+func (s *Store) FindInvitationByToken(ctx context.Context, token string) (*Invitation, error) {
 	// Normalize input early
 	token = strings.TrimSpace(token)
 	if token == "" {
@@ -44,7 +44,7 @@ func (crmdb *CRMDatabase) FindInvitationByToken(ctx context.Context, token strin
 	}
 
 	var inv Invitation
-	err := crmdb.db.WithContext(ctx).
+	err := s.db.WithContext(ctx).
 		Where("token = ?", token).
 		First(&inv).Error
 
@@ -61,10 +61,10 @@ func (crmdb *CRMDatabase) FindInvitationByToken(ctx context.Context, token strin
 }
 
 // ListInvitations returns all invitations ordered by creation time (newest first).
-func (crmdb *CRMDatabase) ListInvitations(ctx context.Context) ([]Invitation, error) {
+func (s *Store) ListInvitations(ctx context.Context) ([]Invitation, error) {
 	var invitations []Invitation
 
-	if err := crmdb.db.WithContext(ctx).
+	if err := s.db.WithContext(ctx).
 		Order("created_at DESC").
 		Find(&invitations).Error; err != nil {
 		return nil, err

@@ -13,10 +13,10 @@ type TagCount struct {
 
 // ListOwnerCompanyTags returns all tag names used on companies for a given owner with usage counts.
 // Soft-deleted links are ignored.
-func (crmdb *CRMDatabase) ListOwnerCompanyTags(ownerID uint) ([]TagCount, error) {
+func (s *Store) ListOwnerCompanyTags(ownerID uint) ([]TagCount, error) {
 	var rows []TagCount
 	// Only company links
-	err := crmdb.db.
+	err := s.db.
 		Table("tag_links tl").
 		Select("t.name AS name, COUNT(*) AS count").
 		Joins("JOIN tags t ON t.id = tl.tag_id").
@@ -47,7 +47,7 @@ type CompanyListResult struct {
 // - Tag names are normalized via normalizeTagName() -> match via tags.norm
 // - ModeAND is handled by a HAVING count(distinct tag_id) = len(tags)
 // - Query matches company name and (optional) email/domain fields if you have them
-func (crmdb *CRMDatabase) SearchCompaniesByTags(ownerID uint, f CompanyListFilters) (CompanyListResult, error) {
+func (s *Store) SearchCompaniesByTags(ownerID uint, f CompanyListFilters) (CompanyListResult, error) {
 	if f.Limit <= 0 {
 		f.Limit = 25
 	}
@@ -59,14 +59,14 @@ func (crmdb *CRMDatabase) SearchCompaniesByTags(ownerID uint, f CompanyListFilte
 	}
 
 	// Base scope: owner companies
-	base := crmdb.db.Model(&Company{}).Where("owner_id = ?", ownerID)
+	base := s.db.Model(&Company{}).Where("owner_id = ?", ownerID)
 
 	// Free-text query (expand fields as you like)
 	if q := strings.TrimSpace(f.Query); q != "" {
 		// list of searchable columns
 		searchCols := []string{"name", "land", "ort", "kundennummer"}
 
-		if crmdb.db.Dialector.Name() == "postgres" {
+		if s.db.Dialector.Name() == "postgres" {
 			p := "%" + q + "%"
 			var ors []string
 			for range searchCols {
@@ -125,7 +125,7 @@ func (crmdb *CRMDatabase) SearchCompaniesByTags(ownerID uint, f CompanyListFilte
 
 	// With tag filter: build a subquery joining tag_links/tags and grouping by company_id.
 	// Filter only company links and owner scope, and only desired tag norms.
-	linkSub := crmdb.db.
+	linkSub := s.db.
 		Table("tag_links tl").
 		Select("tl.parent_id AS company_id, COUNT(DISTINCT tl.tag_id) AS hit_count").
 		Joins("JOIN tags t ON t.id = tl.tag_id").

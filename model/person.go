@@ -33,8 +33,8 @@ type Person struct {
 //   - Owner scoping: OwnerID is taken from the person record (p.OwnerID).
 //
 // Atomicity: Executed in a single DB transaction; either everything succeeds or nothing is written.
-func (crmdb *CRMDatabase) CreatePerson(p *Person, tagNames []string) error {
-	return crmdb.db.Transaction(func(tx *gorm.DB) error {
+func (s *Store) CreatePerson(p *Person, tagNames []string) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
 		var err error
 		if p.ID == 0 {
 			err = tx.Create(p).Error
@@ -47,12 +47,12 @@ func (crmdb *CRMDatabase) CreatePerson(p *Person, tagNames []string) error {
 
 		// OwnerID is read from the person itself.
 		if len(tagNames) > 0 {
-			tags, err := crmdb.ensureTags(tx, p.OwnerID, tagNames)
+			tags, err := s.ensureTags(tx, p.OwnerID, tagNames)
 			if err != nil {
 				return err
 			}
 			// Replace to keep the source of truth at the call site.
-			if err := crmdb.replaceTagsForParent(tx, p.OwnerID, ParentTypePerson, p.ID, tags); err != nil {
+			if err := s.replaceTagsForParent(tx, p.OwnerID, ParentTypePerson, p.ID, tags); err != nil {
 				return err
 			}
 		}
@@ -75,12 +75,12 @@ func (crmdb *CRMDatabase) CreatePerson(p *Person, tagNames []string) error {
 //   - len(tagNames) > 0  -> replace with exactly these tags
 //
 // Security/scope: Operation is rejected if p.OwnerID != ownerID.
-func (crmdb *CRMDatabase) SavePerson(p *Person, ownerID uint, tagNames []string) error {
+func (s *Store) SavePerson(p *Person, ownerID uint, tagNames []string) error {
 	if p.OwnerID != ownerID {
 		return ErrNotAllowed
 	}
 
-	return crmdb.db.Transaction(func(tx *gorm.DB) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
 		var err error
 		if p.ID == 0 {
 			if err = tx.Create(p).Error; err != nil {
@@ -127,11 +127,11 @@ func (crmdb *CRMDatabase) SavePerson(p *Person, ownerID uint, tagNames []string)
 				return err
 			}
 		default:
-			tags, err := crmdb.ensureTags(tx, ownerID, tagNames)
+			tags, err := s.ensureTags(tx, ownerID, tagNames)
 			if err != nil {
 				return err
 			}
-			if err := crmdb.replaceTagsForParent(tx, ownerID, ParentTypePerson, p.ID, tags); err != nil {
+			if err := s.replaceTagsForParent(tx, ownerID, ParentTypePerson, p.ID, tags); err != nil {
 				return err
 			}
 		}
@@ -142,9 +142,9 @@ func (crmdb *CRMDatabase) SavePerson(p *Person, ownerID uint, tagNames []string)
 
 // LoadPeopleForCompany returns all contacts for a given company within an owner scope.
 // ContactInfos are preloaded.
-func (crmdb *CRMDatabase) LoadPeopleForCompany(id any, ownerID any) ([]*Person, error) {
+func (s *Store) LoadPeopleForCompany(id any, ownerID any) ([]*Person, error) {
 	var people = make([]*Person, 0)
-	result := crmdb.db.Preload("ContactInfos").
+	result := s.db.Preload("ContactInfos").
 		Where("owner_id = ?", ownerID).
 		Where("company_id = ?", id).
 		Find(&people)
@@ -153,29 +153,29 @@ func (crmdb *CRMDatabase) LoadPeopleForCompany(id any, ownerID any) ([]*Person, 
 
 // RemovePerson deletes a person if it belongs to the given owner.
 // Returns ErrNotAllowed when the owner check fails.
-func (crmdb *CRMDatabase) RemovePerson(id any, ownerID any) error {
+func (s *Store) RemovePerson(id any, ownerID any) error {
 	var owner uint
 	var ok bool
 	if owner, ok = ownerID.(uint); !ok {
 		return ErrNotAllowed
 	}
 	c := &Person{}
-	result := crmdb.db.Where("owner_id = ?", owner).First(c, id)
+	result := s.db.Where("owner_id = ?", owner).First(c, id)
 	if result.Error != nil {
 		return result.Error
 	}
 	if c.OwnerID != owner {
 		return ErrNotAllowed
 	}
-	result = crmdb.db.Delete(c)
+	result = s.db.Delete(c)
 	return result.Error
 }
 
 // LoadPerson fetches a person by id within an owner scope.
 // Preloads ContactInfos and Company for convenience.
-func (crmdb *CRMDatabase) LoadPerson(id any, ownerID any) (*Person, error) {
+func (s *Store) LoadPerson(id any, ownerID any) (*Person, error) {
 	c := &Person{}
-	result := crmdb.db.Preload("ContactInfos").
+	result := s.db.Preload("ContactInfos").
 		Preload("Company").
 		Where("owner_id = ?", ownerID).
 		First(c, id)
@@ -184,14 +184,14 @@ func (crmdb *CRMDatabase) LoadPerson(id any, ownerID any) (*Person, error) {
 
 // FindAllPeopleWithText performs a case-insensitive substring search on person names
 // within an owner scope. Uses ILIKE on PostgreSQL; uses LOWER(name) LIKE on other dialects.
-func (crmdb *CRMDatabase) FindAllPeopleWithText(search string, ownerid uint) ([]*Person, error) {
+func (s *Store) FindAllPeopleWithText(search string, ownerid uint) ([]*Person, error) {
 	search = likeEscape(search)
 	like := "%" + search + "%"
 
 	var people []*Person
-	q := crmdb.db.Preload("ContactInfos")
+	q := s.db.Preload("ContactInfos")
 
-	switch crmdb.db.Dialector.Name() {
+	switch s.db.Dialector.Name() {
 	case "postgres":
 		// PostgreSQL: ILIKE for case-insensitive search with explicit ESCAPE.
 		q = q.Where("owner_id = ? AND name ILIKE ? ESCAPE '\\'", ownerid, like)
@@ -207,13 +207,13 @@ func (crmdb *CRMDatabase) FindAllPeopleWithText(search string, ownerid uint) ([]
 // ListPersonsForExportCtx returns all persons for the given owner,
 // preloading ContactInfos and Notes.
 // Used for data export.
-func (crmdb *CRMDatabase) ListPersonsForExportCtx(
+func (s *Store) ListPersonsForExportCtx(
 	ctx context.Context,
 	ownerID uint,
 ) ([]Person, error) {
 	var persons []Person
 
-	q := crmdb.db.WithContext(ctx).
+	q := s.db.WithContext(ctx).
 		Where("owner_id = ?", ownerID).
 		Preload("ContactInfos").
 		Preload("Notes").

@@ -108,7 +108,7 @@ func (t *Template) Render(w io.Writer, name string, data any, _ echo.Context) er
 }
 
 type controller struct {
-	model *model.CRMDatabase
+	model *model.Store
 }
 
 // defaultResponseMap builds a base map used by most views (title, flashes, auth info, etc.).
@@ -387,10 +387,10 @@ func (ctrl *controller) search(c echo.Context) error {
 }
 
 // NewController wires routes, middleware, renderer, and starts the server.
-func NewController(crmdb *model.CRMDatabase) error {
+func NewController(s *model.Store) error {
 	// Environment-driven logger: Dev=Text+Debug, Prod=JSON+Info
 	var logger *slog.Logger
-	if crmdb.Config.Mode == "development" {
+	if s.Config.Mode == "development" {
 		logger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	} else {
 		logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
@@ -398,7 +398,7 @@ func NewController(crmdb *model.CRMDatabase) error {
 
 	// Register types used in gorilla/sessions (e.g., Flash) to avoid gob errors.
 	gob.Register(Flash{})
-	ctrl := controller{model: crmdb}
+	ctrl := controller{model: s}
 
 	// Template functions available in views.
 	var templateFunc = template.FuncMap{
@@ -613,13 +613,13 @@ func NewController(crmdb *model.CRMDatabase) error {
 
 	// gorilla/sessions cookie store (client-side). Defaults are conservative;
 	// remember-me MaxAge is controlled per-save by SessionWriter.
-	store := sessions.NewCookieStore([]byte(crmdb.Config.CookieSecret))
+	store := sessions.NewCookieStore([]byte(s.Config.CookieSecret))
 	e.Use(session.Middleware(store))
 	store.Options = &sessions.Options{
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   crmdb.Config.Mode == "production", // set Secure in prod (HTTPS)
+		Secure:   s.Config.Mode == "production", // set Secure in prod (HTTPS)
 		// Domain: set via CookieCfg if you share across subdomains
 	}
 
@@ -630,7 +630,7 @@ func NewController(crmdb *model.CRMDatabase) error {
 	e.Use(FlashLoader)
 
 	// In development, disable caching for static files and provide a flash demo route.
-	if crmdb.Config.Mode == "development" {
+	if s.Config.Mode == "development" {
 		e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 			return func(c echo.Context) error {
 				if strings.HasPrefix(c.Request().URL.Path, "/static/") {
@@ -670,7 +670,7 @@ func NewController(crmdb *model.CRMDatabase) error {
 		CookiePath:     "/",
 		CookieHTTPOnly: true,
 		CookieSameSite: http.SameSiteLaxMode,
-		CookieSecure:   crmdb.Config.Mode == "production",
+		CookieSecure:   s.Config.Mode == "production",
 		Skipper: func(c echo.Context) bool {
 			// allow POSTs to these endpoints without CSRF (e.g., public forms)
 			if c.Request().Method == http.MethodPost {
@@ -722,7 +722,7 @@ func NewController(crmdb *model.CRMDatabase) error {
 	ctrl.letterheadInit(e)
 	ctrl.customernumberInit(e)
 
-	if err := e.Start(fmt.Sprintf(":%d", crmdb.Config.Port)); err != nil {
+	if err := e.Start(fmt.Sprintf(":%d", s.Config.Port)); err != nil {
 		return fmt.Errorf("cannot start application %w", err)
 	}
 	return nil

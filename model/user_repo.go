@@ -7,13 +7,13 @@ import (
 
 // ListUsers returns a page of users filtered by query `q` (matches email or full name, case-insensitive).
 // It also returns the total count for pagination.
-func (crmdb *CRMDatabase) ListUsers(q string, offset, limit int) ([]User, int64, error) {
+func (s *Store) ListUsers(q string, offset, limit int) ([]User, int64, error) {
 	var (
 		users []User
 		total int64
 	)
 
-	db := crmdb.db.Model(&User{})
+	db := s.db.Model(&User{})
 
 	if q != "" {
 		like := "%" + strings.ToLower(q) + "%"

@@ -5,8 +5,8 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-// CRMDatabase wraps the GORM database connection and holds the configuration
-type CRMDatabase struct {
+// Store wraps the GORM database connection and holds the configuration
+type Store struct {
 	db     *gorm.DB
 	Config *Config
 }

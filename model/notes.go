@@ -71,19 +71,19 @@ func JoinTags(a []string) string {
 
 // CreateNote inserts a new note record after normalizing its ParentType.
 // EditedAt is automatically set via BeforeSave.
-func (crmdb *CRMDatabase) CreateNote(n *Note) error {
+func (s *Store) CreateNote(n *Note) error {
 	if n.ParentType.IsValid() {
 		n.ParentType = n.ParentType
 	} else {
 		return fmt.Errorf("invalid parent_type %q", n.ParentType)
 	}
-	return crmdb.db.Create(n).Error
+	return s.db.Create(n).Error
 }
 
 // GetNoteByID loads a single note by ID, ensuring it belongs to the given owner.
-func (crmdb *CRMDatabase) GetNoteByID(id uint, ownerID uint) (*Note, error) {
+func (s *Store) GetNoteByID(id uint, ownerID uint) (*Note, error) {
 	var n Note
-	err := crmdb.db.
+	err := s.db.
 		Where("id = ? AND owner_id = ?", id, ownerID).
 		First(&n).Error
 	if err != nil {
@@ -103,15 +103,15 @@ type NoteFilters struct {
 
 // LoadAllNotesForParent is a convenience wrapper around ListNotesForParent
 // using default (empty) filters.
-func (crmdb *CRMDatabase) LoadAllNotesForParent(ownerID uint, parentType ParentType, parentID uint) ([]Note, error) {
-	return crmdb.ListNotesForParent(ownerID, parentType, parentID, NoteFilters{})
+func (s *Store) LoadAllNotesForParent(ownerID uint, parentType ParentType, parentID uint) ([]Note, error) {
+	return s.ListNotesForParent(ownerID, parentType, parentID, NoteFilters{})
 }
 
 // ListNotesForParent returns a list of notes belonging to a given parent entity,
 // optionally filtered by search terms, with pagination support.
 //
 // Search applies a simple LIKE filter over title, body, and tags (case-sensitive by default).
-func (crmdb *CRMDatabase) ListNotesForParent(ownerID uint, parentType ParentType, parentID uint, f NoteFilters) ([]Note, error) {
+func (s *Store) ListNotesForParent(ownerID uint, parentType ParentType, parentID uint, f NoteFilters) ([]Note, error) {
 	if !parentType.IsValid() {
 		return nil, fmt.Errorf("invalid parent_type %q", parentType)
 	}
@@ -122,7 +122,7 @@ func (crmdb *CRMDatabase) ListNotesForParent(ownerID uint, parentType ParentType
 	}
 	offset := f.Offset
 
-	q := crmdb.db.
+	q := s.db.
 		Where("owner_id = ? AND parent_type = ? AND parent_id = ?", ownerID, parentType, parentID)
 
 	if s := strings.TrimSpace(f.Search); s != "" {
@@ -143,9 +143,9 @@ func (crmdb *CRMDatabase) ListNotesForParent(ownerID uint, parentType ParentType
 // Enforces that the current author matches the note's AuthorID.
 //
 // Only title, body, tags, and edited_at are updated.
-func (crmdb *CRMDatabase) UpdateNoteContentAsAuthor(ownerID, authorID, noteID uint, title, body, tags string) (*Note, error) {
+func (s *Store) UpdateNoteContentAsAuthor(ownerID, authorID, noteID uint, title, body, tags string) (*Note, error) {
 	var n Note
-	if err := crmdb.db.Where("id = ? AND owner_id = ?", noteID, ownerID).First(&n).Error; err != nil {
+	if err := s.db.Where("id = ? AND owner_id = ?", noteID, ownerID).First(&n).Error; err != nil {
 		return nil, err
 	}
 	if n.AuthorID != authorID {
@@ -156,7 +156,7 @@ func (crmdb *CRMDatabase) UpdateNoteContentAsAuthor(ownerID, authorID, noteID ui
 	n.Tags = tags
 	n.EditedAt = time.Now()
 
-	if err := crmdb.db.Model(&n).Select("Title", "Body", "Tags", "EditedAt").Updates(&n).Error; err != nil {
+	if err := s.db.Model(&n).Select("Title", "Body", "Tags", "EditedAt").Updates(&n).Error; err != nil {
 		return nil, err
 	}
 	return &n, nil
@@ -164,8 +164,8 @@ func (crmdb *CRMDatabase) UpdateNoteContentAsAuthor(ownerID, authorID, noteID ui
 
 // DeleteNote removes a note by ID, restricted to its owner and author.
 // Authors can only delete their own notes.
-func (crmdb *CRMDatabase) DeleteNote(id uint, ownerID uint, authorID uint) error {
-	return crmdb.db.
+func (s *Store) DeleteNote(id uint, ownerID uint, authorID uint) error {
+	return s.db.
 		Where("id = ? AND owner_id = ? AND author_id = ?", id, ownerID, authorID).
 		Delete(&Note{}).Error
 }

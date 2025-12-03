@@ -40,7 +40,7 @@ type Settings struct {
 // LoadSettings loads the settings row for a given owner.
 // Accepts ownerID as uint or int and returns an initialized (but unsaved)
 // Settings record if none exists yet (via FirstOrInit).
-func (crmdb *CRMDatabase) LoadSettings(ownerID any) (*Settings, error) {
+func (s *Store) LoadSettings(ownerID any) (*Settings, error) {
 	var oid uint
 	switch v := ownerID.(type) {
 	case uint:
@@ -51,15 +51,15 @@ func (crmdb *CRMDatabase) LoadSettings(ownerID any) (*Settings, error) {
 		return nil, fmt.Errorf("LoadSettings: unsupported ownerID type %T", ownerID)
 	}
 
-	s := &Settings{}
+	settings := &Settings{}
 	// FirstOrInit: if no row exists, return a struct prefilled with OwnerID
 	// without hitting INSERT (use Save/SaveSettings later to persist).
-	if err := crmdb.db.
+	if err := s.db.
 		Where("owner_id = ?", oid).
-		FirstOrInit(s, &Settings{OwnerID: oid}).Error; err != nil {
+		FirstOrInit(settings, &Settings{OwnerID: oid}).Error; err != nil {
 		return nil, err
 	}
-	return s, nil
+	return settings, nil
 }
 
 // UpdateSettings updates fields for the existing row identified by owner_id.
@@ -68,32 +68,32 @@ func (crmdb *CRMDatabase) LoadSettings(ownerID any) (*Settings, error) {
 //
 // Note: updated_at uses NOW() which is DB-specific; for SQLite you may prefer
 // CURRENT_TIMESTAMP or let GORM manage timestamps automatically.
-func (crmdb *CRMDatabase) UpdateSettings(s *Settings) error {
-	if s.OwnerID == 0 {
+func (s *Store) UpdateSettings(settings *Settings) error {
+	if settings.OwnerID == 0 {
 		return errors.New("UpdateSettings: OwnerID required")
 	}
-	return crmdb.db.
+	return s.db.
 		Model(&Settings{}).
-		Where("owner_id = ?", s.OwnerID).
+		Where("owner_id = ?", settings.OwnerID).
 		Updates(map[string]any{
-			"company_name":            s.CompanyName,
-			"invoice_contact":         s.InvoiceContact,
-			"invoice_email":           s.InvoiceEMail,
-			"zip":                     s.ZIP,
-			"address1":                s.Address1,
-			"address2":                s.Address2,
-			"city":                    s.City,
-			"country_code":            s.CountryCode,
-			"vat_id":                  s.VATID,
-			"tax_number":              s.TAXNumber,
-			"invoice_number_template": s.InvoiceNumberTemplate,
-			"use_local_counter":       s.UseLocalCounter,
-			"bank_iban":               s.BankIBAN,
-			"bank_name":               s.BankName,
-			"bank_bic":                s.BankBIC,
-			"customer_number_prefix":  s.CustomerNumberPrefix,
-			"customer_number_width":   s.CustomerNumberWidth,
-			"customer_number_counter": s.CustomerNumberCounter,
+			"company_name":            settings.CompanyName,
+			"invoice_contact":         settings.InvoiceContact,
+			"invoice_email":           settings.InvoiceEMail,
+			"zip":                     settings.ZIP,
+			"address1":                settings.Address1,
+			"address2":                settings.Address2,
+			"city":                    settings.City,
+			"country_code":            settings.CountryCode,
+			"vat_id":                  settings.VATID,
+			"tax_number":              settings.TAXNumber,
+			"invoice_number_template": settings.InvoiceNumberTemplate,
+			"use_local_counter":       settings.UseLocalCounter,
+			"bank_iban":               settings.BankIBAN,
+			"bank_name":               settings.BankName,
+			"bank_bic":                settings.BankBIC,
+			"customer_number_prefix":  settings.CustomerNumberPrefix,
+			"customer_number_width":   settings.CustomerNumberWidth,
+			"customer_number_counter": settings.CustomerNumberCounter,
 			"updated_at":              gorm.Expr("NOW()"),
 		}).Error
 }
@@ -104,36 +104,36 @@ func (crmdb *CRMDatabase) UpdateSettings(s *Settings) error {
 //
 // Caveat: GORM translates ON CONFLICT per dialect. Ensure a unique index exists
 // on owner_id (declared on the struct) and that the target DB supports the clause.
-func (crmdb *CRMDatabase) SaveSettings(s *Settings) error {
-	if s.OwnerID == 0 {
+func (s *Store) SaveSettings(settings *Settings) error {
+	if settings.OwnerID == 0 {
 		return errors.New("SaveSettings: OwnerID required")
 	}
-	return crmdb.db.Clauses(clause.OnConflict{
+	return s.db.Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "owner_id"}}, // conflict target
 		DoUpdates: clause.Assignments(map[string]any{
-			"company_name":            s.CompanyName,
-			"invoice_contact":         s.InvoiceContact,
-			"invoice_email":           s.InvoiceEMail,
-			"zip":                     s.ZIP,
-			"address1":                s.Address1,
-			"address2":                s.Address2,
-			"city":                    s.City,
-			"country_code":            s.CountryCode,
-			"vat_id":                  s.VATID,
-			"tax_number":              s.TAXNumber,
-			"invoice_number_template": s.InvoiceNumberTemplate,
-			"use_local_counter":       s.UseLocalCounter,
-			"bank_iban":               s.BankIBAN,
-			"bank_name":               s.BankName,
-			"bank_bic":                s.BankBIC,
-			"customer_number_prefix":  s.CustomerNumberPrefix,
-			"customer_number_width":   s.CustomerNumberWidth,
-			"customer_number_counter": s.CustomerNumberCounter,
+			"company_name":            settings.CompanyName,
+			"invoice_contact":         settings.InvoiceContact,
+			"invoice_email":           settings.InvoiceEMail,
+			"zip":                     settings.ZIP,
+			"address1":                settings.Address1,
+			"address2":                settings.Address2,
+			"city":                    settings.City,
+			"country_code":            settings.CountryCode,
+			"vat_id":                  settings.VATID,
+			"tax_number":              settings.TAXNumber,
+			"invoice_number_template": settings.InvoiceNumberTemplate,
+			"use_local_counter":       settings.UseLocalCounter,
+			"bank_iban":               settings.BankIBAN,
+			"bank_name":               settings.BankName,
+			"bank_bic":                settings.BankBIC,
+			"customer_number_prefix":  settings.CustomerNumberPrefix,
+			"customer_number_width":   settings.CustomerNumberWidth,
+			"customer_number_counter": settings.CustomerNumberCounter,
 
 			// ensure updated_at changes on UPSERT
 			"updated_at": gorm.Expr("CURRENT_TIMESTAMP"),
 		}),
-	}).Create(s).Error
+	}).Create(settings).Error
 }
 
 // formatCustomerNumber builds the display string: prefix + zero-padded width + n (e.g. "K-" + 5 + 42 => "K-00042").
@@ -149,11 +149,11 @@ var ErrNoSettingsRow = errors.New("no settings row found")
 
 // NextCustomerNumberTx allocates the next unique customer number in a transaction.
 // Returns the formatted string and the numeric value used.
-func (crmdb *CRMDatabase) NextCustomerNumberTx(ctx context.Context) (string, int64, error) {
+func (s *Store) NextCustomerNumberTx(ctx context.Context) (string, int64, error) {
 	var result string
 	var numeric int64
 
-	err := crmdb.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Lock settings row for update (Postgres/MySQL). SQLite ignores this clause.
 		var s Settings
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
@@ -218,9 +218,9 @@ func parseNumericPart(prefix, s string) (int64, bool) {
 // --- Public API ---
 
 // SuggestNextCustomerNumber returns a non-persistent suggestion (counter+1 formatted).
-func (crmdb *CRMDatabase) SuggestNextCustomerNumber(ctx context.Context) (string, error) {
-	var s Settings
-	err := crmdb.db.WithContext(ctx).First(&s).Error
+func (s *Store) SuggestNextCustomerNumber(ctx context.Context) (string, error) {
+	var settings Settings
+	err := s.db.WithContext(ctx).First(&settings).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			// domain specific error when no settings row exists
@@ -230,8 +230,8 @@ func (crmdb *CRMDatabase) SuggestNextCustomerNumber(ctx context.Context) (string
 		return "", err
 	}
 
-	n := s.CustomerNumberCounter + 1
-	return formatCustomerNumber(s.CustomerNumberPrefix, s.CustomerNumberWidth, n), nil
+	n := settings.CustomerNumberCounter + 1
+	return formatCustomerNumber(settings.CustomerNumberPrefix, settings.CustomerNumberWidth, n), nil
 }
 
 // CheckCustomerNumber validates whether a customer number is valid and available.
@@ -241,20 +241,20 @@ func (crmdb *CRMDatabase) SuggestNextCustomerNumber(ctx context.Context) (string
 //
 //	ok=true  -> number is syntactically valid and available (or belongs to excludeID)
 //	ok=false -> invalid or taken; message gives human-readable reason
-func (crmdb *CRMDatabase) CheckCustomerNumber(ctx context.Context, num string, excludeID uint) (ok bool, message string, err error) {
+func (s *Store) CheckCustomerNumber(ctx context.Context, num string, excludeID uint) (ok bool, message string, err error) {
 	// Empty -> treated as a neutral suggestion
 	if num == "" {
 		return true, "Vorschlag – kann überschrieben werden.", nil
 	}
 
 	// Load settings for validation rules
-	var s Settings
-	if err := crmdb.db.WithContext(ctx).First(&s).Error; err != nil {
+	var settings Settings
+	if err := s.db.WithContext(ctx).First(&settings).Error; err != nil {
 		return false, "Fehler beim Laden der Einstellungen", err
 	}
 
-	prefix := strings.TrimSpace(s.CustomerNumberPrefix)
-	width := s.CustomerNumberWidth
+	prefix := strings.TrimSpace(settings.CustomerNumberPrefix)
+	width := settings.CustomerNumberWidth
 
 	// Check prefix
 	if prefix != "" && !strings.HasPrefix(num, prefix) {
@@ -280,7 +280,7 @@ func (crmdb *CRMDatabase) CheckCustomerNumber(ctx context.Context, num string, e
 
 	// Uniqueness check
 	var comp Company
-	q := crmdb.db.WithContext(ctx).Where("customer_number = ?", num)
+	q := s.db.WithContext(ctx).Where("customer_number = ?", num)
 	if err := q.First(&comp).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return true, "", nil
@@ -298,8 +298,8 @@ func (crmdb *CRMDatabase) CheckCustomerNumber(ctx context.Context, num string, e
 }
 
 // MaybeLiftCustomerCounterFor raises the settings counter if num's numeric part is ahead.
-func (crmdb *CRMDatabase) MaybeLiftCustomerCounterFor(ctx context.Context, num string) error {
-	return crmdb.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+func (s *Store) MaybeLiftCustomerCounterFor(ctx context.Context, num string) error {
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var s Settings
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&s).Error; err != nil {
 			return err
@@ -312,15 +312,15 @@ func (crmdb *CRMDatabase) MaybeLiftCustomerCounterFor(ctx context.Context, num s
 	})
 }
 
-func (crmdb *CRMDatabase) LoadSettingsForExportCtx(
+func (s *Store) LoadSettingsForExportCtx(
 	ctx context.Context,
 	ownerID uint,
 ) (*Settings, error) {
-	var s Settings
-	if err := crmdb.db.WithContext(ctx).
+	var settings Settings
+	if err := s.db.WithContext(ctx).
 		Where("owner_id = ?", ownerID).
-		First(&s).Error; err != nil {
+		First(&settings).Error; err != nil {
 		return nil, fmt.Errorf("load settings for export (owner %d): %w", ownerID, err)
 	}
-	return &s, nil
+	return &settings, nil
 }

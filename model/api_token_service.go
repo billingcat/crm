@@ -14,8 +14,8 @@ import (
 
 // AutoMigrateTokens applies database schema migrations for the APIToken model.
 // Should be called during setup or version upgrades.
-func (crmdb *CRMDatabase) AutoMigrateTokens() error {
-	return crmdb.db.AutoMigrate(&APIToken{})
+func (s *Store) AutoMigrateTokens() error {
+	return s.db.AutoMigrate(&APIToken{})
 }
 
 // CreateAPIToken creates a new API token record and returns its plaintext token **once**.
@@ -36,7 +36,7 @@ func (crmdb *CRMDatabase) AutoMigrateTokens() error {
 // Security:
 // The plaintext token is composed of a random prefix and salt; its hash is computed via SHA-256.
 // The prefix allows efficient lookup without storing the full token.
-func (crmdb *CRMDatabase) CreateAPIToken(ownerID uint, userID *uint, name, scope string, expiresAt *time.Time) (plain string, rec *APIToken, err error) {
+func (s *Store) CreateAPIToken(ownerID uint, userID *uint, name, scope string, expiresAt *time.Time) (plain string, rec *APIToken, err error) {
 	plain, prefix, saltHex, hash, err := makeToken()
 	if err != nil {
 		return "", nil, err
@@ -51,7 +51,7 @@ func (crmdb *CRMDatabase) CreateAPIToken(ownerID uint, userID *uint, name, scope
 		Scope:       scope,
 		ExpiresAt:   expiresAt,
 	}
-	if err = crmdb.db.Create(rec).Error; err != nil {
+	if err = s.db.Create(rec).Error; err != nil {
 		return "", nil, err
 	}
 	return plain, rec, nil
@@ -71,14 +71,14 @@ func (crmdb *CRMDatabase) CreateAPIToken(ownerID uint, userID *uint, name, scope
 //   - A specific error (ErrTokenInvalid, ErrTokenNotFound, ErrTokenDisabled, ErrTokenExpired) otherwise.
 //
 // This method avoids timing attacks by using constant-time comparison (crypto/subtle).
-func (crmdb *CRMDatabase) ValidateAPIToken(raw string) (*APIToken, error) {
+func (s *Store) ValidateAPIToken(raw string) (*APIToken, error) {
 	if len(raw) < 12 {
 		return nil, ErrTokenInvalid
 	}
 	prefix := raw[:8]
 
 	var rec APIToken
-	if err := crmdb.db.Where("token_prefix = ?", prefix).First(&rec).Error; err != nil {
+	if err := s.db.Where("token_prefix = ?", prefix).First(&rec).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrTokenNotFound
 		}
@@ -105,14 +105,14 @@ func (crmdb *CRMDatabase) ValidateAPIToken(raw string) (*APIToken, error) {
 	}
 
 	// Best-effort update of last usage timestamp (non-blocking)
-	_ = crmdb.db.Model(&APIToken{}).Where("id = ?", rec.ID).Update("last_used_at", time.Now()).Error
+	_ = s.db.Model(&APIToken{}).Where("id = ?", rec.ID).Update("last_used_at", time.Now()).Error
 	return &rec, nil
 }
 
 // RevokeAPIToken disables a token by marking it as "disabled".
 // Only allowed for tokens belonging to the specified owner.
-func (crmdb *CRMDatabase) RevokeAPIToken(ownerID, tokenID uint) error {
-	return crmdb.db.Model(&APIToken{}).
+func (s *Store) RevokeAPIToken(ownerID, tokenID uint) error {
+	return s.db.Model(&APIToken{}).
 		Where("id = ? AND owner_id = ?", tokenID, ownerID).
 		Update("disabled", true).Error
 }
@@ -130,7 +130,7 @@ func (crmdb *CRMDatabase) RevokeAPIToken(ownerID, tokenID uint) error {
 //   - error if query fails
 //
 // Tokens are ordered by creation date (most recent first).
-func (crmdb *CRMDatabase) ListAPITokensByOwner(ownerID uint, limit int, cursor string) ([]APIToken, string, error) {
+func (s *Store) ListAPITokensByOwner(ownerID uint, limit int, cursor string) ([]APIToken, string, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
@@ -142,7 +142,7 @@ func (crmdb *CRMDatabase) ListAPITokensByOwner(ownerID uint, limit int, cursor s
 	}
 
 	var rows []APIToken
-	if err := crmdb.db.Where("owner_id = ?", ownerID).
+	if err := s.db.Where("owner_id = ?", ownerID).
 		Order("created_at desc").
 		Offset(offset).Limit(limit + 1).Find(&rows).Error; err != nil {
 		return nil, "", err

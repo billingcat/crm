@@ -47,13 +47,13 @@ var ErrNotAllowed = fmt.Errorf("not allowed")
 // Semantics:
 //   - ContactInfos: "replace" semantics → delete existing rows, then insert the provided set.
 //   - Tags: tagNames==nil → keep; len==0 → remove all; len>0 → replace exactly with provided set.
-func (crmdb *CRMDatabase) SaveCompany(c *Company, ownerID uint, tagNames []string) error {
+func (s *Store) SaveCompany(c *Company, ownerID uint, tagNames []string) error {
 	// Ownership guard: callers must pass the same owner scope as the record.
 	if c.OwnerID != ownerID {
 		return ErrNotAllowed
 	}
 
-	return crmdb.db.Transaction(func(tx *gorm.DB) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
 		// 1) Upsert company record (associations handled explicitly below)
 		var err error
 		if c.ID == 0 {
@@ -116,11 +116,11 @@ func (crmdb *CRMDatabase) SaveCompany(c *Company, ownerID uint, tagNames []strin
 				return err
 			}
 		default:
-			tags, err := crmdb.ensureTags(tx, ownerID, tagNames)
+			tags, err := s.ensureTags(tx, ownerID, tagNames)
 			if err != nil {
 				return err
 			}
-			if err := crmdb.replaceTagsForParent(tx, ownerID, ParentTypeCompany, c.ID, tags); err != nil {
+			if err := s.replaceTagsForParent(tx, ownerID, ParentTypeCompany, c.ID, tags); err != nil {
 				return err
 			}
 		}
@@ -133,13 +133,13 @@ func (crmdb *CRMDatabase) SaveCompany(c *Company, ownerID uint, tagNames []strin
 //   - Invoices (ordered newest first),
 //   - ContactInfos,
 //   - Contacts (people) via a follow-up query.
-func (crmdb *CRMDatabase) LoadCompany(id any, ownerID any) (*Company, error) {
+func (s *Store) LoadCompany(id any, ownerID any) (*Company, error) {
 	var err error
 	if ownerID == nil {
 		return nil, fmt.Errorf("userid is nil")
 	}
 	c := &Company{}
-	result := crmdb.db.
+	result := s.db.
 		Preload("Invoices", func(db *gorm.DB) *gorm.DB {
 			return db.Order("invoices.created_at DESC")
 		}).
@@ -148,7 +148,7 @@ func (crmdb *CRMDatabase) LoadCompany(id any, ownerID any) (*Company, error) {
 	if result.Error != nil {
 		return nil, result.Error
 	}
-	c.Contacts, err = crmdb.LoadPeopleForCompany(c.ID, ownerID)
+	c.Contacts, err = s.LoadPeopleForCompany(c.ID, ownerID)
 	if err != nil {
 		return nil, err
 	}
@@ -157,9 +157,9 @@ func (crmdb *CRMDatabase) LoadCompany(id any, ownerID any) (*Company, error) {
 
 // LoadAllCompanies returns all companies for a given owner, preloading ContactInfos.
 // Use with care for large datasets (consider pagination).
-func (crmdb *CRMDatabase) LoadAllCompanies(ownerid any) ([]*Company, error) {
+func (s *Store) LoadAllCompanies(ownerid any) ([]*Company, error) {
 	var companies = make([]*Company, 0)
-	result := crmdb.db.Preload("ContactInfos").Where("owner_id = ?", ownerid).Find(&companies)
+	result := s.db.Preload("ContactInfos").Where("owner_id = ?", ownerid).Find(&companies)
 	return companies, result.Error
 }
 
@@ -173,14 +173,14 @@ func likeEscape(s string) string {
 // FindAllCompaniesWithText performs a case-insensitive substring search on company names
 // within an owner scope. Uses ILIKE on PostgreSQL and LOWER(name) LIKE on other dialects.
 // ContactInfos are preloaded for convenience.
-func (crmdb *CRMDatabase) FindAllCompaniesWithText(search string, ownerid uint) ([]*Company, error) {
+func (s *Store) FindAllCompaniesWithText(search string, ownerid uint) ([]*Company, error) {
 	search = likeEscape(search)
 	like := "%" + search + "%"
 	var companies []*Company
 
-	q := crmdb.db.Preload("ContactInfos")
+	q := s.db.Preload("ContactInfos")
 
-	switch crmdb.db.Dialector.Name() {
+	switch s.db.Dialector.Name() {
 	case "postgres":
 		q = q.Where("owner_id = ? AND name ILIKE ? ESCAPE '\\'", ownerid, like)
 	default: // sqlite, mysql/mariadb
@@ -193,7 +193,7 @@ func (crmdb *CRMDatabase) FindAllCompaniesWithText(search string, ownerid uint) 
 
 // CompanyNamesByIDs returns a map of company ID → company name for a given set of IDs.
 // Efficiently implemented via a selective scan on the "companies" table.
-func (crmdb *CRMDatabase) CompanyNamesByIDs(ownerID uint, ids []uint) (map[uint]string, error) {
+func (s *Store) CompanyNamesByIDs(ownerID uint, ids []uint) (map[uint]string, error) {
 	if len(ids) == 0 {
 		return map[uint]string{}, nil
 	}
@@ -202,7 +202,7 @@ func (crmdb *CRMDatabase) CompanyNamesByIDs(ownerID uint, ids []uint) (map[uint]
 		Name string
 	}
 	var rs []row
-	if err := crmdb.db.
+	if err := s.db.
 		Table("companies").
 		Select("id, name").
 		Where("owner_id = ? AND id IN ?", ownerID, ids).
@@ -219,14 +219,14 @@ func (crmdb *CRMDatabase) CompanyNamesByIDs(ownerID uint, ids []uint) (map[uint]
 
 // ListAllCompaniesByTags returns all companies matching the given filters (no external pagination).
 // Internally iterates in fixed-size pages to control memory usage.
-func (crmdb *CRMDatabase) ListAllCompaniesByTags(ownerID uint, f CompanyListFilters) ([]Company, error) {
+func (s *Store) ListAllCompaniesByTags(ownerID uint, f CompanyListFilters) ([]Company, error) {
 	// Reuse the same filtering logic; page internally
 	const pageSize = 500
 	var out []Company
 	offset := 0
 
 	for {
-		page, err := crmdb.SearchCompaniesByTags(ownerID, CompanyListFilters{
+		page, err := s.SearchCompaniesByTags(ownerID, CompanyListFilters{
 			Query:   f.Query,
 			Tags:    f.Tags,
 			ModeAND: f.ModeAND,
@@ -247,7 +247,7 @@ func (crmdb *CRMDatabase) ListAllCompaniesByTags(ownerID uint, f CompanyListFilt
 
 // TagsForCompanies returns a map[companyID][]Tag for the given company IDs.
 // Skips soft-deleted tag links and orders tags case-insensitively by name.
-func (crmdb *CRMDatabase) TagsForCompanies(ownerID uint, ids []uint) (map[uint][]Tag, error) {
+func (s *Store) TagsForCompanies(ownerID uint, ids []uint) (map[uint][]Tag, error) {
 	if len(ids) == 0 {
 		return map[uint][]Tag{}, nil
 	}
@@ -256,7 +256,7 @@ func (crmdb *CRMDatabase) TagsForCompanies(ownerID uint, ids []uint) (map[uint][
 		ID        uint
 		Name      string
 	}
-	err := crmdb.db.
+	err := s.db.
 		Table("tag_links tl").
 		Select("tl.parent_id AS company_id, t.id, t.name").
 		Joins("JOIN tags t ON t.id = tl.tag_id").
@@ -274,13 +274,13 @@ func (crmdb *CRMDatabase) TagsForCompanies(ownerID uint, ids []uint) (map[uint][
 	return out, nil
 }
 
-func (crmdb *CRMDatabase) ListCompaniesForExportCtx(
+func (s *Store) ListCompaniesForExportCtx(
 	ctx context.Context,
 	ownerID uint,
 ) ([]Company, error) {
 	var companies []Company
 
-	q := crmdb.db.WithContext(ctx).
+	q := s.db.WithContext(ctx).
 		Where("owner_id = ?", ownerID).
 		Preload("ContactInfos").Preload("Notes").
 		Order("id ASC")

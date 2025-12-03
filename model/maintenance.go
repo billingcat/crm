@@ -12,12 +12,12 @@ import (
 
 // RunMaintenance executes housekeeping tasks.
 // Make sure tasks are idempotent and safe to run multiple times.
-func RunMaintenance(ctx context.Context, crmdb *CRMDatabase) error {
+func RunMaintenance(ctx context.Context, s *Store) error {
 	start := time.Now()
 	log.Println("maintenance: start")
 
 	// Try to acquire a DB-level singleton lock (Postgres only).
-	unlock, err := tryAcquireLock(ctx, crmdb)
+	unlock, err := tryAcquireLock(ctx, s)
 	if err != nil {
 		return err
 	}
@@ -26,27 +26,27 @@ func RunMaintenance(ctx context.Context, crmdb *CRMDatabase) error {
 	}
 
 	// 1) Delete API tokens that are either disabled or expired
-	if err := deleteInvalidAPITokens(ctx, crmdb); err != nil {
+	if err := deleteInvalidAPITokens(ctx, s); err != nil {
 		return fmt.Errorf("delete invalid API tokens: %w", err)
 	}
 
 	// 2) Delete expired signup tokens
-	if err := deleteExpiredSignupTokens(ctx, crmdb); err != nil {
+	if err := deleteExpiredSignupTokens(ctx, s); err != nil {
 		return fmt.Errorf("delete expired signup tokens: %w", err)
 	}
 
 	// 3) Prune old recent views (older than 90 days)
-	if err := pruneOldRecentViews(ctx, crmdb, 90*24*time.Hour); err != nil {
+	if err := pruneOldRecentViews(ctx, s, 90*24*time.Hour); err != nil {
 		return fmt.Errorf("prune recent views: %w", err)
 	}
 
 	// 4) Run VACUUM/ANALYZE depending on the DB engine
-	if err := vacuumAnalyze(ctx, crmdb); err != nil {
+	if err := vacuumAnalyze(ctx, s); err != nil {
 		return fmt.Errorf("vacuum/analyze: %w", err)
 	}
 
 	// // 5) Delete stale files in XMLDir (older than 30 days)
-	// _ = pruneTempFiles(crmdb.Config.XMLDir, 30*24*time.Hour)
+	// _ = pruneTempFiles(s.Config.XMLDir, 30*24*time.Hour)
 
 	log.Printf("maintenance: done in %s", time.Since(start).Truncate(time.Millisecond))
 	return nil
@@ -56,13 +56,13 @@ func RunMaintenance(ctx context.Context, crmdb *CRMDatabase) error {
 // DB locking (only relevant for Postgres, safe no-op for SQLite)
 // --------------------------------------------------------------------
 
-func tryAcquireLock(ctx context.Context, crmdb *CRMDatabase) (func(), error) {
-	sqlDB, err := crmdb.db.DB()
+func tryAcquireLock(ctx context.Context, s *Store) (func(), error) {
+	sqlDB, err := s.db.DB()
 	if err != nil {
 		return nil, err
 	}
 
-	switch crmdb.db.Dialector.Name() {
+	switch s.db.Dialector.Name() {
 	case "postgres":
 		var got bool
 		// Pick any unique int64 identifier for your app
@@ -87,35 +87,35 @@ func tryAcquireLock(ctx context.Context, crmdb *CRMDatabase) (func(), error) {
 
 // deleteInvalidAPITokens removes tokens that are explicitly disabled
 // or past their expiration date.
-func deleteInvalidAPITokens(ctx context.Context, crmdb *CRMDatabase) error {
-	return crmdb.db.WithContext(ctx).
+func deleteInvalidAPITokens(ctx context.Context, s *Store) error {
+	return s.db.WithContext(ctx).
 		Exec(`DELETE FROM api_tokens WHERE disabled = TRUE OR (expires_at IS NOT NULL AND expires_at < NOW())`).
 		Error
 }
 
 // deleteExpiredSignupTokens removes signup tokens that are already expired
 // or have been consumed.
-func deleteExpiredSignupTokens(ctx context.Context, crmdb *CRMDatabase) error {
-	return crmdb.db.WithContext(ctx).
+func deleteExpiredSignupTokens(ctx context.Context, s *Store) error {
+	return s.db.WithContext(ctx).
 		Exec(`DELETE FROM signup_tokens WHERE expires_at < NOW() OR consumed_at IS NOT NULL`).
 		Error
 }
 
 // pruneOldRecentViews removes entries older than given duration.
-func pruneOldRecentViews(ctx context.Context, crmdb *CRMDatabase, olderThan time.Duration) error {
+func pruneOldRecentViews(ctx context.Context, s *Store, olderThan time.Duration) error {
 	cutoff := time.Now().Add(-olderThan)
-	return crmdb.db.WithContext(ctx).
+	return s.db.WithContext(ctx).
 		Exec(`DELETE FROM recent_views WHERE viewed_at < ?`, cutoff).
 		Error
 }
 
 // vacuumAnalyze runs database cleanup commands depending on DB engine.
-func vacuumAnalyze(ctx context.Context, crmdb *CRMDatabase) error {
-	sqlDB, err := crmdb.db.DB()
+func vacuumAnalyze(ctx context.Context, s *Store) error {
+	sqlDB, err := s.db.DB()
 	if err != nil {
 		return err
 	}
-	switch crmdb.db.Dialector.Name() {
+	switch s.db.Dialector.Name() {
 	case "postgres":
 		_, err = sqlDB.ExecContext(ctx, "VACUUM (ANALYZE)")
 	case "sqlite":
