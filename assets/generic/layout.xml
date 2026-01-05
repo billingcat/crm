@@ -187,7 +187,7 @@
 	</Function>
 	<Function name="sf:remove-decimal-zeros">
 		<Param name="amount" />
-		<Value select="replace(string($amount), '\.0+$', '')" />
+		<Value select="translate(replace(replace(string($amount), '(\.\d*?)0+$', '$1'), '\.$', ''), '.', ',')" />
 	</Function>
 	<Function name="sf:format-amount">
 		<Param name="amount" />
@@ -454,15 +454,11 @@
 						<Td align="right">
 							<Paragraph>
 								<Value select="sf:format-amount(ram:SpecifiedLineTradeAgreement/ram:NetPriceProductTradePrice/ram:ChargeAmount)" />
-								<Value />
-								<Value select="ram:SpecifiedLineTradeAgreement/ram:NetPriceProductTradePrice/ram:ChargeAmount/@currencyID" />
 							</Paragraph>
 						</Td>
 						<Td align="right" padding-right="4pt">
 							<Paragraph>
 								<Value select="sf:format-amount(ram:SpecifiedLineTradeSettlement/ram:SpecifiedTradeSettlementLineMonetarySummation/ram:LineTotalAmount)" />
-								<Value />
-								<Value select="ram:SpecifiedLineTradeAgreement/ram:GrossPriceProductTradePrice/@currencyID" />
 							</Paragraph>
 						</Td>
 					</Tr>
@@ -478,8 +474,6 @@
 					<Td align="right">
 						<Paragraph>
 							<Value select="sf:format-amount($ApplicableHeaderTradeSettlement/ram:SpecifiedTradeSettlementHeaderMonetarySummation/ram:LineTotalAmount)" />
-							<Value>&#xa0;</Value>
-							<Value select="$currencyCode" />
 						</Paragraph>
 					</Td>
 				</Tr>
@@ -493,8 +487,6 @@
 						<Td align="right">
 							<Paragraph>
 								<Value select="sf:format-amount(ram:CalculatedAmount)" />
-								<Value>&#xa0;</Value>
-								<Value select="$currencyCode" />
 							</Paragraph>
 						</Td>
 					</Tr>
@@ -508,8 +500,6 @@
 					<Td align="right">
 						<Paragraph>
 							<Value select="sf:format-amount($ApplicableHeaderTradeSettlement/ram:SpecifiedTradeSettlementHeaderMonetarySummation/ram:GrandTotalAmount)" />
-							<Value>&#xa0;</Value>
-							<Value select="$currencyCode" />
 						</Paragraph>
 					</Td>
 				</Tr>
