@@ -25,17 +25,17 @@
         id="duedate" name="duedate" value="{{$invoice.DueDate | htmldate}}">
     </div>
     <div>
-      <label for="invoicenumber">Rechnungsnummer</label>
+      <label for="invoicenumber"><span class="lg:hidden">Rechnungsnummer</span><span class="hidden lg:inline xl:hidden">Rechnungsnr.</span><span class="hidden xl:inline">Rechnungsnummer</span></label>
       <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
         id="invoicenumber" name="invoicenumber" value="{{$invoice.Number}}">
     </div>
     <div>
-      <label for="ordernumber">Bestellnummer, Auftragsnummer</label>
+      <label for="ordernumber"><span class="2xl:hidden">Bestellnr.</span><span class="hidden 2xl:inline">Bestellnr., Auftragsnr.</span></label>
       <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
         id="ordernumber" name="ordernumber" value="{{$invoice.OrderNumber}}">
     </div>
     <div>
-      <label for="buyerreference">Käuferreferenz, Leitweg-ID</label>
+      <label for="buyerreference"><span class="2xl:hidden">Käuferreferenz</span><span class="hidden 2xl:inline">Käuferreferenz, Leitweg-ID</span></label>
       <input type="text" class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
         id="buyerreference" name="buyerreference" value="{{$invoice.BuyerReference}}">
     </div>
