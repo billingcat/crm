@@ -22,10 +22,17 @@
                         </div>
                     </div>
 
-                    <div class="form-group form-check mb-3">
-                        <input type="checkbox" class="form-check-input" id="rememberMe" name="rememberMe">
-                        <label class="" for="rememberMe">Remember Me</label>
+                    <div class="form-group form-check mb-3" id="rememberMeGroup">
+                        <input type="checkbox" class="form-check-input" id="rememberMe" name="rememberMe" checked>
+                        <label class="" for="rememberMe">Angemeldet bleiben</label>
                     </div>
+                    <script>
+                        // PWA mode: keep checkbox checked and hide it
+                        if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+                            document.getElementById('rememberMe').checked = true;
+                            document.getElementById('rememberMeGroup').style.display = 'none';
+                        }
+                    </script>
                     <button
                         class="bg-primary text-text px-6 py-3 rounded-button font-bold hover:bg-hover hover:text-white transition-colors">
                         Login
