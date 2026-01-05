@@ -3,6 +3,7 @@ package model
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -19,10 +20,17 @@ type Person struct {
 	EMail     string `gorm:"column:e_mail"`
 	CompanyID int    `gorm:"column:company_id"`
 	Company   Company
+	// DepartedAt marks when the person left the company (nil = still active)
+	DepartedAt *time.Time `gorm:"column:departed_at"`
 	// Polymorphic association: ContactInfos belong to various parent types (here: Person).
 	ContactInfos []ContactInfo `gorm:"polymorphic:Parent;polymorphicValue:person"`
 	// Notes are polymorphic and cascade on delete; removing a Person deletes its Notes.
 	Notes []Note `gorm:"polymorphic:Parent;polymorphicValue:person;constraint:OnDelete:CASCADE;"`
+}
+
+// HasDeparted returns true if the person has left the company
+func (p *Person) HasDeparted() bool {
+	return p.DepartedAt != nil
 }
 
 // CreatePerson inserts or updates a Person and (optionally) replaces its tags.
@@ -230,4 +238,94 @@ func (s *Store) ListPersonsForExportCtx(
 	}
 
 	return persons, nil
+}
+
+// DepartPersonResult contains the result of a DepartPerson operation
+type DepartPersonResult struct {
+	Person *Person
+	Note   *Note
+}
+
+// DepartPerson marks a person as having left their company and creates a note on the company.
+//
+// This operation:
+//   - Sets DepartedAt to the current time
+//   - Creates a note on the associated company documenting the departure
+//   - The person remains linked to the company for historical reference
+//
+// Parameters:
+//   - personID: ID of the person departing
+//   - ownerID: owner scope for authorization
+//   - authorID: user creating the departure record (for the note)
+//
+// Returns ErrNotAllowed if the person doesn't belong to the owner.
+// Returns an error if the person has no associated company.
+func (s *Store) DepartPerson(personID uint, ownerID uint, authorID uint) (*DepartPersonResult, error) {
+	var result DepartPersonResult
+
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		// Load person with company
+		var person Person
+		if err := tx.Preload("Company").
+			Where("id = ? AND owner_id = ?", personID, ownerID).
+			First(&person).Error; err != nil {
+			return err
+		}
+
+		// Check if already departed
+		if person.DepartedAt != nil {
+			return fmt.Errorf("person has already departed")
+		}
+
+		// Check if person has a company
+		if person.CompanyID == 0 {
+			return fmt.Errorf("person has no associated company")
+		}
+
+		// Set departure time
+		now := time.Now()
+		person.DepartedAt = &now
+
+		if err := tx.Model(&Person{}).
+			Where("id = ? AND owner_id = ?", personID, ownerID).
+			Update("departed_at", now).Error; err != nil {
+			return err
+		}
+
+		// Create note on the company
+		noteBody := fmt.Sprintf("%s ist am %s ausgeschieden.",
+			person.Name,
+			now.Format("02.01.2006"))
+
+		note := &Note{
+			OwnerID:    ownerID,
+			AuthorID:   authorID,
+			ParentType: ParentTypeCompany,
+			ParentID:   uint(person.CompanyID),
+			Title:      "Mitarbeiter ausgeschieden",
+			Body:       noteBody,
+			Tags:       "personal,ausgeschieden",
+		}
+
+		if err := tx.Create(note).Error; err != nil {
+			return err
+		}
+
+		result.Person = &person
+		result.Note = note
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ReactivatePerson removes the departed status from a person.
+// Use this if a person returns to the company or was marked departed by mistake.
+func (s *Store) ReactivatePerson(personID uint, ownerID uint) error {
+	return s.db.Model(&Person{}).
+		Where("id = ? AND owner_id = ?", personID, ownerID).
+		Update("departed_at", nil).Error
 }

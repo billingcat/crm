@@ -29,6 +29,8 @@ func (ctrl *controller) personInit(e *echo.Echo) {
 	g.POST("/edit/:id", ctrl.personedit)
 	g.DELETE("/delete/:id", ctrl.deletePersonWithID)
 	g.POST("/:id/tags", ctrl.personTagsUpdate)
+	g.POST("/:id/depart", ctrl.personDepart)
+	g.POST("/:id/reactivate", ctrl.personReactivate)
 }
 
 // personForm models the HTML form payload for creating/updating a person.
@@ -328,5 +330,54 @@ func (ctrl *controller) personTagsUpdate(c echo.Context) error {
 	}
 
 	// Fallback redirect for standard form submit
+	return c.Redirect(http.StatusSeeOther, fmt.Sprintf("/person/%d", personID))
+}
+
+// personDepart marks a person as having left their company.
+// Creates a note on the company documenting the departure.
+//
+// POST /person/:id/depart
+func (ctrl *controller) personDepart(c echo.Context) error {
+	ownerID := c.Get("ownerid").(uint)
+	userID := c.Get("uid").(uint)
+
+	personID64, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		return ErrInvalid(err, "Invalid person ID")
+	}
+	personID := uint(personID64)
+
+	result, err := ctrl.model.DepartPerson(personID, ownerID, userID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrInvalid(err, "Contact not found")
+		}
+		return ErrInvalid(err, err.Error())
+	}
+
+	// Set flash message
+	_ = AddFlash(c, "success", fmt.Sprintf("%s wurde als ausgeschieden markiert.", result.Person.Name))
+
+	return c.Redirect(http.StatusSeeOther, fmt.Sprintf("/person/%d", personID))
+}
+
+// personReactivate removes the departed status from a person.
+//
+// POST /person/:id/reactivate
+func (ctrl *controller) personReactivate(c echo.Context) error {
+	ownerID := c.Get("ownerid").(uint)
+
+	personID64, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		return ErrInvalid(err, "Invalid person ID")
+	}
+	personID := uint(personID64)
+
+	if err := ctrl.model.ReactivatePerson(personID, ownerID); err != nil {
+		return ErrInvalid(err, "Error reactivating contact")
+	}
+
+	_ = AddFlash(c, "success", "Kontakt wurde reaktiviert.")
+
 	return c.Redirect(http.StatusSeeOther, fmt.Sprintf("/person/%d", personID))
 }

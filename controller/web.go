@@ -453,6 +453,22 @@ func NewController(s *model.Store) error {
 			}
 			return t.Format("02.01.2006 15:04")
 		},
+		"fmtDate": func(t any) string {
+			switch v := t.(type) {
+			case time.Time:
+				if v.IsZero() {
+					return ""
+				}
+				return v.Format("02.01.2006")
+			case *time.Time:
+				if v == nil || v.IsZero() {
+					return ""
+				}
+				return v.Format("02.01.2006")
+			default:
+				return ""
+			}
+		},
 		"nl2br": func(s string) template.HTML {
 			esc := html.EscapeString(s)
 			return template.HTML(strings.ReplaceAll(esc, "\n", "<br>"))

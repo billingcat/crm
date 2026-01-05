@@ -191,8 +191,14 @@
       <ul class="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
         {{ range .Contacts }}
         <li>
-          <a class="block rounded-lg px-3 py-2 hover:bg-gray-100 transition" href="/person/{{ .ID }}">
-            {{ .Name }}
+          <a class="block rounded-lg px-3 py-2 hover:bg-gray-100 transition {{ if .HasDeparted }}opacity-50{{ end }}"
+             href="/person/{{ .ID }}">
+            <span class="flex items-center gap-2">
+              {{ .Name }}
+              {{ if .HasDeparted }}
+              <span class="text-xs text-gray-500">(ausgeschieden)</span>
+              {{ end }}
+            </span>
           </a>
         </li>
         {{ end }}

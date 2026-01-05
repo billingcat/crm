@@ -11,6 +11,12 @@ type Store struct {
 	Config *Config
 }
 
+// NewStoreFromDB creates a Store from an existing GORM database connection.
+// Useful for testing with in-memory databases.
+func NewStoreFromDB(db *gorm.DB, cfg *Config) *Store {
+	return &Store{db: db, Config: cfg}
+}
+
 // Config holds the application configuration, it is read from config.toml
 type Config struct {
 	Basedir                  string
