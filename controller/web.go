@@ -17,9 +17,14 @@ import (
 	"strings"
 	"time"
 
+	"bytes"
+
 	"github.com/billingcat/crm/model"
 
 	"github.com/gorilla/sessions"
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/extension"
+	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -468,6 +473,20 @@ func NewController(s *model.Store) error {
 			default:
 				return ""
 			}
+		},
+		"markdown": func(s string) template.HTML {
+			md := goldmark.New(
+				goldmark.WithExtensions(extension.Linkify),
+				goldmark.WithRendererOptions(
+					goldmarkhtml.WithHardWraps(),
+				),
+			)
+			var buf bytes.Buffer
+			if err := md.Convert([]byte(s), &buf); err != nil {
+				esc := html.EscapeString(s)
+				return template.HTML(strings.ReplaceAll(esc, "\n", "<br>"))
+			}
+			return template.HTML(buf.String())
 		},
 		"nl2br": func(s string) template.HTML {
 			esc := html.EscapeString(s)

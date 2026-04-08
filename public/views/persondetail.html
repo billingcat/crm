@@ -264,7 +264,7 @@
 
         <div>
           <label for="note_body" class="block text-sm font-medium text-gray-700">Notiz</label>
-          <textarea id="note_body" name="body" rows="4" required
+          <textarea id="note_body" name="body" rows="4"
             class="mt-1 block w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"></textarea>
         </div>
 
@@ -291,7 +291,7 @@
   {{ with $.notes }}
   <div class="bg-white border border-gray-200 rounded-lg divide-y">
     {{ range . }}
-    <div class="p-4 relative group" x-data="{ edit: false }">
+    <div class="p-4 relative group" x-data="{ edit: false }" x-effect="if (edit) $nextTick(() => initEasyMDE($refs.editBody))">
       {{ $isAuthor := eq $.uid .AuthorID }}
 
       <!-- Edit-Button nur für Autor -->
@@ -325,8 +325,8 @@
           {{- end -}}
         </p>
 
-        <div class="text-sm text-gray-800">
-          {{ nl2br .Body }}
+        <div class="text-sm text-gray-800 prose prose-sm max-w-none">
+          {{ markdown .Body }}
         </div>
 
         {{ if .Tags }}
@@ -352,7 +352,7 @@
 
           <div>
             <label class="block text-xs font-medium text-gray-700" for="body_{{ .ID }}">Notiz</label>
-            <textarea id="body_{{ .ID }}" name="body" rows="4"
+            <textarea x-ref="editBody" id="body_{{ .ID }}" name="body" rows="4"
               class="mt-1 block w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary">{{ .Body }}</textarea>
           </div>
 
@@ -379,5 +379,24 @@
     {{ end }}
   </div>
   {{ end }}
+
+  <link rel="stylesheet" href="/static/css/easymde.min.css">
+  <script src="/static/js/easymde.min.js"></script>
+  <script>
+    function initEasyMDE(el) {
+      if (!el || el._easymde) return;
+      el._easymde = new EasyMDE({
+        element: el,
+        spellChecker: false,
+        status: false,
+        placeholder: "Markdown wird unterstützt…",
+        toolbar: ["bold", "italic", "heading", "|", "unordered-list", "ordered-list", "|", "link", "code", "|", "preview", "guide"],
+        minHeight: "120px",
+      });
+    }
+    document.addEventListener("DOMContentLoaded", function() {
+      initEasyMDE(document.getElementById("note_body"));
+    });
+  </script>
 
   {{template "footer.html" .}}
