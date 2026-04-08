@@ -131,7 +131,7 @@
                             @keydown.escape.window="open=false">
                             <button type="button" @click="open = !open" :aria-expanded="open.toString()"
                                 aria-haspopup="true" class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium
-        {{ if or (eq $.path " /admin/users") (eq $.path "/admin/invitations" ) }} border-primary-light text-white {{
+        {{ if or (eq $.path " /admin/users") (eq $.path "/admin/invitations" ) (eq $.path "/admin/activity") }} border-primary-light text-white {{
                                 else }} border-transparent text-gray-700 hover:border-hover hover:text-white {{ end }}">
                                 Admin
                                 <svg class="ml-1 h-4 w-4" aria-hidden="true">
@@ -147,6 +147,11 @@
                                         class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem"
                                         tabindex="-1">
                                         Benutzer
+                                    </a>
+                                    <a href="/admin/activity"
+                                        class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem"
+                                        tabindex="-1">
+                                        Aktivität
                                     </a>
                                     {{ if .useInvitations }}
                                     <a href="/admin/invitations"

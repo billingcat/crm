@@ -164,6 +164,14 @@ func (ctrl *controller) upsertCompany(c echo.Context) error {
 			return ErrInvalid(err, "Fehler beim Speichern der Firma")
 		}
 
+		// Audit log
+		uid := c.Get("uid").(uint)
+		if isNew {
+			ctrl.model.LogAudit(ownerID, uid, model.AuditActionCreate, model.AuditEntityCompany, dbCompany.ID, dbCompany.Name)
+		} else {
+			ctrl.model.LogAudit(ownerID, uid, model.AuditActionUpdate, model.AuditEntityCompany, dbCompany.ID, dbCompany.Name)
+		}
+
 		// Redirect: keep existing behavior (pretty URL on edit)
 		if isNew {
 			return c.Redirect(http.StatusSeeOther, fmt.Sprintf("/company/%d", dbCompany.ID))

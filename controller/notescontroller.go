@@ -36,6 +36,8 @@ func (ctrl *controller) CreateNote(c echo.Context) error {
 		return ErrInvalid(err, "Note konnte nicht gespeichert werden")
 	}
 
+	ctrl.model.LogAudit(ownerID, userid, model.AuditActionCreate, model.AuditEntityNote, n.ID, n.Title)
+
 	// Redirect back to parent entity
 	if n.ParentType == model.ParentTypeCompany {
 		return c.Redirect(http.StatusSeeOther, fmt.Sprintf("/company/%d", n.ParentID))
@@ -69,6 +71,8 @@ func (ctrl *controller) UpdateNote(c echo.Context) error {
 		}
 		return echo.NewHTTPError(http.StatusInternalServerError, "Notiz konnte nicht aktualisiert werden")
 	}
+
+	ctrl.model.LogAudit(ownerID, authorID, model.AuditActionUpdate, model.AuditEntityNote, n.ID, n.Title)
 
 	switch n.ParentType {
 	case model.ParentTypeCompany:

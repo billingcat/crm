@@ -134,6 +134,10 @@ func (ctrl *controller) personnew(c echo.Context) error {
 		if err := ctrl.model.SavePerson(&personDB, ownerID, tagNames); err != nil {
 			return ErrInvalid(err, "Error creating contact")
 		}
+
+		uid := c.Get("uid").(uint)
+		ctrl.model.LogAudit(ownerID, uid, model.AuditActionCreate, model.AuditEntityPerson, personDB.ID, personDB.Name)
+
 		return c.Redirect(http.StatusSeeOther, fmt.Sprintf("/person/%d", personDB.ID))
 	}
 	return nil
@@ -155,6 +159,10 @@ func (ctrl *controller) deletePersonWithID(c echo.Context) error {
 	if err := ctrl.model.RemovePerson(personID, ownerID); err != nil {
 		return ErrInvalid(err, "Error deleting contact")
 	}
+
+	uid := c.Get("uid").(uint)
+	ctrl.model.LogAudit(ownerID, uid, model.AuditActionDelete, model.AuditEntityPerson, personDB.ID, personDB.Name)
+
 	return c.String(http.StatusOK, "Contact deleted")
 }
 
@@ -294,6 +302,10 @@ func (ctrl *controller) personedit(c echo.Context) error {
 		if err := ctrl.model.SavePerson(dbPerson, ownerID, tagNames); err != nil {
 			return ErrInvalid(err, "Error saving contact")
 		}
+
+		uid := c.Get("uid").(uint)
+		ctrl.model.LogAudit(ownerID, uid, model.AuditActionUpdate, model.AuditEntityPerson, dbPerson.ID, dbPerson.Name)
+
 		return c.Redirect(http.StatusSeeOther, fmt.Sprintf("/person/%d", dbPerson.ID))
 	}
 	return nil

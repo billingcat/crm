@@ -258,6 +258,10 @@ func (ctrl *controller) invoiceNew(c echo.Context) error {
 		if err = ctrl.model.SaveInvoice(mi, ownerID); err != nil {
 			return ErrInvalid(err, "Fehler beim Speichern der Rechnung")
 		}
+
+		uid := c.Get("uid").(uint)
+		ctrl.model.LogAudit(ownerID, uid, model.AuditActionCreate, model.AuditEntityInvoice, mi.ID, mi.Number)
+
 		return c.Redirect(http.StatusSeeOther, fmt.Sprintf("/invoice/detail/%d", mi.ID))
 	}
 	return nil
@@ -281,6 +285,10 @@ func (ctrl *controller) invoiceDelete(c echo.Context) error {
 	if err != nil {
 		return ErrInvalid(err, "Kann Rechnung nicht löschen")
 	}
+
+	uid := c.Get("uid").(uint)
+	ctrl.model.LogAudit(ownerID, uid, model.AuditActionDelete, model.AuditEntityInvoice, inv.ID, inv.Number)
+
 	return c.Redirect(http.StatusSeeOther, fmt.Sprintf("/company/%d", companyid))
 }
 
@@ -479,6 +487,10 @@ func (ctrl *controller) invoiceEdit(c echo.Context) error {
 		if err = ctrl.model.UpdateInvoice(mi, ownerID); err != nil {
 			return ErrInvalid(err, "Fehler beim Speichern der Rechnung")
 		}
+
+		uid := c.Get("uid").(uint)
+		ctrl.model.LogAudit(ownerID, uid, model.AuditActionUpdate, model.AuditEntityInvoice, mi.ID, mi.Number)
+
 		return c.Redirect(http.StatusSeeOther, "/invoice/detail/"+c.Param("id"))
 	}
 	return nil
@@ -655,10 +667,14 @@ func (ctrl *controller) invoiceStatusChange(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "unsupported transition")
 	}
 	if err != nil {
-		// Give the user a clear message (e.g., “paid invoices cannot be voided”)
+		// Give the user a clear message (e.g., "paid invoices cannot be voided")
 		slog.Error("invoice status change failed", "invoice_id", invoiceID, "err", err)
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
+
+	// Audit log for status change
+	uid := c.Get("uid").(uint)
+	ctrl.model.LogAudit(ownerID, uid, model.AuditActionStatus, model.AuditEntityInvoice, invoiceID, "Status → "+desired)
 
 	// AJAX: 200 + JSON with relevant timestamps is handy for optimistic UI updates.
 	inv, loadErr := ctrl.model.LoadInvoiceWithTemplate(invoiceID, ownerID)

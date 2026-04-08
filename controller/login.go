@@ -136,6 +136,13 @@ func (ctrl *controller) login(c echo.Context) error {
 	}
 
 	_ = ctrl.model.TouchLastLogin(user) // best-effort
+
+	loginOwnerID := user.OwnerID
+	if loginOwnerID == 0 {
+		loginOwnerID = user.ID
+	}
+	ctrl.model.LogAudit(loginOwnerID, user.ID, model.AuditActionLogin, model.AuditEntityUser, user.ID, user.Email)
+
 	return c.Redirect(http.StatusSeeOther, "/")
 }
 

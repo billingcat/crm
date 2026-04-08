@@ -20,6 +20,8 @@ func (ctrl *controller) adminInit(e *echo.Echo) {
 
 	// Users list with optional search & pagination.
 	g.GET("/users", ctrl.adminUsersList)
+	// Activity / audit log
+	g.GET("/activity", ctrl.adminActivity)
 	// Show list + form
 	g.GET("/invitations", ctrl.adminInvitationsPage)
 
@@ -150,6 +152,100 @@ func (ctrl *controller) adminCreateInvitation(c echo.Context) error {
 		return err
 	}
 	return c.Redirect(http.StatusSeeOther, "/admin_invitation_created.html")
+}
+
+// adminActivity renders a paginated, filterable audit log for the admin.
+func (ctrl *controller) adminActivity(c echo.Context) error {
+	m := ctrl.defaultResponseMap(c, "Aktivität (Admin)")
+	ownerID := c.Get("ownerid").(uint)
+
+	// Pagination
+	const defaultPerPage = 50
+	const maxPerPage = 200
+
+	page, _ := strconv.Atoi(c.QueryParam("page"))
+	if page < 1 {
+		page = 1
+	}
+	perPage, _ := strconv.Atoi(c.QueryParam("per"))
+	if perPage <= 0 || perPage > maxPerPage {
+		perPage = defaultPerPage
+	}
+	offset := (page - 1) * perPage
+
+	// Filters
+	var filter model.AuditLogFilter
+
+	if u := c.QueryParam("user"); u != "" {
+		if uid, err := strconv.ParseUint(u, 10, 64); err == nil {
+			uidVal := uint(uid)
+			filter.UserID = &uidVal
+		}
+	}
+	if a := c.QueryParam("action"); a != "" {
+		action := model.AuditAction(a)
+		filter.Action = &action
+	}
+	if et := c.QueryParam("entity"); et != "" {
+		entityType := model.AuditEntityType(et)
+		filter.EntityType = &entityType
+	}
+
+	entries, total, err := ctrl.model.ListAuditLogs(ownerID, filter, offset, perPage)
+	if err != nil {
+		return ErrInvalid(err, "Fehler beim Laden der Aktivitäten")
+	}
+
+	// Users for filter dropdown
+	users, _ := ctrl.model.ListAuditLogUsers(ownerID)
+
+	totalPages := int((total + int64(perPage) - 1) / int64(perPage))
+	if totalPages < 1 {
+		totalPages = 1
+	}
+	hasPrev := page > 1
+	hasNext := page < totalPages
+
+	buildURL := func(p int) string {
+		params := url.Values{}
+		params.Set("page", strconv.Itoa(p))
+		params.Set("per", strconv.Itoa(perPage))
+		if filter.UserID != nil {
+			params.Set("user", strconv.FormatUint(uint64(*filter.UserID), 10))
+		}
+		if filter.Action != nil {
+			params.Set("action", string(*filter.Action))
+		}
+		if filter.EntityType != nil {
+			params.Set("entity", string(*filter.EntityType))
+		}
+		return "/admin/activity?" + params.Encode()
+	}
+
+	m["entries"] = entries
+	m["users"] = users
+	m["page"] = page
+	m["per"] = perPage
+	m["total"] = total
+	m["totalPages"] = totalPages
+	m["hasPrev"] = hasPrev
+	m["hasNext"] = hasNext
+	m["prevURL"] = ""
+	m["nextURL"] = ""
+	if hasPrev {
+		m["prevURL"] = buildURL(page - 1)
+	}
+	if hasNext {
+		m["nextURL"] = buildURL(page + 1)
+	}
+	m["selfURL"] = buildURL(page)
+
+	// Current filter values for form
+	m["filterUser"] = c.QueryParam("user")
+	m["filterAction"] = c.QueryParam("action")
+	m["filterEntity"] = c.QueryParam("entity")
+
+	return c.Render(http.StatusOK, "admin_activity.html", m)
 }
 
 func GenerateToken(nBytes int) (string, error) {

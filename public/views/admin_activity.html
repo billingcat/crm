@@ -1,0 +1,150 @@
+{{template "header.html" .}}
+<div class="flex-1 p-8">
+  {{template "_flash" .}}
+
+  <div class="bg-surface border border-border rounded-card shadow-md p-6 mb-8">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-2xl font-bold">Aktivität</h2>
+    </div>
+
+    <!-- Filter form -->
+    <form class="mb-4" method="GET" action="/admin/activity" novalidate>
+      <div class="flex flex-wrap gap-2 items-end">
+        <!-- User filter -->
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">Benutzer</label>
+          <select name="user" class="bg-white rounded-lg px-3 py-2 border border-border text-sm">
+            <option value="">Alle</option>
+            {{ range .users }}
+            <option value="{{ .ID }}" {{ if eq (printf "%d" .ID) $.filterUser }}selected{{ end }}>
+              {{ if .FullName }}{{ .FullName }}{{ else }}{{ .Email }}{{ end }}
+            </option>
+            {{ end }}
+          </select>
+        </div>
+
+        <!-- Action filter -->
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">Aktion</label>
+          <select name="action" class="bg-white rounded-lg px-3 py-2 border border-border text-sm">
+            <option value="">Alle</option>
+            <option value="create" {{ if eq $.filterAction "create" }}selected{{ end }}>Erstellt</option>
+            <option value="update" {{ if eq $.filterAction "update" }}selected{{ end }}>Bearbeitet</option>
+            <option value="delete" {{ if eq $.filterAction "delete" }}selected{{ end }}>Gelöscht</option>
+            <option value="status" {{ if eq $.filterAction "status" }}selected{{ end }}>Statusänderung</option>
+            <option value="login" {{ if eq $.filterAction "login" }}selected{{ end }}>Login</option>
+          </select>
+        </div>
+
+        <!-- Entity filter -->
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">Typ</label>
+          <select name="entity" class="bg-white rounded-lg px-3 py-2 border border-border text-sm">
+            <option value="">Alle</option>
+            <option value="company" {{ if eq $.filterEntity "company" }}selected{{ end }}>Firma</option>
+            <option value="person" {{ if eq $.filterEntity "person" }}selected{{ end }}>Kontakt</option>
+            <option value="invoice" {{ if eq $.filterEntity "invoice" }}selected{{ end }}>Rechnung</option>
+            <option value="note" {{ if eq $.filterEntity "note" }}selected{{ end }}>Notiz</option>
+            <option value="user" {{ if eq $.filterEntity "user" }}selected{{ end }}>Benutzer</option>
+          </select>
+        </div>
+
+        <div class="flex gap-2">
+          <button class="bg-primary text-text px-4 py-2 rounded-button font-semibold hover:bg-hover hover:text-white transition-colors text-sm">
+            Filtern
+          </button>
+          {{ if or $.filterUser $.filterAction $.filterEntity }}
+          <a href="/admin/activity" class="text-sm text-gray-600 hover:underline self-center">Zurücksetzen</a>
+          {{ end }}
+        </div>
+      </div>
+    </form>
+
+    <!-- Result meta -->
+    <div class="text-sm text-gray-600 mb-3">
+      {{ .total }} Einträge gesamt · Seite {{ .page }} von {{ .totalPages }}
+    </div>
+
+    <!-- Activity table -->
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left border-b border-border">
+            <th class="py-2 pr-2">Zeitpunkt</th>
+            <th class="py-2 pr-2">Benutzer</th>
+            <th class="py-2 pr-2">Aktion</th>
+            <th class="py-2 pr-2">Typ</th>
+            <th class="py-2 pr-2">Details</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{ range .entries }}
+          <tr class="border-b border-border/60 hover:bg-white/50">
+            <td class="py-2 pr-2 text-gray-500 whitespace-nowrap">{{ .CreatedAt.Format "02.01.2006 15:04" }}</td>
+            <td class="py-2 pr-2">
+              {{ if .UserFullName }}{{ .UserFullName }}{{ else }}{{ .UserEmail }}{{ end }}
+            </td>
+            <td class="py-2 pr-2">
+              {{ if eq (printf "%s" .Action) "create" }}
+                <span class="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">Erstellt</span>
+              {{ else if eq (printf "%s" .Action) "update" }}
+                <span class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">Bearbeitet</span>
+              {{ else if eq (printf "%s" .Action) "delete" }}
+                <span class="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Gelöscht</span>
+              {{ else if eq (printf "%s" .Action) "status" }}
+                <span class="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700">Status</span>
+              {{ else if eq (printf "%s" .Action) "login" }}
+                <span class="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">Login</span>
+              {{ else }}
+                <span class="text-gray-500">{{ .Action }}</span>
+              {{ end }}
+            </td>
+            <td class="py-2 pr-2">
+              {{ if eq (printf "%s" .EntityType) "company" }}Firma
+              {{ else if eq (printf "%s" .EntityType) "person" }}Kontakt
+              {{ else if eq (printf "%s" .EntityType) "invoice" }}Rechnung
+              {{ else if eq (printf "%s" .EntityType) "note" }}Notiz
+              {{ else if eq (printf "%s" .EntityType) "user" }}Benutzer
+              {{ else }}{{ .EntityType }}
+              {{ end }}
+            </td>
+            <td class="py-2 pr-2 text-gray-600">
+              {{ if .Summary }}{{ .Summary }}{{ else }}&ndash;{{ end }}
+            </td>
+          </tr>
+          {{ end }}
+          {{ if not .entries }}
+          <tr>
+            <td class="py-6 text-center text-gray-500" colspan="5">
+              Keine Aktivitäten gefunden.
+            </td>
+          </tr>
+          {{ end }}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="flex items-center justify-between mt-4">
+      <div class="text-xs text-gray-500">
+        Pro Seite: {{ .per }}
+      </div>
+      <div class="flex items-center gap-2">
+        <a
+          class="inline-flex items-center rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-white {{ if not .hasPrev }}pointer-events-none opacity-50{{ end }}"
+          href="{{ if .hasPrev }}{{ .prevURL }}{{ else }}#{{ end }}"
+          aria-disabled="{{ if .hasPrev }}false{{ else }}true{{ end }}">
+          ← Zurück
+        </a>
+        <span class="text-sm text-gray-700">Seite {{ .page }} / {{ .totalPages }}</span>
+        <a
+          class="inline-flex items-center rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-white {{ if not .hasNext }}pointer-events-none opacity-50{{ end }}"
+          href="{{ if .hasNext }}{{ .nextURL }}{{ else }}#{{ end }}"
+          aria-disabled="{{ if .hasNext }}false{{ else }}true{{ end }}">
+          Weiter →
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{{template "footer.html" .}}
