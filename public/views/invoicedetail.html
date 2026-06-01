@@ -241,7 +241,7 @@
     </button>
 
     <div x-show="open" x-cloak @click.outside="open=false"
-      class="absolute z-10 mt-2 w-64 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5">
+      class="absolute z-10 bottom-full mb-2 w-64 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5">
       <div class="py-1">
         <template x-for="opt in ['draft','issued','paid','voided']" :key="opt">
           <button type="button" @click.prevent="$store.invoice.pending = opt; open=false; confirmStatus=true"
