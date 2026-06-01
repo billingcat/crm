@@ -91,8 +91,16 @@
     <p><a href="/company/{{$company.ID}}" class="text-blue-600 hover:underline">{{$company.Name}}</a></p>
     {{ with $invoice.ContactInvoice }}
     <p class="text-sm text-gray-500">Ansprechpartner</p>
+    {{ if index $ "mailtoLink" }}
+    <p>
+      <a href="{{ index $ "mailtoLink" }}" class="text-blue-600 hover:underline"
+        title="E-Mail an {{$company.InvoiceEmail}} erstellen">{{.}}</a>
+      <span class="ml-2 text-xs text-gray-500">(PDF separat herunterladen und anhängen)</span>
+    </p>
+    {{ else }}
     <p>{{.}}</p>
-    {{end}}
+    {{ end }}
+    {{ end }}
     {{ with $invoice.OrderNumber }}
     <p class="text-sm text-gray-500">Bestellnummer, Auftragsnummer</p>
     <p>{{.}}</p>

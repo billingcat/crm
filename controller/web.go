@@ -750,6 +750,7 @@ func NewController(s *model.Store) error {
 	ctrl.personInit(e)
 	ctrl.tagsInit(e)
 	ctrl.settingsInit(e)
+	ctrl.emailTemplatesInit(e)
 	ctrl.fileManagerInit(e)
 	ctrl.noteInit(e)
 	ctrl.adminInit(e)

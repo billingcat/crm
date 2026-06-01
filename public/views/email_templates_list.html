@@ -1,0 +1,43 @@
+{{template "header.html" .}}
+{{template "_flash" .}}
+
+<div class="bg-white shadow rounded-xl p-4">
+  <h1 class="text-lg font-semibold mb-2">E-Mail-Vorlagen</h1>
+  <p class="text-sm text-gray-600 mb-4">
+    Hier kannst du Betreff und Text für die automatisch erzeugten E-Mails anpassen.
+    Die Vorlagen gelten für alle Firmen; eine Firma kann sie auf ihrer Bearbeitungsseite überschreiben.
+  </p>
+
+  <ul class="divide-y divide-gray-200">
+    {{ range index . "kinds" }}
+    <li class="py-3 flex items-start justify-between gap-4">
+      <div class="min-w-0">
+        <p class="font-medium text-gray-900">{{ .Title }}</p>
+        <p class="text-sm text-gray-600">{{ .Description }}</p>
+        <p class="text-xs mt-1">
+          {{ if .HasCustomization }}
+          <span class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-blue-800">angepasst</span>
+          {{ else }}
+          <span class="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-gray-700">Standardtext</span>
+          {{ end }}
+        </p>
+      </div>
+      <a href="/email-templates/edit/{{ .Kind }}"
+         class="bg-accent-green text-text px-4 py-2 rounded-button font-bold hover:bg-hover hover:text-white transition-colors whitespace-nowrap">
+        Bearbeiten
+      </a>
+    </li>
+    {{ end }}
+  </ul>
+</div>
+
+<div class="mt-4">
+  <a href="/settings">
+    <button type="button"
+      class="bg-accent-green text-text px-6 py-3 rounded-button font-bold hover:bg-hover hover:text-white transition-colors">
+      Zurück zu den Einstellungen
+    </button>
+  </a>
+</div>
+
+{{template "footer.html" .}}

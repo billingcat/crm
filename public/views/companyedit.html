@@ -201,6 +201,30 @@
     </div>
   </fieldset>
 
+  <fieldset class="mt-3 p-3 border rounded">
+    <legend>E-Mail-Vorlage: Rechnung (überschreibt globale Vorlage)</legend>
+    <p class="text-sm text-gray-600 mb-2">
+      Lass beide Felder leer, um die <a href="/email-templates" class="text-blue-600 hover:underline">globale Vorlage</a>
+      zu verwenden. Platzhalter wie <code class="bg-gray-100 px-1 rounded">{{ "{{.Number}}" }}</code>,
+      <code class="bg-gray-100 px-1 rounded">{{ "{{.Date}}" }}</code>,
+      <code class="bg-gray-100 px-1 rounded">{{ "{{.Amount}}" }}</code>,
+      <code class="bg-gray-100 px-1 rounded">{{ "{{.DueDate}}" }}</code>,
+      <code class="bg-gray-100 px-1 rounded">{{ "{{.Contact}}" }}</code>,
+      <code class="bg-gray-100 px-1 rounded">{{ "{{.Company}}" }}</code> werden bei jeder Mail eingesetzt.
+    </p>
+    <div class="mt-2">
+      <label for="email_subject_invoice">Betreff</label>
+      <input type="text" id="email_subject_invoice" name="email_subject_invoice"
+        class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+        value="{{ index . "emailInvoiceSubject" }}">
+    </div>
+    <div class="mt-2">
+      <label for="email_body_invoice">Nachricht</label>
+      <textarea id="email_body_invoice" name="email_body_invoice" rows="8"
+        class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5 font-mono">{{ index . "emailInvoiceBody" }}</textarea>
+    </div>
+  </fieldset>
+
 <fieldset class="border rounded p-3 mt-3" x-data="{ counter: 1, showDivs: [] }">
   <legend>Kontaktdaten</legend>
 

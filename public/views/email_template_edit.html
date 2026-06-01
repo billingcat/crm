@@ -1,0 +1,51 @@
+{{template "header.html" .}}
+{{template "_flash" .}}
+
+{{ $info := index . "info" }}
+
+<form action="/email-templates/edit/{{ $info.Kind }}" method="post" class="bg-white shadow rounded-xl p-4">
+  <input type="hidden" name="csrf" value="{{ .CSRFToken }}">
+
+  <h1 class="text-lg font-semibold">E-Mail-Vorlage: {{ $info.Title }}</h1>
+  <p class="text-sm text-gray-600 mt-1">{{ $info.Description }}</p>
+
+  <div class="mt-4">
+    <label class="form-label" for="subject">Betreff</label>
+    <input type="text" id="subject" name="subject"
+      class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+      value="{{ index . "subject" }}">
+  </div>
+
+  <div class="mt-4">
+    <label class="form-label" for="body">Nachricht</label>
+    <textarea id="body" name="body" rows="12"
+      class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5 font-mono">{{ index . "body" }}</textarea>
+  </div>
+
+  <details class="mt-3 text-sm text-gray-700">
+    <summary class="cursor-pointer">Verfügbare Platzhalter</summary>
+    <ul class="mt-2 space-y-1">
+      {{ range $info.Placeholders }}
+      <li><code class="bg-gray-100 px-1 rounded">{{ printf "{{.%s}}" .Name }}</code> — {{ .Desc }}</li>
+      {{ end }}
+    </ul>
+    <p class="text-xs text-gray-500 mt-2">
+      Leere Felder setzen die Vorlage auf den Standardtext zurück.
+    </p>
+  </details>
+
+  <div class="mt-4 flex gap-3">
+    <button type="submit"
+      class="bg-primary text-text px-6 py-3 rounded-button font-bold hover:bg-hover hover:text-white transition-colors">
+      Speichern
+    </button>
+    <a href="/email-templates">
+      <button type="button"
+        class="bg-accent-green text-text px-6 py-3 rounded-button font-bold hover:bg-hover hover:text-white transition-colors">
+        Abbruch
+      </button>
+    </a>
+  </div>
+</form>
+
+{{template "footer.html" .}}

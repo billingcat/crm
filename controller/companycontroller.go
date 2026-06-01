@@ -61,6 +61,8 @@ type companyForm struct {
 	InvoiceFooter          string            `form:"invoicefooter"`
 	InvoiceExemptionReason string            `form:"invoiceexemptionreason"`
 	Tags                   []string          `form:"tags"` // multiple inputs
+	EmailSubjectInvoice    string            `form:"email_subject_invoice"`
+	EmailBodyInvoice       string            `form:"email_body_invoice"`
 }
 
 // upsertCompany handles both creating a new company and editing an existing one.
@@ -114,6 +116,11 @@ func (ctrl *controller) upsertCompany(c echo.Context) error {
 		m["action"] = fmt.Sprintf("/company/edit/%d", company.ID)
 		m["cancel"] = fmt.Sprintf("/company/%d", company.ID)
 		m["submit"] = "Daten ändern"
+
+		if override, err := ctrl.model.LoadCompanyEmailTemplate(ownerID, company.ID, model.EmailTemplateKindInvoice); err == nil && override != nil {
+			m["emailInvoiceSubject"] = override.Subject
+			m["emailInvoiceBody"] = override.Body
+		}
 		return c.Render(http.StatusOK, "companyedit.html", m)
 
 	case http.MethodPost:
@@ -162,6 +169,17 @@ func (ctrl *controller) upsertCompany(c echo.Context) error {
 		// Persist
 		if err := ctrl.model.SaveCompany(dbCompany, ownerID, tagNames); err != nil {
 			return ErrInvalid(err, "Fehler beim Speichern der Firma")
+		}
+
+		// Save (or clear) invoice mail override for this company.
+		if err := ctrl.model.SaveEmailTemplate(&model.EmailTemplate{
+			OwnerID:   ownerID,
+			CompanyID: dbCompany.ID,
+			Kind:      model.EmailTemplateKindInvoice,
+			Subject:   strings.TrimSpace(comp.EmailSubjectInvoice),
+			Body:      strings.TrimSpace(comp.EmailBodyInvoice),
+		}); err != nil {
+			return ErrInvalid(err, "Fehler beim Speichern der E-Mail-Vorlage")
 		}
 
 		// Audit log

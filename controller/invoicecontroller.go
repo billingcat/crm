@@ -342,6 +342,19 @@ func popProblemsFromSession(c echo.Context, invoiceID uint) (any, bool) {
 	return v, true
 }
 
+func (ctrl *controller) buildInvoiceMailtoLink(ownerID uint, i *model.Invoice, cpy *model.Company) string {
+	if cpy.InvoiceEmail == "" {
+		return ""
+	}
+	subject, body, _ := ctrl.model.RenderInvoiceMail(ownerID, i, cpy)
+	q := url.Values{}
+	q.Set("subject", subject)
+	q.Set("body", body)
+	// mailto: clients expect %20 for spaces, not '+'
+	enc := strings.ReplaceAll(q.Encode(), "+", "%20")
+	return "mailto:" + cpy.InvoiceEmail + "?" + enc
+}
+
 func (ctrl *controller) invoiceDetail(c echo.Context) error {
 	m := ctrl.defaultResponseMap(c, "Rechnung-Details")
 	ownerID := c.Get("ownerid").(uint)
@@ -356,6 +369,7 @@ func (ctrl *controller) invoiceDetail(c echo.Context) error {
 	m["title"] = "Rechnung " + i.Number
 	m["invoice"] = i
 	m["company"] = cpy
+	m["mailtoLink"] = ctrl.buildInvoiceMailtoLink(ownerID, i, cpy)
 
 	// --- Letterhead info for view ---
 	type letterheadVM struct {
