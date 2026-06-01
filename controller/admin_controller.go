@@ -157,7 +157,6 @@ func (ctrl *controller) adminCreateInvitation(c echo.Context) error {
 // adminActivity renders a paginated, filterable audit log for the admin.
 func (ctrl *controller) adminActivity(c echo.Context) error {
 	m := ctrl.defaultResponseMap(c, "Aktivität (Admin)")
-	ownerID := c.Get("ownerid").(uint)
 
 	// Pagination
 	const defaultPerPage = 50
@@ -191,13 +190,13 @@ func (ctrl *controller) adminActivity(c echo.Context) error {
 		filter.EntityType = &entityType
 	}
 
-	entries, total, err := ctrl.model.ListAuditLogs(ownerID, filter, offset, perPage)
+	entries, total, err := ctrl.model.ListAllAuditLogs(filter, offset, perPage)
 	if err != nil {
 		return ErrInvalid(err, "Fehler beim Laden der Aktivitäten")
 	}
 
 	// Users for filter dropdown
-	users, _ := ctrl.model.ListAuditLogUsers(ownerID)
+	users, _ := ctrl.model.ListAllAuditLogUsers()
 
 	totalPages := int((total + int64(perPage) - 1) / int64(perPage))
 	if totalPages < 1 {

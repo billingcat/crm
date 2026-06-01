@@ -109,6 +109,54 @@ func (s *Store) ListAuditLogs(ownerID uint, filter AuditLogFilter, offset, limit
 	return entries, total, err
 }
 
+// ListAllAuditLogs returns paginated audit log entries across all owners, newest first.
+// Intended for super-admin views; tenant-scoped views should use ListAuditLogs.
+func (s *Store) ListAllAuditLogs(filter AuditLogFilter, offset, limit int) ([]AuditLogEntry, int64, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+
+	base := s.db.Table("audit_logs").
+		Select("audit_logs.*, users.email AS user_email, users.full_name AS user_full_name").
+		Joins("LEFT JOIN users ON users.id = audit_logs.user_id")
+
+	if filter.UserID != nil {
+		base = base.Where("audit_logs.user_id = ?", *filter.UserID)
+	}
+	if filter.Action != nil {
+		base = base.Where("audit_logs.action = ?", *filter.Action)
+	}
+	if filter.EntityType != nil {
+		base = base.Where("audit_logs.entity_type = ?", *filter.EntityType)
+	}
+
+	var total int64
+	if err := base.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var entries []AuditLogEntry
+	err := base.
+		Order("audit_logs.created_at DESC").
+		Offset(offset).
+		Limit(limit).
+		Scan(&entries).Error
+
+	return entries, total, err
+}
+
+// ListAllAuditLogUsers returns distinct users with audit log entries across all owners.
+func (s *Store) ListAllAuditLogUsers() ([]User, error) {
+	var users []User
+	err := s.db.
+		Where("id IN (?)",
+			s.db.Table("audit_logs").Select("DISTINCT user_id"),
+		).
+		Order("full_name ASC").
+		Find(&users).Error
+	return users, err
+}
+
 // ListAuditLogUsers returns distinct users who have audit log entries for the given owner.
 func (s *Store) ListAuditLogUsers(ownerID uint) ([]User, error) {
 	var users []User
