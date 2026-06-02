@@ -41,6 +41,10 @@ type Flash struct {
 // stores them on the Echo context, and keeps remember-me intact by using SessionWriter.
 func FlashLoader(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
+		path := c.Request().URL.Path
+		if strings.HasPrefix(path, "/static/") || strings.HasPrefix(path, "/uploads/") {
+			return next(c)
+		}
 		sw, err := LoadSession(c)
 		if err != nil {
 			// Session not available; continue without flashes.
@@ -664,19 +668,24 @@ func NewController(s *model.Store) error {
 	// Flash loader must run after session middleware and before handlers.
 	e.Use(FlashLoader)
 
-	// In development, disable caching for static files and provide a flash demo route.
-	if s.Config.Mode == "development" {
-		e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
-			return func(c echo.Context) error {
-				if strings.HasPrefix(c.Request().URL.Path, "/static/") {
-					res := c.Response().Header()
+	// Cache headers for /static: aggressive cache in production, no-cache in development.
+	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			if strings.HasPrefix(c.Request().URL.Path, "/static/") {
+				res := c.Response().Header()
+				if s.Config.Mode == "development" {
 					res.Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
 					res.Set("Pragma", "no-cache")
 					res.Set("Expires", "0")
+				} else {
+					res.Set("Cache-Control", "public, max-age=3600")
 				}
-				return next(c)
 			}
-		})
+			return next(c)
+		}
+	})
+
+	if s.Config.Mode == "development" {
 		e.GET("/__dev/flash", func(c echo.Context) error {
 			kind := c.QueryParam("k")
 			if kind == "" {
@@ -707,6 +716,11 @@ func NewController(s *model.Store) error {
 		CookieSameSite: http.SameSiteLaxMode,
 		CookieSecure:   s.Config.Mode == "production",
 		Skipper: func(c echo.Context) bool {
+			// Static assets don't need CSRF and shouldn't have Set-Cookie set on them.
+			path := c.Request().URL.Path
+			if strings.HasPrefix(path, "/static/") || strings.HasPrefix(path, "/uploads/") {
+				return true
+			}
 			// allow POSTs to these endpoints without CSRF (e.g., public forms)
 			if c.Request().Method == http.MethodPost {
 				if strings.HasPrefix(c.Path(), "/password/reset") {

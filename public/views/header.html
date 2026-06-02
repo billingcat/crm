@@ -5,10 +5,11 @@
     <title>{{.title}}</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <script src="/static/js/jslogic.js"></script>
+    <script src="/static/js/jslogic.js" defer></script>
     <script src="/static/js/alpine.min.js" defer></script>
+    {{template "_preloads" .}}
     <link rel="stylesheet" href="/static/css/output.css">
-    <link rel="stylesheet" href="/static/css/fontawesome.min.css">
+    <link rel="preload" href="/static/css/fontawesome.min.css" as="style" onload="this.rel='stylesheet'">
     <!-- Favicon -->
     <link rel="icon" href="/static/images/favicon.ico" type="image/x-icon">
     <link rel="apple-touch-icon" href="/static/images/apple-touch-icon.png">
@@ -234,7 +235,7 @@
         <div class="bg-background text-black w-full md:w-64  p-3">
             <div class="flex justify-center items-center">
                 <a href="/" class="block">
-                    <img src="/static/images/billingcat.png" alt="Logo" class="h-40 w-40">
+                    <img src="/static/images/billingcat.png" alt="Logo" width="160" height="160" class="h-40 w-40">
                 </a>
             </div>
             <div class="space-y-6">
