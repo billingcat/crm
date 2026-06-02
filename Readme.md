@@ -2,58 +2,22 @@
 
 <img src="https://billingcat.de/images/billingcat.png" width="256">
 
-billingcat is a lightweight CRM and invoicing tool, made for freelancers and small businesses.
-It helps you manage contacts, companies and notes – but its main focus is on **invoicing** in a b2b environment.
-You can even generate **ZUGFeRD-compliant invoices** (both XML and PDF).
+billingcat is a small CRM and invoicing tool for freelancers and small businesses in a B2B context.
+Besides managing contacts, companies and notes, it can generate ZUGFeRD-compliant invoices (XML and PDF).
 
-Check out [billingcat.de](https://billingcat.de) – you can sign up for the newsletter there to get notified once the public alpha SaaS goes live!
+The project website is [billingcat.de](https://billingcat.de). The hosted version is currently in beta — registration is available on request via hallo@billingcat.de.
 
----
-
-## Features
-
-- Create and download **ZUGFeRD invoices** (XML + PDF)
-- Simple but complete **CRM** for contacts, companies and notes
-- Focused on **invoice management**
-- Designed for freelancers and small businesses
-- Open Source and SaaS
-
->  Note: billingcat is currently available **only in German** (source code and user interface).
->  "billingcat" is a registered trademark of Patrick Gundlach.
-
----
+Note: billingcat is currently German only — both the source code comments and the user interface.
 
 ## Tech stack
 
-- [Go](https://go.dev/) + [Echo](https://echo.labstack.com/) for the backend
-- [GORM](https://gorm.io/) as ORM
-- [Tailwind CSS](https://tailwindcss.com/) + [Alpine.js](https://alpinejs.dev/) for the frontend
-- [SQLite](https://www.sqlite.org/) as the default database (built-in, file-based, zero-config)
-- [PostgreSQL](https://www.postgresql.org/) as an alternative database
+- [Go](https://go.dev/) with [Echo](https://echo.labstack.com/)
+- [GORM](https://gorm.io/) for database access
+- [Tailwind CSS](https://tailwindcss.com/) and [Alpine.js](https://alpinejs.dev/) on the frontend
+- SQLite by default, PostgreSQL optional
 - [speedata Publisher](https://github.com/speedata/publisher) for PDF generation
 
----
-
-## Installation
-
-billingcat can be **self-hosted** or used as a hosted SaaS on [billingcat.de](https://billingcat.de).
-
-The recommended and up-to-date installation instructions are documented in the
-**billingcat manual** (currently **German only**):
-
-- 👉 _Installation chapter in the documentation (German):_
-  <https://docs.billingcat.de/de/docs/install/>
-
-The manual covers:
-
-- local development setup (SQLite)
-- configuration via `config.toml`
-- running migrations
-- production deployment (e.g. with PostgreSQL)
-- PDF generation via speedata Publisher
-- e-mail setup
-
-If you just want to experiment locally, the very short version is:
+## Running it locally
 
 ```bash
 git clone https://github.com/billingcat/crm.git
@@ -62,71 +26,26 @@ cp config.toml.example config.toml
 go run -tags sqlite .
 ```
 
-Then open:
+Then open <http://localhost:5555/register>. The first user to register becomes the admin.
 
-- <http://localhost:5555/register>
-
-The **first registered user** becomes the **admin user**.
-
-For all details and edge cases, please refer to the documentation.
-
----
-
-## Getting started
-
-If you:
-
-- want to **self-host** billingcat → read the
-  [**[installation section in the installation guide]**](https://docs.billingcat.de/de/docs/install/)
-- want to **just try it as SaaS** → keep an eye on
-  <https://billingcat.de> and subscribe to the newsletter.
-
-For local hacking, a minimal workflow looks like this:
-
-```bash
-git clone https://github.com/billingcat/crm.git
-cd crm
-cp config.toml.example config.toml
-go run -tags sqlite .
-```
-
-More complete setup instructions (production, databases, mail, PDF, …) live in the manual.
-
----
+For production deployment, PostgreSQL setup, mail configuration and PDF generation, see the manual at <https://docs.billingcat.de/de/docs/install/> (German).
 
 ## License
 
-billingcat is dual-licensed:
+billingcat is dual-licensed.
 
-- **Open Source**: released under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
-  That means if you modify and use billingcat as a service, you need to publish your changes.
-  See the [LICENSE](./License.md) file for details.
+The open source version is released under the GNU Affero General Public License v3.0 (AGPL-3.0); see [License.md](./License.md). Running a modified version as a service means you have to publish your changes.
 
-- **Commercial License**: if you want to use billingcat **without the AGPL requirements** (e.g. inside proprietary products or SaaS offerings), get in touch.
-  
-  Contact: [hallo@billingcat.de]
+If that doesn't work for you — for example inside a proprietary product or a closed-source SaaS — a commercial license is available. Contact hallo@billingcat.de.
 
----
+## Trademarks
 
-## Trademarks & Logos
-
-The **billingcat** name is a registered trademark of
-Patrick Gundlach. The name and the billingcat logo are not part of the open-source license.
-Forks or self-hosted instances should replace them with their own branding.
-
----
+"billingcat" is a registered trademark of Patrick Gundlach. The name and the logo are not covered by the open source license, so forks and self-hosted instances should use their own branding.
 
 ## Contributing
 
-Pull requests, bug reports and ideas are always welcome!
-Just open an issue or a PR here on GitHub.
+Issues and pull requests are welcome.
 
----
+## Third-party licenses
 
-## Third-Party Licenses
-
-This project makes use of third-party libraries like Alpine.js, Tailwind CSS and Font Awesome (see [Notice.md](./Notice.md)).
-
----
-
-Made with ❤️ by a small business, for small businesses.
+See [Notice.md](./Notice.md) for the third-party libraries used (Alpine.js, Tailwind CSS, Font Awesome and others).
