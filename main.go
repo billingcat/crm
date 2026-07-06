@@ -14,10 +14,10 @@ import (
 	"github.com/billingcat/crm/model"
 	"github.com/pelletier/go-toml/v2"
 
-	// migrate imports
+	// migrate imports. The database drivers are imported behind build tags in
+	// migrate_postgres.go / migrate_sqlite.go so a build only pulls in the
+	// driver it needs (avoids the CGO sqlite3 driver in -tags postgres builds).
 	"github.com/golang-migrate/migrate/v4"
-	_ "github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/database/sqlite3"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
