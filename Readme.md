@@ -1,3 +1,5 @@
+[![Explore in Constellation](https://img.shields.io/badge/Explore%20in-Constellation-blue)](https://constellation.speedata.de)
+
 # billingcat
 
 <img src="https://billingcat.de/images/billingcat.png" width="256">
@@ -29,6 +31,12 @@ go run -tags sqlite .
 Then open <http://localhost:5555/register>. The first user to register becomes the admin.
 
 For production deployment, PostgreSQL setup, mail configuration and PDF generation, see the manual at <https://docs.billingcat.de/de/docs/install/> (German).
+
+## Ecosystem
+
+billingcat is part of a broader ecosystem of PDF, typesetting and publishing technologies.
+
+**[Explore the constellation →](https://constellation.speedata.de)**
 
 ## License
 
