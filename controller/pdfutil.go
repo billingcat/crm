@@ -6,13 +6,7 @@ package controller
 import (
 	"fmt"
 	"image"
-
-	"github.com/labstack/echo/v4"
 )
-
-func parseUintParam(c echo.Context, name string) (uint, error) {
-	return uint(0), fmt.Errorf("PDF rendering not supported (built without cgo/fitz)")
-}
 
 func renderPDFToPNGs(pdfPath, outDir string, dpi, maxPages int) (sizes [][2]float64, pngPaths []string, err error) {
 	return nil, nil, fmt.Errorf("PDF rendering not supported (built without cgo/fitz)")

@@ -7,7 +7,19 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/labstack/echo/v4"
 )
+
+// parseUintParam parses a uint path parameter (e.g. ":id") from the request.
+// It lives here (build-tag independent) so it is available regardless of the
+// cgo/fitz build variant.
+func parseUintParam(c echo.Context, name string) (uint, error) {
+	val := c.Param(name)
+	var id64 uint64
+	_, err := fmt.Sscanf(val, "%d", &id64)
+	return uint(id64), err
+}
 
 // LetterheadOption is used to render selectable PDFs in the form.
 type LetterheadOption struct {

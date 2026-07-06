@@ -13,15 +13,7 @@ import (
 
 	"github.com/gen2brain/go-fitz"
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
 )
-
-func parseUintParam(c echo.Context, name string) (uint, error) {
-	val := c.Param(name)
-	var id64 uint64
-	_, err := fmt.Sscanf(val, "%d", &id64)
-	return uint(id64), err
-}
 
 func renderPDFToPNGs(pdfPath, outDir string, dpi, maxPages int) (sizes [][2]float64, pngPaths []string, err error) {
 	if dpi <= 0 {
