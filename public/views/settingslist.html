@@ -127,6 +127,24 @@
             <input class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
                 type="text" name="bankbic" id="bankbic" value="{{.BankBIC}}">
         </div>
+
+        <div class="sm:col-span-3">
+            <label class="form-label" for="pdfengine">PDF-Erzeugung</label>
+            <select class="bg-white border border-gray-300 text-sm rounded-lg focus:ring-primary w-full p-2.5"
+                name="pdfengine" id="pdfengine">
+                <option value="auto" {{ if or (eq .PDFEngine "auto") (eq .PDFEngine "") }}selected{{ end }}>
+                    Automatisch (layout.xml, falls vorhanden)
+                </option>
+                <option value="boxesandglue" {{ if eq .PDFEngine "boxesandglue" }}selected{{ end }}>
+                    Eingebautes Standard-Layout (boxesandglue)
+                </option>
+                {{ if index $ "speedataAvailable" }}
+                <option value="speedata" {{ if eq .PDFEngine "speedata" }}selected{{ end }}>
+                    speedata Publishing-Server (layout.xml)
+                </option>
+                {{ end }}
+            </select>
+        </div>
     </div>
 
     {{end}}

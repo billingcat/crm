@@ -1,5 +1,3 @@
-//go:build speedata
-
 package model
 
 import (
@@ -31,15 +29,11 @@ func ensureDir(dirName string) error {
 	return nil
 }
 
-// AutoLayoutNote describes, for the UI, what the "Automatisch" letterhead
-// choice renders with this build's PDF engine (see the boxesandglue variant
-// in pdfgeneration_bag.go).
-const AutoLayoutNote = `Verwendet "layout.xml", falls vorhanden, sonst die Standard-Layoutdatei.`
-
-// CreateZUGFeRDPDF creates a ZUGFeRD PDF file for the invoice. The XML is
-// expected to exist at the given location and the PDF gets written to the
-// location given by the last argument.
-func (s *Store) CreateZUGFeRDPDF(inv *Invoice, ownerID uint, xmlpath string, pdfpath string, logger *slog.Logger) error {
+// createZUGFeRDPDFSpeedata creates a ZUGFeRD PDF file for the invoice on the
+// remote speedata Publishing Server. The XML is expected to exist at the given
+// location and the PDF gets written to the location given by the last
+// argument. Engine selection happens in CreateZUGFeRDPDF (pdfengine.go).
+func (s *Store) createZUGFeRDPDFSpeedata(inv *Invoice, ownerID uint, xmlpath string, pdfpath string, logger *slog.Logger) error {
 	var err error
 	var settingsData []byte
 	if s := buildSettingsFromInvoice(inv); s != nil {
@@ -98,7 +92,9 @@ func (s *Store) CreateZUGFeRDPDF(inv *Invoice, ownerID uint, xmlpath string, pdf
 		}
 		fullPath := filepath.Join(userAssetsDir, file.Name())
 		logger.Debug("attaching user asset", "file", fullPath)
-		attachFile(p, fullPath, dstFilename)
+		if err = attachFile(p, fullPath, dstFilename); err != nil {
+			return err
+		}
 	}
 
 	// if has layout or has custom letterhead, we do not attach the generic layout

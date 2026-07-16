@@ -411,9 +411,9 @@ func NewController(s *model.Store) error {
 
 	// Template functions available in views.
 	var templateFunc = template.FuncMap{
-		// autolayoutnote depends on the PDF engine the binary was built with
-		// (boxesandglue default vs. -tags speedata).
-		"autolayoutnote": func() string { return model.AutoLayoutNote },
+		// autolayoutnote depends on the PDF engine resolved for the owner
+		// (settings field pdf_engine, layout.xml, server config).
+		"autolayoutnote": func(ownerID uint) string { return s.AutoLayoutNote(ownerID) },
 		"htmldate":       func(in time.Time) string { return in.Format("2006-01-02") },
 		"userdate": func(in time.Time) string { return in.Format("02.01.2006") },
 		"timeago":  func(in time.Time) string { return timeagoGerman.Format(in) },

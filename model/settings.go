@@ -35,6 +35,7 @@ type Settings struct {
 	CustomerNumberPrefix  string `gorm:"column:customer_number_prefix"`  // e.g. "K-"
 	CustomerNumberWidth   int    `gorm:"column:customer_number_width"`   // e.g. 5 -> K-00001
 	CustomerNumberCounter int64  `gorm:"column:customer_number_counter"` // current counter (e.g. 1000)
+	PDFEngine             string `gorm:"column:pdf_engine;default:auto"` // "auto" | "speedata" | "boxesandglue" (see PDFEngine type)
 }
 
 // LoadSettings loads the settings row for a given owner.
@@ -94,6 +95,7 @@ func (s *Store) UpdateSettings(settings *Settings) error {
 			"customer_number_prefix":  settings.CustomerNumberPrefix,
 			"customer_number_width":   settings.CustomerNumberWidth,
 			"customer_number_counter": settings.CustomerNumberCounter,
+			"pdf_engine":              settings.PDFEngine,
 			"updated_at":              gorm.Expr("NOW()"),
 		}).Error
 }
@@ -129,6 +131,7 @@ func (s *Store) SaveSettings(settings *Settings) error {
 			"customer_number_prefix":  settings.CustomerNumberPrefix,
 			"customer_number_width":   settings.CustomerNumberWidth,
 			"customer_number_counter": settings.CustomerNumberCounter,
+			"pdf_engine":              settings.PDFEngine,
 
 			// ensure updated_at changes on UPSERT
 			"updated_at": gorm.Expr("CURRENT_TIMESTAMP"),

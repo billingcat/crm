@@ -34,7 +34,7 @@ type settingsForm struct {
 	CustomerPrefix  string `form:"custprefix"`  // e.g. "K-"
 	CustomerWidth   int    `form:"custwidth"`   // e.g. 5
 	CustomerCounter int64  `form:"custcounter"` // e.g. 1000
-
+	PDFEngine       string `form:"pdfengine"`   // "auto" | "speedata" | "boxesandglue"
 }
 
 func (ctrl *controller) settingsInit(e *echo.Echo) {
@@ -71,6 +71,10 @@ func (ctrl *controller) settingslist(c echo.Context) error {
 	m["submit"] = "Save"
 	m["cancel"] = "/"
 	ownerID := c.Get("ownerid").(uint)
+	// The speedata option is only offered when a publishing server is
+	// configured in config.toml.
+	speedataAvailable := ctrl.model.Config.PublishingServerAddress != ""
+	m["speedataAvailable"] = speedataAvailable
 
 	switch c.Request().Method {
 	case http.MethodGet:
@@ -86,6 +90,20 @@ func (ctrl *controller) settingslist(c echo.Context) error {
 		if err := c.Bind(f); err != nil {
 			c.Get("logger").(*slog.Logger).Error("binding settings form failed", "err", err)
 			return ErrInvalid(err, "Error processing form data")
+		}
+
+		// Normalize the engine choice: reject unknown values and the
+		// speedata option when no publishing server is configured (the form
+		// hides it, but the value could still arrive in the POST).
+		pdfEngine := f.PDFEngine
+		switch pdfEngine {
+		case string(model.PDFEngineAuto), string(model.PDFEngineBag):
+		case string(model.PDFEngineSpeedata):
+			if !speedataAvailable {
+				pdfEngine = string(model.PDFEngineAuto)
+			}
+		default:
+			pdfEngine = string(model.PDFEngineAuto)
 		}
 
 		dbSettings := &model.Settings{
@@ -108,6 +126,7 @@ func (ctrl *controller) settingslist(c echo.Context) error {
 			CustomerNumberPrefix:  f.CustomerPrefix,
 			CustomerNumberWidth:   f.CustomerWidth,
 			CustomerNumberCounter: f.CustomerCounter,
+			PDFEngine:             pdfEngine,
 		}
 
 		if err := ctrl.model.SaveSettings(dbSettings); err != nil {

@@ -181,7 +181,7 @@
     {{- else }}
     <p class="mt-1">
       <span class="font-medium text-gray-900">Automatisch</span>
-      <span class="text-xs text-gray-500 block">{{ autolayoutnote }}</span>
+      <span class="text-xs text-gray-500 block">{{ autolayoutnote $.ownerid }}</span>
     </p>
     {{- end }}
     <a href="/invoice/edit/{{$invoice.ID}}#letterhead" class="mt-2 inline-block text-sm underline hover:no-underline">

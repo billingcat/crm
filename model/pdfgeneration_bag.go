@@ -1,5 +1,3 @@
-//go:build !speedata
-
 package model
 
 import (
@@ -10,13 +8,10 @@ import (
 	"github.com/boxesandglue/bagme/document"
 )
 
-// CreateZUGFeRDPDF generates the invoice PDF locally and in-process using
-// boxesandglue/bagme. This is the default engine; it is selected for any build
-// without the "speedata" tag. The speedata variant (remote publishing server)
-// lives in pdfgeneration_speedata.go and is enabled via "-tags speedata".
-//
-// The signature is identical to the speedata variant so the caller
-// (controller/invoicecontroller.go) stays unchanged.
+// createZUGFeRDPDFBag generates the invoice PDF locally and in-process using
+// boxesandglue/bagme. This is the default engine; the speedata variant (remote
+// publishing server) lives in pdfgeneration_speedata.go. Engine selection
+// happens in CreateZUGFeRDPDF (pdfengine.go).
 //
 // Two layouts are supported, selected per invoice:
 //   - mode 1 (generic, no letterhead): an HTML/CSS reproduction of
@@ -30,12 +25,7 @@ import (
 // CSS and can restyle the fixed, documented HTML scaffold (see
 // docs/invoice-css.md).
 
-// AutoLayoutNote describes, for the UI, what the "Automatisch" letterhead
-// choice renders with this build's PDF engine (see the speedata variant in
-// pdfgeneration_speedata.go).
-const AutoLayoutNote = "Verwendet das eingebaute Standard-Layout (DIN 5008) mit den Firmendaten aus den Einstellungen."
-
-func (s *Store) CreateZUGFeRDPDF(inv *Invoice, ownerID uint, xmlpath string, pdfpath string, logger *slog.Logger) error {
+func (s *Store) createZUGFeRDPDFBag(inv *Invoice, ownerID uint, xmlpath string, pdfpath string, logger *slog.Logger) error {
 	// Reuse the exact same computation as the embedded XML so the printed
 	// amounts (net, per-rate tax, grand total) match the ZUGFeRD data.
 	settings, err := s.LoadSettings(ownerID)

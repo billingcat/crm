@@ -379,12 +379,12 @@ func (ctrl *controller) invoiceDetail(c echo.Context) error {
 		PreviewURL string // optional
 	}
 
-	// The note depends on the PDF engine the binary was built with
-	// (boxesandglue default vs. -tags speedata).
+	// The note depends on the PDF engine resolved for the owner (settings
+	// field pdf_engine, layout.xml, server config).
 	lh := letterheadVM{
 		Mode: "auto",
 		Name: "Automatisch",
-		Note: model.AutoLayoutNote,
+		Note: ctrl.model.AutoLayoutNote(ownerID),
 	}
 
 	if i.TemplateID != nil {

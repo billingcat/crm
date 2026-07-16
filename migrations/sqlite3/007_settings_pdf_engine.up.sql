@@ -1,0 +1,1 @@
+ALTER TABLE settings ADD COLUMN pdf_engine TEXT NOT NULL DEFAULT 'auto';

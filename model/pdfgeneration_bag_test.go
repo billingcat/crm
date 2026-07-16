@@ -1,5 +1,3 @@
-//go:build !speedata
-
 package model_test
 
 import (
