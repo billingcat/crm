@@ -379,12 +379,12 @@ func (ctrl *controller) invoiceDetail(c echo.Context) error {
 		PreviewURL string // optional
 	}
 
-	// Bestmögliche Anzeige ohne teure I/O – falls du exakt prüfen willst,
-	// ob layout.xml vorhanden ist, kannst du das hier nachrüsten.
+	// The note depends on the PDF engine the binary was built with
+	// (boxesandglue default vs. -tags speedata).
 	lh := letterheadVM{
 		Mode: "auto",
 		Name: "Automatisch",
-		Note: `Verwendet "layout.xml", falls vorhanden, sonst die Standard-Layoutdatei.`,
+		Note: model.AutoLayoutNote,
 	}
 
 	if i.TemplateID != nil {

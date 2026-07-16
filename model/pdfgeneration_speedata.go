@@ -1,3 +1,5 @@
+//go:build speedata
+
 package model
 
 import (
@@ -28,6 +30,11 @@ func ensureDir(dirName string) error {
 	}
 	return nil
 }
+
+// AutoLayoutNote describes, for the UI, what the "Automatisch" letterhead
+// choice renders with this build's PDF engine (see the boxesandglue variant
+// in pdfgeneration_bag.go).
+const AutoLayoutNote = `Verwendet "layout.xml", falls vorhanden, sonst die Standard-Layoutdatei.`
 
 // CreateZUGFeRDPDF creates a ZUGFeRD PDF file for the invoice. The XML is
 // expected to exist at the given location and the PDF gets written to the
