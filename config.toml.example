@@ -14,7 +14,9 @@ mailsecret="mailsecret"
 
 publishingserveraddress = "https://api.speedata.de"
 publishingserverusername = "sdapi..."
-cookiesecret="some secret"
+# Signs the session cookies. At least 32 bytes, required in production.
+# Generate one with: openssl rand -base64 48
+cookiesecret=""
 
 
 [servers.development]
