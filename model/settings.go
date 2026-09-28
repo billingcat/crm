@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -150,9 +151,9 @@ func formatCustomerNumber(prefix string, width int, n int64) string {
 // ErrNoSettingsRow is returned when no settings row exists in the database.
 var ErrNoSettingsRow = errors.New("no settings row found")
 
-// NextCustomerNumberTx allocates the next unique customer number in a transaction.
-// Returns the formatted string and the numeric value used.
-func (s *Store) NextCustomerNumberTx(ctx context.Context) (string, int64, error) {
+// NextCustomerNumberTx allocates the next unique customer number for ownerID
+// in a transaction. Returns the formatted string and the numeric value used.
+func (s *Store) NextCustomerNumberTx(ctx context.Context, ownerID uint) (string, int64, error) {
 	var result string
 	var numeric int64
 
@@ -160,6 +161,7 @@ func (s *Store) NextCustomerNumberTx(ctx context.Context) (string, int64, error)
 		// Lock settings row for update (Postgres/MySQL). SQLite ignores this clause.
 		var s Settings
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("owner_id = ?", ownerID).
 			First(&s).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return ErrNoSettingsRow
@@ -173,7 +175,7 @@ func (s *Store) NextCustomerNumberTx(ctx context.Context) (string, int64, error)
 			candidate := formatCustomerNumber(s.CustomerNumberPrefix, s.CustomerNumberWidth, tryVal)
 			var cnt int64
 			if err := tx.Model(&Company{}).
-				Where("customer_number = ?", candidate).
+				Where("owner_id = ? AND customer_number = ?", ownerID, candidate).
 				Count(&cnt).Error; err != nil {
 				return err
 			}
@@ -210,8 +212,8 @@ func parseNumericPart(prefix, s string) (int64, bool) {
 			return 0, false
 		}
 	}
-	var n int64
-	_, err := fmt.Sscan(tail, &n)
+	// Base 10 explicitly: zero-padded numbers like "050" must not be read as octal.
+	n, err := strconv.ParseInt(tail, 10, 64)
 	if err != nil {
 		return 0, false
 	}
@@ -220,10 +222,11 @@ func parseNumericPart(prefix, s string) (int64, bool) {
 
 // --- Public API ---
 
-// SuggestNextCustomerNumber returns a non-persistent suggestion (counter+1 formatted).
-func (s *Store) SuggestNextCustomerNumber(ctx context.Context) (string, error) {
+// SuggestNextCustomerNumber returns a non-persistent suggestion (counter+1 formatted)
+// for ownerID.
+func (s *Store) SuggestNextCustomerNumber(ctx context.Context, ownerID uint) (string, error) {
 	var settings Settings
-	err := s.db.WithContext(ctx).First(&settings).Error
+	err := s.db.WithContext(ctx).Where("owner_id = ?", ownerID).First(&settings).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			// domain specific error when no settings row exists
@@ -237,14 +240,16 @@ func (s *Store) SuggestNextCustomerNumber(ctx context.Context) (string, error) {
 	return formatCustomerNumber(settings.CustomerNumberPrefix, settings.CustomerNumberWidth, n), nil
 }
 
-// CheckCustomerNumber validates whether a customer number is valid and available.
+// CheckCustomerNumber validates whether a customer number is valid and available
+// for ownerID.
 //
-// It enforces format rules from settings (prefix and numeric width) and checks uniqueness.
+// It enforces format rules from the owner's settings (prefix and numeric width)
+// and checks uniqueness among the owner's companies.
 // Returns:
 //
 //	ok=true  -> number is syntactically valid and available (or belongs to excludeID)
 //	ok=false -> invalid or taken; message gives human-readable reason
-func (s *Store) CheckCustomerNumber(ctx context.Context, num string, excludeID uint) (ok bool, message string, err error) {
+func (s *Store) CheckCustomerNumber(ctx context.Context, ownerID uint, num string, excludeID uint) (ok bool, message string, err error) {
 	// Empty -> treated as a neutral suggestion
 	if num == "" {
 		return true, "Vorschlag – kann überschrieben werden.", nil
@@ -252,7 +257,7 @@ func (s *Store) CheckCustomerNumber(ctx context.Context, num string, excludeID u
 
 	// Load settings for validation rules
 	var settings Settings
-	if err := s.db.WithContext(ctx).First(&settings).Error; err != nil {
+	if err := s.db.WithContext(ctx).Where("owner_id = ?", ownerID).First(&settings).Error; err != nil {
 		return false, "Fehler beim Laden der Einstellungen", err
 	}
 
@@ -283,7 +288,7 @@ func (s *Store) CheckCustomerNumber(ctx context.Context, num string, excludeID u
 
 	// Uniqueness check
 	var comp Company
-	q := s.db.WithContext(ctx).Where("customer_number = ?", num)
+	q := s.db.WithContext(ctx).Where("owner_id = ? AND customer_number = ?", ownerID, num)
 	if err := q.First(&comp).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return true, "", nil
@@ -300,11 +305,14 @@ func (s *Store) CheckCustomerNumber(ctx context.Context, num string, excludeID u
 	return false, "Kundennummer bereits vergeben", nil
 }
 
-// MaybeLiftCustomerCounterFor raises the settings counter if num's numeric part is ahead.
-func (s *Store) MaybeLiftCustomerCounterFor(ctx context.Context, num string) error {
+// MaybeLiftCustomerCounterFor raises ownerID's settings counter if num's numeric
+// part is ahead.
+func (s *Store) MaybeLiftCustomerCounterFor(ctx context.Context, ownerID uint, num string) error {
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var s Settings
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&s).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("owner_id = ?", ownerID).
+			First(&s).Error; err != nil {
 			return err
 		}
 		if n, ok := parseNumericPart(s.CustomerNumberPrefix, num); ok && n > s.CustomerNumberCounter {

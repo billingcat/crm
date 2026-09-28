@@ -24,7 +24,8 @@ func (ctrl *controller) apiCheckCustomerNumber(c echo.Context) error {
 			excludeID = uint(v)
 		}
 	}
-	ok, msg, err := ctrl.model.CheckCustomerNumber(c.Request().Context(), num, excludeID)
+	ownerID := c.Get("ownerid").(uint)
+	ok, msg, err := ctrl.model.CheckCustomerNumber(c.Request().Context(), ownerID, num, excludeID)
 	if err != nil {
 		// Keep a generic message for the client; log server-side details elsewhere if needed.
 		return c.JSON(http.StatusInternalServerError, echo.Map{

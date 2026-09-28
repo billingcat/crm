@@ -87,7 +87,7 @@ func (ctrl *controller) upsertCompany(c echo.Context) error {
 			m["cancel"] = "/"
 
 			ctx := c.Request().Context()
-			suggestion, err := ctrl.model.SuggestNextCustomerNumber(ctx)
+			suggestion, err := ctrl.model.SuggestNextCustomerNumber(ctx, ownerID)
 			if err != nil {
 				if errors.Is(err, model.ErrNoSettingsRow) {
 					AddFlash(c, "info", "Bitte richte zunächst die Grundeinstellungen ein, bevor du Firmen anlegst.")
@@ -159,7 +159,7 @@ func (ctrl *controller) upsertCompany(c echo.Context) error {
 
 		// Customer number rules
 		desired := strings.TrimSpace(comp.CustomerNumber)
-		if err := ctrl.handleCustomerNumber(c.Request().Context(), dbCompany, desired, isNew); err != nil {
+		if err := ctrl.handleCustomerNumber(c.Request().Context(), ownerID, dbCompany, desired, isNew); err != nil {
 			return err // already wrapped with ErrInvalid inside
 		}
 
@@ -245,21 +245,21 @@ func buildContactInfos(items []contactInfoForm, ownerID uint, parentType model.P
 
 // handleCustomerNumber encapsulates the "new vs. edit" customer number rules,
 // including availability checks and counter lifting.
-func (ctrl *controller) handleCustomerNumber(ctx context.Context, dbCompany *model.Company, desired string, isNew bool) error {
+func (ctrl *controller) handleCustomerNumber(ctx context.Context, ownerID uint, dbCompany *model.Company, desired string, isNew bool) error {
 	switch {
 	case isNew:
 		// New company:
 		// - Empty => allocate via NextCustomerNumberTx
 		// - Non-empty => must be free and may lift counter
 		if desired == "" {
-			num, _, allocErr := ctrl.model.NextCustomerNumberTx(ctx)
+			num, _, allocErr := ctrl.model.NextCustomerNumberTx(ctx, ownerID)
 			if allocErr != nil {
 				return ErrInvalid(allocErr, "Kundennummer konnte nicht automatisch vergeben werden")
 			}
 			dbCompany.CustomerNumber = num
 			return nil
 		}
-		ok, msg, chkErr := ctrl.model.CheckCustomerNumber(ctx, desired, 0 /* exclude none on new */)
+		ok, msg, chkErr := ctrl.model.CheckCustomerNumber(ctx, ownerID, desired, 0 /* exclude none on new */)
 		if chkErr != nil {
 			return ErrInvalid(chkErr, "Fehler bei der Kundennummernprüfung")
 		}
@@ -269,7 +269,7 @@ func (ctrl *controller) handleCustomerNumber(ctx context.Context, dbCompany *mod
 			}
 			return ErrInvalid(fmt.Errorf("customer number taken"), msg)
 		}
-		if liftErr := ctrl.model.MaybeLiftCustomerCounterFor(ctx, desired); liftErr != nil {
+		if liftErr := ctrl.model.MaybeLiftCustomerCounterFor(ctx, ownerID, desired); liftErr != nil {
 			return ErrInvalid(liftErr, "Konnte Zählerstand nicht anheben")
 		}
 		dbCompany.CustomerNumber = desired
@@ -282,7 +282,7 @@ func (ctrl *controller) handleCustomerNumber(ctx context.Context, dbCompany *mod
 		if desired == "" || desired == dbCompany.CustomerNumber {
 			return nil
 		}
-		ok, msg, chkErr := ctrl.model.CheckCustomerNumber(ctx, desired, dbCompany.ID)
+		ok, msg, chkErr := ctrl.model.CheckCustomerNumber(ctx, ownerID, desired, dbCompany.ID)
 		if chkErr != nil {
 			return ErrInvalid(chkErr, "Fehler bei der Kundennummernprüfung")
 		}
@@ -292,7 +292,7 @@ func (ctrl *controller) handleCustomerNumber(ctx context.Context, dbCompany *mod
 			}
 			return ErrInvalid(fmt.Errorf("customer number taken"), msg)
 		}
-		if liftErr := ctrl.model.MaybeLiftCustomerCounterFor(ctx, desired); liftErr != nil {
+		if liftErr := ctrl.model.MaybeLiftCustomerCounterFor(ctx, ownerID, desired); liftErr != nil {
 			return ErrInvalid(liftErr, "Konnte Zählerstand nicht anheben")
 		}
 		dbCompany.CustomerNumber = desired
