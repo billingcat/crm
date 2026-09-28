@@ -126,6 +126,13 @@ func main() {
 		return
 	}
 
+	if err := cfg.CheckCookieSecret(); err != nil {
+		if cfg.Mode == "production" {
+			log.Fatal(err)
+		}
+		log.Printf("warning: %v", err)
+	}
+
 	if err := controller.NewController(s); err != nil {
 		log.Fatal(err)
 	}

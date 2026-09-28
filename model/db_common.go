@@ -1,6 +1,8 @@
 package model
 
 import (
+	"fmt"
+
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -32,6 +34,20 @@ type Config struct {
 	Servers                  map[string]server
 	SP                       string
 	XMLDir                   string
+}
+
+// MinCookieSecretLen is the minimum length of Config.CookieSecret. The secret
+// is the HMAC key for the session cookies; gorilla/securecookie recommends
+// 32 or 64 bytes.
+const MinCookieSecretLen = 32
+
+// CheckCookieSecret reports an error if the cookie secret is too weak to
+// protect the session cookies against forgery.
+func (c *Config) CheckCookieSecret() error {
+	if n := len(c.CookieSecret); n < MinCookieSecretLen {
+		return fmt.Errorf("cookiesecret is %d bytes long, need at least %d (e.g. openssl rand -base64 48)", n, MinCookieSecretLen)
+	}
+	return nil
 }
 
 type server struct {
