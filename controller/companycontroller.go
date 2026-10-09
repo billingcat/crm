@@ -27,6 +27,7 @@ func (ctrl *controller) companyInit(e *echo.Echo) {
 	g.POST("/edit/:id", ctrl.upsertCompany)
 	g.GET("/list", ctrl.companylist)
 	g.GET("/list/export", ctrl.companyExport)
+	g.GET("/:id/invoices", ctrl.companyInvoices)
 	g.GET("/:id/:name", ctrl.companydetail)
 	g.GET("/:id", ctrl.companydetail)
 	g.POST("/:id/tags", ctrl.companyTagsUpdate)
@@ -337,6 +338,85 @@ func (ctrl *controller) companydetail(c echo.Context) error {
 	ctrl.model.TouchRecentView(ownerID, model.EntityCompany, companyDB.ID)
 
 	return c.Render(http.StatusOK, "companydetail.html", m)
+}
+
+// invoicePositionSummary is a condensed invoice line for overview tables.
+type invoicePositionSummary struct {
+	Text      string
+	LineTotal decimal.Decimal
+}
+
+// companyInvoiceRow is one invoice in the company invoice overview.
+type companyInvoiceRow struct {
+	model.Invoice
+	Positions     []invoicePositionSummary
+	MorePositions int
+}
+
+const (
+	overviewMaxPositions = 3
+	overviewMaxTextRunes = 80
+)
+
+// summarizePositions returns the first positions of an invoice with their
+// text shortened to the first non-empty line, plus the number of omitted
+// positions.
+func summarizePositions(positions []model.InvoicePosition) ([]invoicePositionSummary, int) {
+	n := min(len(positions), overviewMaxPositions)
+	out := make([]invoicePositionSummary, 0, n)
+	for _, p := range positions[:n] {
+		out = append(out, invoicePositionSummary{
+			Text:      shortenText(firstLine(p.Text), overviewMaxTextRunes),
+			LineTotal: p.LineTotal,
+		})
+	}
+	return out, len(positions) - n
+}
+
+func firstLine(s string) string {
+	for line := range strings.Lines(s) {
+		if t := strings.TrimSpace(line); t != "" {
+			return t
+		}
+	}
+	return ""
+}
+
+func shortenText(s string, maxRunes int) string {
+	r := []rune(s)
+	if len(r) <= maxRunes {
+		return s
+	}
+	return strings.TrimSpace(string(r[:maxRunes-1])) + "…"
+}
+
+// GET /company/:id/invoices
+func (ctrl *controller) companyInvoices(c echo.Context) error {
+	ownerID := c.Get("ownerid").(uint)
+
+	company, err := ctrl.model.LoadCompany(c.Param("id"), ownerID)
+	if err != nil {
+		return ErrInvalid(err, "Kann Firma nicht laden")
+	}
+	invoices, err := ctrl.model.LoadInvoicesForCompany(company.ID, ownerID)
+	if err != nil {
+		return ErrInvalid(err, "Kann Rechnungen nicht laden")
+	}
+
+	rows := make([]companyInvoiceRow, 0, len(invoices))
+	for _, inv := range invoices {
+		positions, more := summarizePositions(inv.InvoicePositions)
+		rows = append(rows, companyInvoiceRow{
+			Invoice:       inv,
+			Positions:     positions,
+			MorePositions: more,
+		})
+	}
+
+	m := ctrl.defaultResponseMap(c, "Rechnungen "+company.Name)
+	m["company"] = company
+	m["invoices"] = rows
+	return c.Render(http.StatusOK, "companyinvoices.html", m)
 }
 
 func normalizeSliceInput(in []string) []string {

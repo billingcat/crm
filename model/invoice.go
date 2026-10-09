@@ -617,6 +617,23 @@ func (s *Store) FindInvoices(ownerID uint, statuses []InvoiceStatus, companyID *
 	return
 }
 
+// LoadInvoicesForCompany returns all invoices of a company including their
+// positions (ordered by position), newest invoice first.
+func (s *Store) LoadInvoicesForCompany(companyID uint, ownerID uint) ([]Invoice, error) {
+	var invs []Invoice
+	err := s.db.
+		Where("owner_id = ? AND company_id = ?", ownerID, companyID).
+		Preload("InvoicePositions", func(db *gorm.DB) *gorm.DB {
+			return db.Where("owner_id = ?", ownerID).Order("position ASC, id ASC")
+		}).
+		Order("date DESC, id DESC").
+		Find(&invs).Error
+	if err != nil {
+		return nil, fmt.Errorf("load invoices for company %d: %w", companyID, err)
+	}
+	return invs, nil
+}
+
 func (s *Store) ListInvoicesForExport(ownerID uint) ([]Invoice, error) {
 	var invs []Invoice
 

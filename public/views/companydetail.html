@@ -250,6 +250,10 @@
         </button>
         <div x-show="openInvoices" x-cloak @click.away="openInvoices = false"
           class="absolute z-10 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 overflow-hidden">
+          <a href="/company/{{ $.companydetail.ID }}/invoices"
+            class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 border-b hover:bg-gray-100">
+            <i class="fas fa-list"></i> Übersicht
+          </a>
           {{ range . }}
           <a href="/invoice/detail/{{.ID}}"
             class="flex items-center justify-between px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
